@@ -1,0 +1,111 @@
+name: Build R&C Abastecimento v8
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'payload/**'
+      - '.github/workflows/build-v8.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v8-public-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar configuração
+        run: |
+          if [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::Configure o segredo SUPABASE_KEY neste repositório antes de compilar."
+            exit 1
+          fi
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar plataforma Android
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+
+      - name: Reconstruir fonte final v8
+        run: |
+          mkdir -p lib
+          base64 -d payload/main_online.dart.gz.b64 | gzip -d > lib/main_online.dart
+          base64 -d payload/pubspec.yaml.gz.b64 | gzip -d > pubspec.yaml
+          grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          permissions = [
+              'android.permission.INTERNET',
+              'android.permission.CAMERA',
+              'android.permission.ACCESS_FINE_LOCATION',
+              'android.permission.ACCESS_COARSE_LOCATION',
+          ]
+          for permission in permissions:
+              if permission not in text:
+                  text = text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
+          text = text.replace('android:label="rc_abastecimento"', 'android:label="R&amp;C Abastecimento"')
+          manifest.write_text(text)
+          gradle = Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              gradle.write_text(gradle.read_text().replace('minSdk = flutter.minSdkVersion', 'minSdk = 23'))
+          PY
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Análise estática
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Compilar APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Preparar APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v8.apk
+
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-abastecimento-v8-build
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v8.apk \
+            --target "$GITHUB_SHA" \
+            --title "R&C Abastecimento v8" \
+            --notes "Build temporário da v8. Inclui PDF individual, totalizador, equipamentos alugados, pesquisa de ativos, detalhes em Meus registros, foto obrigatória do Galão e regras finais do Tanque Estacionário."
+
+      - name: Registrar sucesso
+        run: |
+          printf 'status=success\ncommit=%s\nrun=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v8-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-v8-status.txt
+          git commit -m "Build v8 concluído [skip ci]" || exit 0
+          git push

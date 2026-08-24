@@ -101,13 +101,12 @@ jobs:
             --title "R&C Abastecimento v8" \
             --notes "Build temporário da v8. Inclui PDF individual, totalizador, equipamentos alugados, pesquisa de ativos, detalhes em Meus registros, foto obrigatória do Galão e regras finais do Tanque Estacionário."
 
-      - name: Registrar sucesso
+      - name: Registrar resultado
+        if: always()
         run: |
-          printf 'status=success\ncommit=%s\nrun=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v8-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v8-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add build-v8-status.txt
-          git commit -m "Build v8 concluído [skip ci]" || exit 0
+          git commit -m "Resultado do build v8 [skip ci]" || exit 0
           git push
-
-# trigger após configuração do SUPABASE_KEY

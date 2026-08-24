@@ -17,18 +17,39 @@ jobs:
       - uses: actions/checkout@v4
       - name: Testar aplicação completa do v14 sem Flutter
         run: |
+          set +e
           mkdir -p lib
-          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
-          python3 tool/apply_v9_user_delete_pdf_selection.py
-          python3 tool/apply_v10_cleanup_selection_ui.py
-          python3 tool/apply_v11_comboio_asset_driver.py
-          python3 tool/apply_v12_comboio_prefix_008.py
-          python3 tool/apply_v13_work_rule_by_source.py
-          python3 tool/apply_v14_compat.py
-          python3 tool/apply_v14_final_package.py
-          python3 - <<'PY'
+          : > v14-patch-test.txt
+          {
+            echo "=== reconstrução ==="
+            cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+            echo "reconstrucao=$?"
+            echo "=== v9 ==="
+            python3 tool/apply_v9_user_delete_pdf_selection.py
+            echo "v9=$?"
+            echo "=== v10 ==="
+            python3 tool/apply_v10_cleanup_selection_ui.py
+            echo "v10=$?"
+            echo "=== v11 ==="
+            python3 tool/apply_v11_comboio_asset_driver.py
+            echo "v11=$?"
+            echo "=== v12 ==="
+            python3 tool/apply_v12_comboio_prefix_008.py
+            echo "v12=$?"
+            echo "=== v13 ==="
+            python3 tool/apply_v13_work_rule_by_source.py
+            echo "v13=$?"
+            echo "=== compat ==="
+            python3 tool/apply_v14_compat.py
+            echo "compat=$?"
+            echo "=== v14 ==="
+            python3 tool/apply_v14_final_package.py
+            V14_CODE=$?
+            echo "v14=$V14_CODE"
+            echo "=== validações ==="
+            python3 - <<'PY'
           from pathlib import Path
-          text = Path('lib/main_online.dart').read_text()
+          text = Path('lib/main_online.dart').read_text() if Path('lib/main_online.dart').exists() else ''
           checks = {
             'rpc_v14': "rca_record_fueling_v14" in text,
             'geocoding': "package:geocoding/geocoding.dart" in text,
@@ -42,18 +63,16 @@ jobs:
             'selection_1s': "Duration(seconds: 1)" in text,
             'no_selection_snackbar': "Modo de seleção ativado" not in text,
           }
-          ok = all(checks.values())
-          lines = [f"status={'success' if ok else 'failure'}"] + [f"{k}={v}" for k,v in checks.items()]
-          Path('v14-patch-test.txt').write_text('\n'.join(lines)+'\n')
-          print('\n'.join(lines))
-          if not ok:
-              raise SystemExit(1)
+          for k,v in checks.items(): print(f'{k}={v}')
           PY
+          } >> v14-patch-test.txt 2>&1
+          cat v14-patch-test.txt
+          exit 0
       - name: Salvar resultado do teste
         if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
-          git add v14-patch-test.txt || true
-          git commit -m "Teste rápido do patch v14 [skip ci]" || exit 0
+          git add v14-patch-test.txt
+          git commit -m "Teste diagnosticável do patch v14 [skip ci]" || exit 0
           git push

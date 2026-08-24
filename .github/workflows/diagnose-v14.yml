@@ -1,0 +1,35 @@
+name: Diagnosticar patch v14
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-v14.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Decodificar patch v14
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, ast, base64, gzip
+          wrapper = Path('tool/apply_v14_final_package.py').read_text()
+          m = re.search(r"payload\s*=\s*('''.*?''')", wrapper, re.S)
+          if not m:
+              raise SystemExit('payload não encontrado')
+          payload = ast.literal_eval(m.group(1))
+          inner = gzip.decompress(base64.b64decode(payload)).decode()
+          lines = inner.splitlines()
+          for i, line in enumerate(lines):
+              if 'catálogo obras' in line or "title: 'Obras'" in line or 'AdminCatalogScreen' in line:
+                  lo=max(0,i-8); hi=min(len(lines),i+12)
+                  print(f'--- linhas {lo+1}-{hi} ---')
+                  for j in range(lo,hi): print(f'{j+1}: {lines[j]}')
+          PY

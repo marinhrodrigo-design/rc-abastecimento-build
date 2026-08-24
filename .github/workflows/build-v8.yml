@@ -109,3 +109,5 @@ jobs:
           git add build-v8-status.txt
           git commit -m "Build v8 concluído [skip ci]" || exit 0
           git push
+
+# trigger após configuração do SUPABASE_KEY

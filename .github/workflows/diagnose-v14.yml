@@ -15,25 +15,36 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Decodificar patch v14
+      - name: Reconstruir fonte até v13 e inspecionar marcador
         run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
           python3 - <<'PY'
           from pathlib import Path
           import re, ast, base64, gzip
+          source = Path('lib/main_online.dart').read_text()
+          out=[]
+          out.append('=== FONTE APÓS v13 + compat ===')
+          for i,line in enumerate(source.splitlines()):
+              if "title: 'Obras'" in line or 'AdminCatalogScreen' in line or "title: 'Cadastros'" in line:
+                  out.append(f'{i+1}: {line!r}')
           wrapper = Path('tool/apply_v14_final_package.py').read_text()
           m = re.search(r"payload\s*=\s*('''.*?''')", wrapper, re.S)
-          if not m:
-              raise SystemExit('payload não encontrado')
           payload = ast.literal_eval(m.group(1))
           inner = gzip.decompress(base64.b64decode(payload)).decode()
           lines = inner.splitlines()
-          out=[]
-          for i, line in enumerate(lines):
-              if 'catálogo obras' in line or "title: 'Obras'" in line or 'AdminCatalogScreen' in line:
-                  lo=max(0,i-12); hi=min(len(lines),i+18)
-                  out.append(f'--- linhas {lo+1}-{hi} ---')
+          out.append('=== TRECHO INTERNO v14 ===')
+          for i,line in enumerate(lines):
+              if 'catálogo obras' in line or "title: 'Obras'" in line or line.strip().startswith('us =') or line.strip().startswith('ue ='):
+                  lo=max(0,i-4); hi=min(len(lines),i+7)
                   for j in range(lo,hi): out.append(f'{j+1}: {lines[j]}')
-          Path('v14-diagnostic.txt').write_text('\n'.join(out) + '\n')
+          Path('v14-diagnostic.txt').write_text('\n'.join(out)+'\n')
           print('\n'.join(out))
           PY
       - name: Salvar diagnóstico
@@ -41,5 +52,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
           git add v14-diagnostic.txt
-          git commit -m "Diagnóstico interno v14 [skip ci]" || exit 0
+          git commit -m "Diagnóstico fonte real v14 [skip ci]" || exit 0
           git push

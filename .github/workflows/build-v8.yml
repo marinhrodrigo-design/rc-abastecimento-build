@@ -60,13 +60,14 @@ jobs:
       - name: Aplicar exclusão de usuário e seleção para PDF v9
         run: python3 tool/apply_v9_user_delete_pdf_selection.py
 
-      - name: Remover textos auxiliares da seleção v10
+      - name: Remover textos auxiliares e usar pressão de 1 segundo v10
         run: python3 tool/apply_v10_cleanup_selection_ui.py
 
       - name: Validar alterações v10
         run: |
           grep -q "rca_delete_driver_user" lib/main_online.dart
-          grep -q "Duration(seconds: 2)" lib/main_online.dart
+          grep -q "Duration(seconds: 1)" lib/main_online.dart
+          ! grep -q "Duration(seconds: 2)" lib/main_online.dart
           grep -q "Excluir usuário" lib/main_online.dart
           grep -q "selectedCodes" lib/main_online.dart
           ! grep -q "Pressione um registro por 2 segundos para selecionar" lib/main_online.dart
@@ -116,7 +117,7 @@ jobs:
           gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v10.apk \
             --target "$GITHUB_SHA" \
             --title "R&C Abastecimento v10" \
-            --notes "R&C Abastecimento v10: mantém todas as funções da v9 e remove da tela de registros o texto explicativo de seleção e a mensagem inferior de modo de seleção. O gesto de pressionar por 2 segundos e a seleção múltipla para PDF permanecem funcionando."
+            --notes "R&C Abastecimento v10: mantém todas as funções da v9, remove os textos auxiliares do modo de seleção e reduz a pressão necessária para selecionar um registro de 2 para 1 segundo. A seleção múltipla para PDF permanece funcionando."
 
       - name: Registrar resultado
         if: always()

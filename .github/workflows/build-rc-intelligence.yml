@@ -1,4 +1,4 @@
-name: Build R&C Intelligence Simulador v1
+name: Build R&C Intelligence Simulador v2
 
 on:
   push:
@@ -6,11 +6,12 @@ on:
     paths:
       - 'intelligence_app/**'
       - 'intelligence_payload/**'
+      - 'intelligence_payload_v2/**'
       - '.github/workflows/build-rc-intelligence.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-intelligence-simulador-v1
+  group: rc-intelligence-simulador-v2
   cancel-in-progress: true
 
 permissions:
@@ -41,26 +42,24 @@ jobs:
         working-directory: intelligence_app
         run: flutter create --platforms=android --org com.rc --project-name rc_intelligence .
 
-      - name: Reconstruir e validar fontes
+      - name: Reconstruir e validar fontes v2
         run: |
           mkdir -p intelligence_app/lib intelligence_app/test
-          {
-            cat intelligence_payload/main_parts/00.b64
-            cat intelligence_payload/main_parts/01_parts/00.b64
-            cat intelligence_payload/main_parts/01_parts/01.b64
-            cat intelligence_payload/main_parts/01_parts/02.b64
-            cat intelligence_payload/main_parts/01_parts/03.b64
-            cat intelligence_payload/main_parts/02.b64
-            cat intelligence_payload/main_parts/03.b64
-            cat intelligence_payload/main_parts/04.b64
-          } | tr -d '\n\r ' > /tmp/rc_intelligence_main.b64
-          cat intelligence_payload/intelligence_engine_test.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_test.b64
-          echo 'b3e1146665dce4efc12023b6e30ca90a0c76f8d46f34cd194ea80f3a265704db  /tmp/rc_intelligence_main.b64' | sha256sum -c -
-          echo 'd3e8b9297ed9bf3b0ebdd8b683cf7c76eb90b0a47162dac0ca2ec37b34024f67  /tmp/rc_intelligence_test.b64' | sha256sum -c -
-          base64 -d /tmp/rc_intelligence_main.b64 | gzip -d > intelligence_app/lib/main.dart
-          base64 -d /tmp/rc_intelligence_test.b64 | gzip -d > intelligence_app/test/intelligence_engine_test.dart
+          cat intelligence_payload_v2/main.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_main_v2.b64
+          cat intelligence_payload/intelligence_engine_test.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_engine_test.b64
+          cat intelligence_payload_v2/navigation_clickability_test.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_nav_test_v2.b64
+          echo '563aa44a8d83342bab6ada121145f4b4ad857c1f6407c7536781fd2976d1ecae  /tmp/rc_intelligence_main_v2.b64' | sha256sum -c -
+          echo 'd3e8b9297ed9bf3b0ebdd8b683cf7c76eb90b0a47162dac0ca2ec37b34024f67  /tmp/rc_intelligence_engine_test.b64' | sha256sum -c -
+          echo '9e6c0f6eaae60f42896eba3c5336031f26f58522803dd35b375d647223a1bd3f  /tmp/rc_intelligence_nav_test_v2.b64' | sha256sum -c -
+          base64 -d /tmp/rc_intelligence_main_v2.b64 | gzip -d > intelligence_app/lib/main.dart
+          base64 -d /tmp/rc_intelligence_engine_test.b64 | gzip -d > intelligence_app/test/intelligence_engine_test.dart
+          base64 -d /tmp/rc_intelligence_nav_test_v2.b64 | gzip -d > intelligence_app/test/navigation_clickability_test.dart
           rm -f intelligence_app/test/widget_test.dart
-          grep -q "R&C Intelligence" intelligence_app/lib/main.dart
+          grep -q "Destinatários e regras de envio" intelligence_app/lib/main.dart
+          grep -q "showRecipientConfig" intelligence_app/lib/main.dart
+          grep -q "showMtbfDetail" intelligence_app/lib/main.dart
+          grep -q "showTheoreticalBalance" intelligence_app/lib/main.dart
+          grep -q "showRecurrenceDetail" intelligence_app/lib/main.dart
           grep -q "anomalyScore" intelligence_app/lib/intelligence_engine.dart
 
       - name: Configurar Android
@@ -91,7 +90,7 @@ jobs:
         working-directory: intelligence_app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Testes do Intelligence Engine
+      - name: Testes do Intelligence Engine e clicabilidade
         working-directory: intelligence_app
         run: flutter test
 
@@ -100,25 +99,25 @@ jobs:
         run: flutter build apk --release
 
       - name: Preparar APK
-        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v1.apk
+        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v2.apk
 
       - name: Publicar artefato temporário
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Intelligence-Simulador-v1-APK
-          path: RC-Intelligence-Simulador-v1.apk
+          name: RC-Intelligence-Simulador-v2-APK
+          path: RC-Intelligence-Simulador-v2.apk
           retention-days: 7
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-intelligence-simulador-v1
+          TAG: rc-intelligence-simulador-v2
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Intelligence-Simulador-v1.apk \
+          gh release create "$TAG" RC-Intelligence-Simulador-v2.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Intelligence — Simulador v1" \
-            --notes "Primeira versão funcional do R&C Intelligence. Inclui Dashboard, Central de Alertas, Manutenção, Combustível, Insights e evidências com cálculos reproduzíveis. Usa somente dados simulados e não altera produção."
+            --title "R&C Intelligence — Simulador v2" \
+            --notes "v2: todos os cards principais clicáveis; configuração individual dos alertas de Pedro, Darlan e Diego; detalhes de MTBF, MTTR, disponibilidade, RUL, componentes, marcas, combustível e Insights; testes automatizados de clicabilidade."
 
       - name: Registrar resultado
         if: always()
@@ -127,5 +126,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add intelligence-build-status.txt
-          git commit -m "Resultado do build R&C Intelligence [skip ci]" || exit 0
+          git commit -m "Resultado do build R&C Intelligence v2 [skip ci]" || exit 0
           git push

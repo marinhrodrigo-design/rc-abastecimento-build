@@ -1,0 +1,62 @@
+--- linhas 813-842 ---
+813:           ])));
+814:         },
+815:       ),
+816:     ),
+817:   );
+818: }
+819: 
+820: '''
+821: text = text[:us] + users + text[ue:]
+822: 
+823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
+824: if "title: 'Dados da empresa'" not in text:
+825:     catalog_marker = "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras'"
+826:     require(catalog_marker in text, 'catálogo obras')
+827:     text = text.replace(catalog_marker, "      HomeActionCard(icon: Icons.business_outlined, title: 'Dados da empresa', subtitle: 'Nome, CNPJ e endereço exibidos nos PDFs', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCompanyAdminScreen()))),\n      const SizedBox(height: 10),\n" + catalog_marker, 1)
+828: 
+829:     company_screen = r'''class ReportCompanyAdminScreen extends StatefulWidget {
+830:   const ReportCompanyAdminScreen({super.key});
+831:   @override
+832:   State<ReportCompanyAdminScreen> createState() => _ReportCompanyAdminScreenState();
+833: }
+834: 
+835: class _ReportCompanyAdminScreenState extends State<ReportCompanyAdminScreen> {
+836:   final name = TextEditingController(text: 'Hydra');
+837:   final subtitle = TextEditingController(text: 'Equipamentos');
+838:   final document = TextEditingController();
+839:   final address = TextEditingController();
+840:   bool busy = true;
+841: 
+842:   @override
+--- linhas 814-843 ---
+814:         },
+815:       ),
+816:     ),
+817:   );
+818: }
+819: 
+820: '''
+821: text = text[:us] + users + text[ue:]
+822: 
+823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
+824: if "title: 'Dados da empresa'" not in text:
+825:     catalog_marker = "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras'"
+826:     require(catalog_marker in text, 'catálogo obras')
+827:     text = text.replace(catalog_marker, "      HomeActionCard(icon: Icons.business_outlined, title: 'Dados da empresa', subtitle: 'Nome, CNPJ e endereço exibidos nos PDFs', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCompanyAdminScreen()))),\n      const SizedBox(height: 10),\n" + catalog_marker, 1)
+828: 
+829:     company_screen = r'''class ReportCompanyAdminScreen extends StatefulWidget {
+830:   const ReportCompanyAdminScreen({super.key});
+831:   @override
+832:   State<ReportCompanyAdminScreen> createState() => _ReportCompanyAdminScreenState();
+833: }
+834: 
+835: class _ReportCompanyAdminScreenState extends State<ReportCompanyAdminScreen> {
+836:   final name = TextEditingController(text: 'Hydra');
+837:   final subtitle = TextEditingController(text: 'Equipamentos');
+838:   final document = TextEditingController();
+839:   final address = TextEditingController();
+840:   bool busy = true;
+841: 
+842:   @override
+843:   void initState() { super.initState(); load(); }

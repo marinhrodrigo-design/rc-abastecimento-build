@@ -8,6 +8,9 @@ on:
       - 'payload/**'
       - 'tool/**'
       - '.github/workflows/build-v8.yml'
+  workflow_run:
+    workflows: ['Build R&C Abastecimento v17']
+    types: [completed]
   workflow_dispatch:
 
 concurrency:

@@ -1,15 +1,16 @@
-name: Build R&C Abastecimento v8
+name: Build R&C Abastecimento v9
 
 on:
   push:
     branches: [main]
     paths:
       - 'payload/**'
+      - 'tool/**'
       - '.github/workflows/build-v8.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v8-public-build
+  group: rc-abastecimento-v9-public-build
   cancel-in-progress: true
 
 permissions:
@@ -56,6 +57,16 @@ jobs:
           grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
           grep -q "totalizador antes/depois, KM/horímetro antes e placa ou ativo antes" lib/main_online.dart
 
+      - name: Aplicar exclusão de usuário e seleção para PDF v9
+        run: python3 tool/apply_v9_user_delete_pdf_selection.py
+
+      - name: Validar alterações v9
+        run: |
+          grep -q "rca_delete_driver_user" lib/main_online.dart
+          grep -q "Duration(seconds: 2)" lib/main_online.dart
+          grep -q "Excluir usuário" lib/main_online.dart
+          grep -q "selectedCodes" lib/main_online.dart
+
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -89,25 +100,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v8.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v9.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v8-build
+          TAG: rc-abastecimento-v9-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v8.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v9.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v8" \
-            --notes "Build temporário da v8. Inclui PDF individual, totalizador, equipamentos alugados, pesquisa de ativos, detalhes em Meus registros, foto obrigatória do Galão e regras finais do Tanque Estacionário."
+            --title "R&C Abastecimento v9" \
+            --notes "R&C Abastecimento v9: mantém as correções da v8 e adiciona exclusão real de usuário com confirmação e histórico preservado, além de seleção de um ou vários cartões por pressão de 2 segundos para exportação em PDF."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v8-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v9-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v8-status.txt
-          git commit -m "Resultado do build v8 [skip ci]" || exit 0
+          git add build-v9-status.txt
+          git commit -m "Resultado do build v9 [skip ci]" || exit 0
           git push

@@ -1,0 +1,2 @@
+R&C Intelligence Simulador v1
+integrity=sha256-verified-parts

@@ -1,0 +1,62 @@
+[
+  {
+    "id": 32745255985,
+    "status": "in_progress",
+    "conclusion": null,
+    "head_sha": "116f705168bb8b50650067e11471955e390a5930",
+    "created_at": "2026-08-24T15:30:18Z",
+    "updated_at": "2026-08-24T15:30:44Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32745255985",
+    "display_title": "Dispara build limpo da v14 corrigida"
+  },
+  {
+    "id": 32744744908,
+    "status": "completed",
+    "conclusion": "cancelled",
+    "head_sha": "0bca455ffc8991eeb6f273007d19c7cd29e35a77",
+    "created_at": "2026-08-24T15:25:18Z",
+    "updated_at": "2026-08-24T15:30:42Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32744744908",
+    "display_title": "Corrige limite estrutural da gestão de usuários no v14"
+  },
+  {
+    "id": 32741969450,
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "2db828201617022f4ec6740d73eb254c088e815a",
+    "created_at": "2026-08-24T14:58:08Z",
+    "updated_at": "2026-08-24T14:58:46Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32741969450",
+    "display_title": "Normaliza linha do catálogo para o pacote v14"
+  },
+  {
+    "id": 32741759656,
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "132c5a07c10c21c50694a756609e69676038e561",
+    "created_at": "2026-08-24T14:56:03Z",
+    "updated_at": "2026-08-24T14:56:50Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32741759656",
+    "display_title": "Prepara compatibilidade antes do pacote v14"
+  },
+  {
+    "id": 32741707223,
+    "status": "completed",
+    "conclusion": "cancelled",
+    "head_sha": "5efc1ac724e23a9f30b0387e30b039f886f6e0a6",
+    "created_at": "2026-08-24T14:55:33Z",
+    "updated_at": "2026-08-24T14:56:12Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32741707223",
+    "display_title": "Adiciona compatibilidade do catálogo para v14"
+  },
+  {
+    "id": 32741175592,
+    "status": "completed",
+    "conclusion": "failure",
+    "head_sha": "916ec37ad6653f20a45b449d78be410db73be4de",
+    "created_at": "2026-08-24T14:50:23Z",
+    "updated_at": "2026-08-24T14:51:06Z",
+    "html_url": "https://github.com/marinhrodrigo-design/rc-abastecimento-build/actions/runs/32741175592",
+    "display_title": "Compila R&C Abastecimento v14 com pacote final aprovado"
+  }
+]

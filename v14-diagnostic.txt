@@ -1,32 +1,28 @@
-=== FONTE APÓS v13 + compat ===
-2204: "                  HomeActionCard(icon: Icons.inventory_2_outlined, title: 'Cadastros', subtitle: 'Tanques estacionários, obras, ativos próprios e equipamentos alugados', onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCatalogScreen())); await refresh(); }),"
-2809: 'class AdminCatalogScreen extends StatelessWidget {'
-2810: '  const AdminCatalogScreen({super.key});'
-2817: "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras', subtitle: 'Cadastrar e consultar obras', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorksAdminScreen()))),"
-=== TRECHO INTERNO v14 ===
-629: '''
+=== POSIÇÕES NA FONTE APÓS v13 + compat ===
+class AdminHomeScreen: [2153]
+class AdminCatalogScreen: [2809]
+class FuelPdfReport: [2515]
+class AdminUsersOnlineScreen: [2617]
+class _AdminUsersOnlineScreenState: [2624]
+class TanksAdminScreen: [2827]
+class MovementDetailScreen: [2401]
+class MyOnlineMovementsScreen: [2110]
+OBRAS 2817: "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras', subtitle: 'Cadastrar e consultar obras', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorksAdminScreen()))),"
+=== OPERAÇÕES DO v14 ANTES DO CATÁLOGO ===
+19: def replace_between(start_marker: str, end_marker: str, replacement: str, label: str):
+25:     text = text[:s] + replacement + text[e:]
+106: replace_between('  Future<Map<String, dynamic>> fueling({', '  Future<Map<String, dynamic>> dailyStockReport', api_fueling, 'API abastecimento v14')
+129: fs = text.index('class _FuelingOnlineScreenState extends State<FuelingOnlineScreen> {')
+130: fe = text.index('class SignatureCaptureOnlineScreen extends StatefulWidget {', fs)
+237: text = text[:fs] + seg + text[fe:]
+373: replace_between('class MyOnlineMovementsScreen extends StatefulWidget {', 'class AdminHomeScreen extends StatefulWidget {', my_records, 'Meus registros v14')
+378: if "title: 'Meus registros'" not in text[text.index('class _AdminHomeScreenState'):text.index('class AdminRecordsScreen')]:
+488: replace_between('class MovementDetailScreen extends StatelessWidget {', 'class _MovementMediaTile extends StatelessWidget {', detail, 'detalhe v14')
 630: replace_between('class FuelPdfReport {', 'class AdminUsersOnlineScreen extends StatefulWidget {', pdf, 'PDF v14')
-631: 
-632: # Gestão de usuários: campo único com comboios 008 e Tanques Estacionários.
 633: us = text.index('class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {')
 634: ue = text.index('class TanksAdminScreen extends StatefulWidget {', us)
-635: users = r'''class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {
-636:   List<Map<String, dynamic>>? users;
-637:   bool busy = false;
-638: 
-639:   @override
-630: replace_between('class FuelPdfReport {', 'class AdminUsersOnlineScreen extends StatefulWidget {', pdf, 'PDF v14')
-631: 
-632: # Gestão de usuários: campo único com comboios 008 e Tanques Estacionários.
-633: us = text.index('class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {')
-634: ue = text.index('class TanksAdminScreen extends StatefulWidget {', us)
-635: users = r'''class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {
-636:   List<Map<String, dynamic>>? users;
-637:   bool busy = false;
-638: 
-639:   @override
-640:   void initState() { super.initState(); load(); }
 821: text = text[:us] + users + text[ue:]
+=== CATÁLOGO ===
 822: 
 823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
 824: if "title: 'Dados da empresa'" not in text:
@@ -35,16 +31,3 @@
 827:     text = text.replace(catalog_marker, "      HomeActionCard(icon: Icons.business_outlined, title: 'Dados da empresa', subtitle: 'Nome, CNPJ e endereço exibidos nos PDFs', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCompanyAdminScreen()))),\n      const SizedBox(height: 10),\n" + catalog_marker, 1)
 828: 
 829:     company_screen = r'''class ReportCompanyAdminScreen extends StatefulWidget {
-830:   const ReportCompanyAdminScreen({super.key});
-831:   @override
-822: 
-823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
-824: if "title: 'Dados da empresa'" not in text:
-825:     catalog_marker = "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras'"
-826:     require(catalog_marker in text, 'catálogo obras')
-827:     text = text.replace(catalog_marker, "      HomeActionCard(icon: Icons.business_outlined, title: 'Dados da empresa', subtitle: 'Nome, CNPJ e endereço exibidos nos PDFs', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ReportCompanyAdminScreen()))),\n      const SizedBox(height: 10),\n" + catalog_marker, 1)
-828: 
-829:     company_screen = r'''class ReportCompanyAdminScreen extends StatefulWidget {
-830:   const ReportCompanyAdminScreen({super.key});
-831:   @override
-832:   State<ReportCompanyAdminScreen> createState() => _ReportCompanyAdminScreenState();

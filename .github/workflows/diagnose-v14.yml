@@ -9,74 +9,33 @@ on:
 
 permissions:
   contents: write
+  actions: read
 
 jobs:
   diagnose:
     runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
     steps:
       - uses: actions/checkout@v4
-      - name: Testar aplicação completa do v14 sem Flutter
+      - name: Consultar build v14
         run: |
-          set +e
-          mkdir -p lib
-          : > v14-patch-test.txt
-          {
-            echo "=== reconstrução ==="
-            cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
-            echo "main=$?"
-            cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
-            echo "pubspec=$?"
-            echo "=== v9 ==="
-            python3 tool/apply_v9_user_delete_pdf_selection.py
-            echo "v9=$?"
-            echo "=== v10 ==="
-            python3 tool/apply_v10_cleanup_selection_ui.py
-            echo "v10=$?"
-            echo "=== v11 ==="
-            python3 tool/apply_v11_comboio_asset_driver.py
-            echo "v11=$?"
-            echo "=== v12 ==="
-            python3 tool/apply_v12_comboio_prefix_008.py
-            echo "v12=$?"
-            echo "=== v13 ==="
-            python3 tool/apply_v13_work_rule_by_source.py
-            echo "v13=$?"
-            echo "=== compat ==="
-            python3 tool/apply_v14_compat.py
-            echo "compat=$?"
-            echo "=== v14 ==="
-            python3 tool/apply_v14_final_package.py
-            echo "v14=$?"
-            echo "=== validações ==="
-            python3 - <<'PY'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=30" > runs.json
+          python3 - <<'PY'
+          import json
           from pathlib import Path
-          text = Path('lib/main_online.dart').read_text() if Path('lib/main_online.dart').exists() else ''
-          pub = Path('pubspec.yaml').read_text() if Path('pubspec.yaml').exists() else ''
-          checks = {
-            'rpc_v14': "rca_record_fueling_v14" in text,
-            'geocoding_import': "package:geocoding/geocoding.dart" in text,
-            'geocoding_dep': "geocoding:" in pub,
-            'fuel_type': "Tipo de combustível *" in text,
-            'location': "Localização *" in text,
-            'full_address': "placemarkFromCoordinates" in text,
-            'assignment': "Ativo que vai operar *" in text,
-            'pdf': "class FuelPdfReport" in text,
-            'company': "company_subtitle" in text and "Hydra" in text and "Equipamentos" in text,
-            'stock_dynamic': "Estoque do $source antes" in text,
-            'selection_1s': "Duration(seconds: 1)" in text,
-            'no_selection_snackbar': "Modo de seleção ativado" not in text,
-          }
-          for k,v in checks.items(): print(f'{k}={v}')
-          print('status=' + ('success' if all(checks.values()) else 'failure'))
+          data=json.loads(Path('runs.json').read_text())
+          rows=[]
+          for r in data.get('workflow_runs',[]):
+              if r.get('name') == 'Build R&C Abastecimento v14':
+                  rows.append({k:r.get(k) for k in ['id','status','conclusion','head_sha','created_at','updated_at','html_url','display_title']})
+          Path('v14-build-watch.txt').write_text(json.dumps(rows[:8], ensure_ascii=False, indent=2)+'\n')
+          print(Path('v14-build-watch.txt').read_text())
           PY
-          } >> v14-patch-test.txt 2>&1
-          cat v14-patch-test.txt
-          exit 0
-      - name: Salvar resultado do teste
-        if: always()
+      - name: Salvar consulta
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
-          git add v14-patch-test.txt
-          git commit -m "Teste completo do patch v14 [skip ci]" || exit 0
+          git add v14-build-watch.txt
+          git commit -m "Consulta status do build v14 [skip ci]" || exit 0
           git push

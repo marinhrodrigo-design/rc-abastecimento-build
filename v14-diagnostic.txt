@@ -1,12 +1,31 @@
---- linhas 813-842 ---
-813:           ])));
-814:         },
-815:       ),
-816:     ),
-817:   );
-818: }
-819: 
-820: '''
+=== FONTE APÓS v13 + compat ===
+2204: "                  HomeActionCard(icon: Icons.inventory_2_outlined, title: 'Cadastros', subtitle: 'Tanques estacionários, obras, ativos próprios e equipamentos alugados', onTap: () async { await Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminCatalogScreen())); await refresh(); }),"
+2809: 'class AdminCatalogScreen extends StatelessWidget {'
+2810: '  const AdminCatalogScreen({super.key});'
+2817: "      HomeActionCard(icon: Icons.location_city_outlined, title: 'Obras', subtitle: 'Cadastrar e consultar obras', onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const WorksAdminScreen()))),"
+=== TRECHO INTERNO v14 ===
+629: '''
+630: replace_between('class FuelPdfReport {', 'class AdminUsersOnlineScreen extends StatefulWidget {', pdf, 'PDF v14')
+631: 
+632: # Gestão de usuários: campo único com comboios 008 e Tanques Estacionários.
+633: us = text.index('class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {')
+634: ue = text.index('class TanksAdminScreen extends StatefulWidget {', us)
+635: users = r'''class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {
+636:   List<Map<String, dynamic>>? users;
+637:   bool busy = false;
+638: 
+639:   @override
+630: replace_between('class FuelPdfReport {', 'class AdminUsersOnlineScreen extends StatefulWidget {', pdf, 'PDF v14')
+631: 
+632: # Gestão de usuários: campo único com comboios 008 e Tanques Estacionários.
+633: us = text.index('class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {')
+634: ue = text.index('class TanksAdminScreen extends StatefulWidget {', us)
+635: users = r'''class _AdminUsersOnlineScreenState extends State<AdminUsersOnlineScreen> {
+636:   List<Map<String, dynamic>>? users;
+637:   bool busy = false;
+638: 
+639:   @override
+640:   void initState() { super.initState(); load(); }
 821: text = text[:us] + users + text[ue:]
 822: 
 823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
@@ -18,26 +37,6 @@
 829:     company_screen = r'''class ReportCompanyAdminScreen extends StatefulWidget {
 830:   const ReportCompanyAdminScreen({super.key});
 831:   @override
-832:   State<ReportCompanyAdminScreen> createState() => _ReportCompanyAdminScreenState();
-833: }
-834: 
-835: class _ReportCompanyAdminScreenState extends State<ReportCompanyAdminScreen> {
-836:   final name = TextEditingController(text: 'Hydra');
-837:   final subtitle = TextEditingController(text: 'Equipamentos');
-838:   final document = TextEditingController();
-839:   final address = TextEditingController();
-840:   bool busy = true;
-841: 
-842:   @override
---- linhas 814-843 ---
-814:         },
-815:       ),
-816:     ),
-817:   );
-818: }
-819: 
-820: '''
-821: text = text[:us] + users + text[ue:]
 822: 
 823: # Dados da empresa do relatório: configuráveis pelo administrador, sem inventar CNPJ/endereço.
 824: if "title: 'Dados da empresa'" not in text:
@@ -49,14 +48,3 @@
 830:   const ReportCompanyAdminScreen({super.key});
 831:   @override
 832:   State<ReportCompanyAdminScreen> createState() => _ReportCompanyAdminScreenState();
-833: }
-834: 
-835: class _ReportCompanyAdminScreenState extends State<ReportCompanyAdminScreen> {
-836:   final name = TextEditingController(text: 'Hydra');
-837:   final subtitle = TextEditingController(text: 'Equipamentos');
-838:   final document = TextEditingController();
-839:   final address = TextEditingController();
-840:   bool busy = true;
-841: 
-842:   @override
-843:   void initState() { super.initState(); load(); }

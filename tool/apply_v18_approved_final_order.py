@@ -9,6 +9,10 @@ if "'Quantidade abastecida'" not in text:
     raise SystemExit('v18: marcador Quantidade abastecida não encontrado na tela de detalhe')
 text = text.replace("'Quantidade abastecida'", "'Abastecimento/Lubrificação'")
 
+# A imagem final aprovada não possui o título "Fotos e assinaturas".
+if "'Fotos e assinaturas'" in text:
+    text = text.replace("'Fotos e assinaturas'", "''")
+
 # 2) PDF: desenhar separadores em vez de enviar o caractere bullet à fonte Helvetica.
 marker = "    pw.Widget rule() => pw.Container(height: 0.7, color: lineColor);\n"
 if marker not in text:

@@ -85,11 +85,17 @@ if old not in text:
     raise SystemExit('v18: sequência Obra/Combustível/Localização do PDF v17 não encontrada')
 text = text.replace(old, new, 1)
 
-# 6) Endereço da empresa também não envia bullet diretamente para Helvetica.
+# 6) Endereço da empresa e título da página de evidências também usam separador gráfico.
 old = "          pw.Text('Endereço: $companyAddress', style: pw.TextStyle(font: regular, fontSize: 11.5, color: textColor)),"
 new = "          bulletText('Endereço: $companyAddress', pw.TextStyle(font: regular, fontSize: 11.5, color: textColor), dotSize: 2.7),"
 if old not in text:
     raise SystemExit('v18: linha de endereço da empresa não encontrada')
+text = text.replace(old, new, 1)
+
+old = "            pw.Text(title, style: pw.TextStyle(font: regular, fontSize: 11, color: textColor)),"
+new = "            bulletText(title, pw.TextStyle(font: regular, fontSize: 11, color: textColor), dotSize: 2.7),"
+if old not in text:
+    raise SystemExit('v18: título da página de evidências não encontrado')
 text = text.replace(old, new, 1)
 
 # Validações estruturais finais.

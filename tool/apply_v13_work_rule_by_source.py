@@ -8,7 +8,6 @@ start = text.index('class _FuelingOnlineScreenState extends State<FuelingOnlineS
 end = text.index('class ', start + 10)
 segment = text[start:end]
 
-# Insere a regra logo após a declaração da lista de obras, sem depender das linhas vizinhas.
 if "final workRequired = widget.sourceTank['tank_type'] == 'comboio';" not in segment:
     segment, count = re.subn(
         r"(?m)^(\s*)final works = ([^\n]+);$",
@@ -19,7 +18,6 @@ if "final workRequired = widget.sourceTank['tank_type'] == 'comboio';" not in se
     if count != 1:
         raise SystemExit('v13: não foi possível localizar a lista de obras no formulário')
 
-# Comboio mostra obra obrigatória; tanque estacionário mostra obra opcional.
 segment, count = re.subn(
     r"decoration:\s*(?:const\s+)?InputDecoration\(labelText:\s*'Obra \*'\),",
     "decoration: InputDecoration(labelText: workRequired ? 'Obra *' : 'Obra (opcional)'),",
@@ -29,15 +27,22 @@ segment, count = re.subn(
 if count != 1:
     raise SystemExit('v13: não foi possível localizar rótulo da obra')
 
-# A validação só impede salvar sem obra quando a origem é comboio.
-segment, count = re.subn(
-    r"validator:\s*\(v\)\s*=>\s*v\s*==\s*null\s*\?\s*'Selecione a obra\. O administrador pode cadastrá-la\.'\s*:\s*null,",
-    "validator: (v) => workRequired && v == null ? 'Selecione a obra. O administrador pode cadastrá-la.' : null,",
-    segment,
-    count=1,
-)
-if count != 1:
+# Substitui a linha de validação logo após o campo Obra, sem depender do texto anterior.
+label_pos = segment.index("workRequired ? 'Obra *' : 'Obra (opcional)'")
+validator_pos = segment.find('validator:', label_pos, min(len(segment), label_pos + 1600))
+if validator_pos < 0:
     raise SystemExit('v13: não foi possível localizar validação da obra')
+line_start = segment.rfind('\n', 0, validator_pos) + 1
+line_end = segment.find('\n', validator_pos)
+if line_end < 0:
+    line_end = len(segment)
+indent = segment[line_start:validator_pos]
+segment = (
+    segment[:line_start]
+    + indent
+    + "validator: (v) => workRequired && v == null ? 'Selecione a obra. O administrador pode cadastrá-la.' : null,"
+    + segment[line_end:]
+)
 
 text = text[:start] + segment + text[end:]
 

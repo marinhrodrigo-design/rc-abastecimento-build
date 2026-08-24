@@ -42,8 +42,17 @@ if old in inner:
     inner = inner.replace(old, new, 1)
 elif new not in inner:
     raise SystemExit('v14 compat: limite da gestão de usuários não encontrado')
+
+# 3) A série 3.x do geocoding compila o plugin Android contra SDK 33.
+# A série 4.x mantém a API usada pelo app e compila contra SDK 35,
+# compatível com as dependências Android atuais.
+if "geocoding: ^3.0.0" in inner:
+    inner = inner.replace("geocoding: ^3.0.0", "geocoding: ^4.0.0", 1)
+elif "geocoding: ^4.0.0" not in inner:
+    raise SystemExit('v14 compat: dependência geocoding não encontrada no pacote')
+
 new_payload = base64.b64encode(gzip.compress(inner.encode(), mtime=0)).decode()
 wrapper = wrapper[:m.start(1)] + "'''" + new_payload + "'''" + wrapper[m.end(1):]
 wrapper_path.write_text(wrapper)
 
-print('v14 compat: catálogo preservado e limite da gestão de usuários corrigido.')
+print('v14 compat: catálogo preservado, limite corrigido e geocoding Android atualizado.')

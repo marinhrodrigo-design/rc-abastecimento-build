@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v13
+name: Build R&C Abastecimento v14
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v13-public-build
+  group: rc-abastecimento-v14-public-build
   cancel-in-progress: true
 
 permissions:
@@ -72,26 +72,31 @@ jobs:
       - name: Aplicar regra de obra por origem v13
         run: python3 tool/apply_v13_work_rule_by_source.py
 
-      - name: Validar alterações v13
-        run: |
-          grep -q "rca_delete_driver_user" lib/main_online.dart
-          grep -q "Duration(seconds: 1)" lib/main_online.dart
-          ! grep -q "Duration(seconds: 2)" lib/main_online.dart
-          grep -q "Excluir usuário" lib/main_online.dart
-          grep -q "selectedCodes" lib/main_online.dart
-          ! grep -q "Modo de seleção ativado" lib/main_online.dart
-          grep -q "rca_save_machine_v2" lib/main_online.dart
-          grep -q "Ativo que irá operar" lib/main_online.dart
-          grep -q "Capacidade do comboio (litros)" lib/main_online.dart
-          grep -q "Tanques estacionários" lib/main_online.dart
-          grep -q "asset.startsWith('008')" lib/main_online.dart
-          grep -q "number.text.trim().startsWith('008')" lib/main_online.dart
-          grep -q "workRequired ? 'Obra \*' : 'Obra (opcional)'" lib/main_online.dart
-          grep -q "workRequired && v == null" lib/main_online.dart
+      - name: Aplicar pacote final de registros e PDF v14
+        run: python3 tool/apply_v14_final_package.py
 
-      - name: Configurar Android
+      - name: Validar alterações v14
+        run: |
+          grep -q "rca_record_fueling_v14" lib/main_online.dart
+          grep -q "package:geocoding/geocoding.dart" lib/main_online.dart
+          grep -q "Tipo de combustível \*" lib/main_online.dart
+          grep -q "Localização \*" lib/main_online.dart
+          grep -q "placemarkFromCoordinates" lib/main_online.dart
+          grep -q "Ativo que vai operar \*" lib/main_online.dart
+          grep -q "class FuelPdfReport" lib/main_online.dart
+          grep -q "company_subtitle" lib/main_online.dart
+          grep -q "Hydra" lib/main_online.dart
+          grep -q "Equipamentos" lib/main_online.dart
+          grep -q "Estoque do \$source antes" lib/main_online.dart
+          grep -q "Duration(seconds: 1)" lib/main_online.dart
+          ! grep -q "Modo de seleção ativado" lib/main_online.dart
+          ! grep -q "R&C Abastecimento.*REGISTRO CONFERIDO" lib/main_online.dart
+
+      - name: Configurar Android e fonte dos ícones do PDF
         run: |
           rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
           python3 - <<'PY'
           from pathlib import Path
           manifest = Path('android/app/src/main/AndroidManifest.xml')
@@ -122,25 +127,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v13.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v14.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v13-build
+          TAG: rc-abastecimento-v14-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v13.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v14.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v13" \
-            --notes "R&C Abastecimento v13: abastecimento por Comboio exige obra obrigatoriamente; abastecimento direto pelo Tanque Estacionário permite obra opcional. Mantém a regra de comboios pelo prefixo 008 e todas as funções da v12."
+            --title "R&C Abastecimento v14" \
+            --notes "R&C Abastecimento v14: novo layout aprovado para registros e PDF, combustível selecionável, endereço completo da localização, PDF em Meus registros restrito ao próprio login, Tanque Estacionário disponível na destinação de usuário e dados da empresa configuráveis. Mantém todas as regras operacionais anteriores."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v13-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v14-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v13-status.txt
-          git commit -m "Resultado do build v13 [skip ci]" || exit 0
+          git add build-v14-status.txt
+          git commit -m "Resultado do build v14 [skip ci]" || exit 0
           git push

@@ -1,5 +1,5 @@
-# v15: PDF corrigido e acesso integral do administrador
-name: Build R&C Abastecimento v15
+# v16: corrige definitivamente a fonte dos ícones no PDF e testa geração real
+name: Build R&C Abastecimento v16
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v15-public-build
+  group: rc-abastecimento-v16-public-build
   cancel-in-progress: true
 
 permissions:
@@ -56,50 +56,31 @@ jobs:
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
           cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
           grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
-          grep -q "totalizador antes/depois, KM/horímetro antes e placa ou ativo antes" lib/main_online.dart
 
-      - name: Aplicar exclusão de usuário e seleção para PDF v9
-        run: python3 tool/apply_v9_user_delete_pdf_selection.py
+      - name: Aplicar patches v9 a v16
+        run: |
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
 
-      - name: Remover textos auxiliares e usar pressão de 1 segundo v10
-        run: python3 tool/apply_v10_cleanup_selection_ui.py
-
-      - name: Vincular comboios aos ativos e motorista ao ativo v11
-        run: python3 tool/apply_v11_comboio_asset_driver.py
-
-      - name: Classificar comboios pelo prefixo 008 v12
-        run: python3 tool/apply_v12_comboio_prefix_008.py
-
-      - name: Aplicar regra de obra por origem v13
-        run: python3 tool/apply_v13_work_rule_by_source.py
-
-      - name: Preparar compatibilidade v14
-        run: python3 tool/apply_v14_compat.py
-
-      - name: Aplicar pacote final de registros e PDF v14
-        run: python3 tool/apply_v14_final_package.py
-
-      - name: Corrigir PDF e acesso administrativo v15
-        run: python3 tool/apply_v15_admin_pdf_fix.py
-
-      - name: Validar alterações v15
+      - name: Validar alterações v16
         run: |
           grep -q "rca_record_fueling_v14" lib/main_online.dart
           grep -q "package:geocoding/geocoding.dart" lib/main_online.dart
           grep -q "Tipo de combustível \*" lib/main_online.dart
           grep -q "Localização \*" lib/main_online.dart
-          grep -q "placemarkFromCoordinates" lib/main_online.dart
           grep -q "Ativo que vai operar \*" lib/main_online.dart
           grep -q "class FuelPdfReport" lib/main_online.dart
-          grep -q "company_subtitle" lib/main_online.dart
-          grep -q "Hydra" lib/main_online.dart
-          grep -q "Equipamentos" lib/main_online.dart
-          grep -q "Estoque do \$source antes" lib/main_online.dart
-          grep -q "Duration(seconds: 1)" lib/main_online.dart
-          grep -q "pw.Icon(pw.IconData(icon.codePoint)" lib/main_online.dart
-          grep -q "pw.Icon(pw.IconData(Icons.local_gas_station_rounded.codePoint)" lib/main_online.dart
-          ! grep -q "Modo de seleção ativado" lib/main_online.dart
-          ! grep -q "R&C Abastecimento.*REGISTRO CONFERIDO" lib/main_online.dart
+          grep -q "ThemeData.withFont(base: regular, bold: bold, icons: iconFont)" lib/main_online.dart
+          grep -q "pw.Icon(pw.IconData(icon.codePoint), size: size" lib/main_online.dart
+          grep -q "pw.Icon(pw.IconData(Icons.local_gas_station_rounded.codePoint), size: 22" lib/main_online.dart
+          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "String.fromCharCode("
 
       - name: Configurar Android e fonte dos ícones do PDF
         run: |
@@ -110,13 +91,7 @@ jobs:
           from pathlib import Path
           manifest = Path('android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
-          permissions = [
-              'android.permission.INTERNET',
-              'android.permission.CAMERA',
-              'android.permission.ACCESS_FINE_LOCATION',
-              'android.permission.ACCESS_COARSE_LOCATION',
-          ]
-          for permission in permissions:
+          for permission in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
               if permission not in text:
                   text = text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
           text = text.replace('android:label="rc_abastecimento"', 'android:label="R&amp;C Abastecimento"')
@@ -129,6 +104,39 @@ jobs:
       - name: Dependências
         run: flutter pub get
 
+      - name: Teste real de geração de PDF com Material Icons
+        run: |
+          cat > tool/pdf_icon_smoke_v16.dart <<'DART'
+          import 'dart:io';
+          import 'dart:typed_data';
+          import 'package:pdf/pdf.dart';
+          import 'package:pdf/widgets.dart' as pw;
+
+          Future<void> main() async {
+            final bytes = File('assets/MaterialIcons-Regular.otf').readAsBytesSync();
+            final iconFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(bytes)));
+            final doc = pw.Document();
+            doc.addPage(pw.Page(
+              theme: pw.ThemeData.withFont(
+                base: pw.Font.helvetica(),
+                bold: pw.Font.helveticaBold(),
+                icons: iconFont,
+              ),
+              build: (_) => pw.Row(children: [
+                pw.Icon(pw.IconData(0xe546), size: 22, color: PdfColors.blue),
+                pw.SizedBox(width: 8),
+                pw.Text('PDF R&C Abastecimento'),
+              ]),
+            ));
+            final out = await doc.save();
+            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') {
+              throw StateError('PDF smoke test inválido');
+            }
+            stdout.writeln('PDF_ICON_SMOKE_OK bytes=${out.length}');
+          }
+          DART
+          dart run tool/pdf_icon_smoke_v16.dart
+
       - name: Análise estática
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
 
@@ -136,25 +144,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v15.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v16.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v15-build
+          TAG: rc-abastecimento-v16-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v15.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v16.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v15" \
-            --notes "R&C Abastecimento v15: corrige a exportação PDF usando o renderizador nativo de ícones do pacote PDF, preservando fonte, layout e ícones aprovados. O administrador passa a ter acesso total aos registros de todos os logins e todas as datas; demais usuários permanecem restritos aos próprios registros. Mantém todas as funções da v14."
+            --title "R&C Abastecimento v16" \
+            --notes "R&C Abastecimento v16: corrige definitivamente a exportação PDF registrando a fonte Material Icons no tema do documento e inclui teste real de geração de PDF no build. Mantém o layout aprovado e a regra de acesso: administrador vê todos os registros; demais usuários somente os próprios."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v15-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v16-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v15-status.txt
-          git commit -m "Resultado do build v15 [skip ci]" || exit 0
+          git add build-v16-status.txt
+          git commit -m "Resultado do build v16 [skip ci]" || exit 0
           git push

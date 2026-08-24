@@ -1,5 +1,5 @@
-# v16: corrige definitivamente os ícones do PDF rasterizando-os antes da exportação
-name: Build R&C Abastecimento v16
+# v17: PDF fiel ao modelo visual aprovado, com litragem e assinaturas
+name: Build R&C Abastecimento v17
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v16-public-build
+  group: rc-abastecimento-v17-public-build
   cancel-in-progress: true
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
           cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
           grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
 
-      - name: Aplicar patches v9 a v16
+      - name: Aplicar patches v9 a v17
         run: |
           python3 tool/apply_v9_user_delete_pdf_selection.py
           python3 tool/apply_v10_cleanup_selection_ui.py
@@ -68,8 +68,9 @@ jobs:
           python3 tool/apply_v14_final_package.py
           python3 tool/apply_v15_admin_pdf_fix.py
           python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
 
-      - name: Validar alterações v16
+      - name: Validar alterações v17
         run: |
           grep -q "rca_record_fueling_v14" lib/main_online.dart
           grep -q "package:geocoding/geocoding.dart" lib/main_online.dart
@@ -77,11 +78,15 @@ jobs:
           grep -q "Localização \*" lib/main_online.dart
           grep -q "Ativo que vai operar \*" lib/main_online.dart
           grep -q "class FuelPdfReport" lib/main_online.dart
-          grep -q "_materialIconPng" lib/main_online.dart
-          grep -q "blueIconImages" lib/main_online.dart
-          grep -q "pw.Image(headerIconImage" lib/main_online.dart
-          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "pw.Icon("
-          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "MaterialIcons-Regular.otf"
+          grep -q "Assinatura de quem recebeu" lib/main_online.dart
+          grep -q "Assinatura de quem abasteceu" lib/main_online.dart
+          grep -q "_brNumber(x\['liters'\], liters: true)" lib/main_online.dart
+          grep -q "Estoque do \$source antes" lib/main_online.dart
+          grep -q "Estoque do \$source depois" lib/main_online.dart
+          grep -q "companySubtitle" lib/main_online.dart
+          grep -q "rca_report_company" lib/main_online.dart
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "pw.Icon("
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "REGISTRO CONFERIDO"
 
       - name: Configurar Android
         run: |
@@ -105,9 +110,9 @@ jobs:
       - name: Dependências
         run: flutter pub get
 
-      - name: Teste real de PDF sem caracteres privados
+      - name: Teste real de PDF com imagens
         run: |
-          cat > tool/pdf_image_smoke_v16.dart <<'DART'
+          cat > tool/pdf_image_smoke_v17.dart <<'DART'
           import 'dart:convert';
           import 'dart:io';
           import 'package:pdf/pdf.dart';
@@ -117,20 +122,22 @@ jobs:
             final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
             final doc = pw.Document();
             doc.addPage(pw.Page(
-              build: (_) => pw.Row(children: [
-                pw.Image(pw.MemoryImage(png), width: 22, height: 22),
-                pw.SizedBox(width: 8),
-                pw.Text('R&C Abastecimento - Localização - Lubrificação'),
+              build: (_) => pw.Column(children: [
+                pw.Text('Hydra', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
+                pw.Text('Equipamentos'),
+                pw.Text('24/08/2026 13:48 • 30,0 L'),
+                pw.Row(children: [
+                  pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)),
+                  pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)),
+                ]),
               ]),
             ));
             final out = await doc.save();
-            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') {
-              throw StateError('PDF smoke test inválido');
-            }
-            stdout.writeln('PDF_IMAGE_SMOKE_OK bytes=${out.length}');
+            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') throw StateError('PDF smoke test inválido');
+            stdout.writeln('PDF_V17_SMOKE_OK bytes=${out.length}');
           }
           DART
-          dart run tool/pdf_image_smoke_v16.dart
+          dart run tool/pdf_image_smoke_v17.dart
 
       - name: Análise estática
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
@@ -139,25 +146,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v16.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v17.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v16-build
+          TAG: rc-abastecimento-v17-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v16.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v17.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v16" \
-            --notes "R&C Abastecimento v16: corrige a exportação PDF rasterizando os mesmos ícones Material do app como imagens transparentes antes de inseri-los no documento, eliminando caracteres privados incompatíveis com o pacote PDF. Mantém o layout aprovado e a regra de acesso do administrador."
+            --title "R&C Abastecimento v17" \
+            --notes "R&C Abastecimento v17: refaz o PDF de Meus registros no layout visual aprovado Hydra/Equipamentos, sem carimbo, com litragem visível, estoques dinâmicos, endereço/combustível e as assinaturas de quem recebeu e de quem abasteceu. Mantém a correção de ícones rasterizados e as regras de acesso do administrador."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v16-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v17-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v16-status.txt
-          git commit -m "Resultado do build v16 [skip ci]" || exit 0
+          git add build-v17-status.txt
+          git commit -m "Resultado do build v17 [skip ci]" || exit 0
           git push

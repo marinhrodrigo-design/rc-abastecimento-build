@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruir fonte até v13 e inspecionar limites
+      - name: Testar aplicação completa do v14 sem Flutter
         run: |
           mkdir -p lib
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
@@ -25,43 +25,35 @@ jobs:
           python3 tool/apply_v12_comboio_prefix_008.py
           python3 tool/apply_v13_work_rule_by_source.py
           python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
           python3 - <<'PY'
           from pathlib import Path
-          import re, ast, base64, gzip
-          source = Path('lib/main_online.dart').read_text()
-          src_lines = source.splitlines()
-          out=[]
-          out.append('=== POSIÇÕES NA FONTE APÓS v13 + compat ===')
-          markers = [
-            'class AdminHomeScreen', 'class AdminCatalogScreen', 'class FuelPdfReport',
-            'class AdminUsersOnlineScreen', 'class _AdminUsersOnlineScreenState',
-            'class TanksAdminScreen', 'class MovementDetailScreen', 'class MyOnlineMovementsScreen'
-          ]
-          for marker in markers:
-              found=[i+1 for i,l in enumerate(src_lines) if marker in l]
-              out.append(f'{marker}: {found}')
-          for i,line in enumerate(src_lines):
-              if "title: 'Obras'" in line:
-                  out.append(f'OBRAS {i+1}: {line!r}')
-
-          wrapper = Path('tool/apply_v14_final_package.py').read_text()
-          m = re.search(r"payload\s*=\s*('''.*?''')", wrapper, re.S)
-          payload = ast.literal_eval(m.group(1))
-          inner = gzip.decompress(base64.b64decode(payload)).decode()
-          lines = inner.splitlines()
-          out.append('=== OPERAÇÕES DO v14 ANTES DO CATÁLOGO ===')
-          for i,line in enumerate(lines[:823]):
-              if 'replace_between(' in line or 'text = text[:' in line or "text.index('class" in line:
-                  out.append(f'{i+1}: {line}')
-          out.append('=== CATÁLOGO ===')
-          for i in range(821,829): out.append(f'{i+1}: {lines[i]}')
-          Path('v14-diagnostic.txt').write_text('\n'.join(out)+'\n')
-          print('\n'.join(out))
+          text = Path('lib/main_online.dart').read_text()
+          checks = {
+            'rpc_v14': "rca_record_fueling_v14" in text,
+            'geocoding': "package:geocoding/geocoding.dart" in text,
+            'fuel_type': "Tipo de combustível *" in text,
+            'location': "Localização *" in text,
+            'full_address': "placemarkFromCoordinates" in text,
+            'assignment': "Ativo que vai operar *" in text,
+            'pdf': "class FuelPdfReport" in text,
+            'company': "company_subtitle" in text and "Hydra" in text and "Equipamentos" in text,
+            'stock_dynamic': "Estoque do $source antes" in text,
+            'selection_1s': "Duration(seconds: 1)" in text,
+            'no_selection_snackbar': "Modo de seleção ativado" not in text,
+          }
+          ok = all(checks.values())
+          lines = [f"status={'success' if ok else 'failure'}"] + [f"{k}={v}" for k,v in checks.items()]
+          Path('v14-patch-test.txt').write_text('\n'.join(lines)+'\n')
+          print('\n'.join(lines))
+          if not ok:
+              raise SystemExit(1)
           PY
-      - name: Salvar diagnóstico
+      - name: Salvar resultado do teste
+        if: always()
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
-          git add v14-diagnostic.txt
-          git commit -m "Diagnóstico limites v14 [skip ci]" || exit 0
+          git add v14-patch-test.txt || true
+          git commit -m "Teste rápido do patch v14 [skip ci]" || exit 0
           git push

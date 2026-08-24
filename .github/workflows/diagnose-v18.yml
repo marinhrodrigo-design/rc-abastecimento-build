@@ -1,0 +1,59 @@
+name: Diagnóstico R&C Abastecimento v18
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/diagnose-v18.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruir fonte e aplicar v9-v17
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+      - name: Extrair trechos relevantes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('lib/main_online.dart').read_text()
+          needles=['Detalhe do registro','Quantidade abastecida','Combustível','Fotos e assinaturas']
+          out=[]
+          for n in needles:
+              out.append('\n===== '+n+' =====\n')
+              pos=0
+              found=0
+              while True:
+                  i=text.find(n,pos)
+                  if i<0: break
+                  found+=1
+                  out.append(text[max(0,i-900):min(len(text),i+1800)])
+                  out.append('\n--- ocorrência ---\n')
+                  pos=i+len(n)
+                  if found>=6: break
+          Path('diagnose-v18.txt').write_text(''.join(out))
+          PY
+      - name: Salvar diagnóstico
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add diagnose-v18.txt
+          git commit -m "Diagnóstico fonte final v18 [skip ci]" || exit 0
+          git push

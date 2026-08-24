@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v12
+name: Build R&C Abastecimento v13
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v12-public-build
+  group: rc-abastecimento-v13-public-build
   cancel-in-progress: true
 
 permissions:
@@ -69,7 +69,10 @@ jobs:
       - name: Classificar comboios pelo prefixo 008 v12
         run: python3 tool/apply_v12_comboio_prefix_008.py
 
-      - name: Validar alterações v12
+      - name: Aplicar regra de obra por origem v13
+        run: python3 tool/apply_v13_work_rule_by_source.py
+
+      - name: Validar alterações v13
         run: |
           grep -q "rca_delete_driver_user" lib/main_online.dart
           grep -q "Duration(seconds: 1)" lib/main_online.dart
@@ -83,7 +86,8 @@ jobs:
           grep -q "Tanques estacionários" lib/main_online.dart
           grep -q "asset.startsWith('008')" lib/main_online.dart
           grep -q "number.text.trim().startsWith('008')" lib/main_online.dart
-          ! grep -q "final isComboio = type.text.trim().toUpperCase().contains('COMBOIO')" lib/main_online.dart
+          grep -q "workRequired ? 'Obra \*' : 'Obra (opcional)'" lib/main_online.dart
+          grep -q "workRequired && v == null" lib/main_online.dart
 
       - name: Configurar Android
         run: |
@@ -118,25 +122,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v12.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v13.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v12-build
+          TAG: rc-abastecimento-v13-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v12.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v13.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v12" \
-            --notes "R&C Abastecimento v12: todo ativo cujo número começa com 008 é tratado como comboio, inclusive futuros cadastros. O motorista pode ser destinado aos ativos 008-..., e os comboios existentes são reaproveitados preservando saldo e histórico. Mantém Tanque Estacionário e todas as funções da v11."
+            --title "R&C Abastecimento v13" \
+            --notes "R&C Abastecimento v13: abastecimento por Comboio exige obra obrigatoriamente; abastecimento direto pelo Tanque Estacionário permite obra opcional. Mantém a regra de comboios pelo prefixo 008 e todas as funções da v12."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v12-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v13-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v12-status.txt
-          git commit -m "Resultado do build v12 [skip ci]" || exit 0
+          git add build-v13-status.txt
+          git commit -m "Resultado do build v13 [skip ci]" || exit 0
           git push

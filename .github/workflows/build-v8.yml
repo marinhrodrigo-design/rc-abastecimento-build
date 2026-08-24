@@ -1,5 +1,5 @@
-# v17: PDF fiel ao modelo visual aprovado, com litragem e assinaturas
-name: Build R&C Abastecimento v17
+# v18: ordem visual final aprovada no detalhe e PDF
+name: Build R&C Abastecimento v18
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v17-public-build
+  group: rc-abastecimento-v18-public-build
   cancel-in-progress: true
 
 permissions:
@@ -57,7 +57,7 @@ jobs:
           cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
           grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
 
-      - name: Aplicar patches v9 a v17
+      - name: Aplicar patches v9 a v18
         run: |
           python3 tool/apply_v9_user_delete_pdf_selection.py
           python3 tool/apply_v10_cleanup_selection_ui.py
@@ -69,24 +69,40 @@ jobs:
           python3 tool/apply_v15_admin_pdf_fix.py
           python3 tool/apply_v16_pdf_icon_theme_fix.py
           python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
 
-      - name: Validar alterações v17
+      - name: Validar alterações v18
         run: |
           grep -q "rca_record_fueling_v14" lib/main_online.dart
-          grep -q "package:geocoding/geocoding.dart" lib/main_online.dart
           grep -q "Tipo de combustível \*" lib/main_online.dart
           grep -q "Localização \*" lib/main_online.dart
           grep -q "Ativo que vai operar \*" lib/main_online.dart
           grep -q "class FuelPdfReport" lib/main_online.dart
           grep -q "Assinatura de quem recebeu" lib/main_online.dart
           grep -q "Assinatura de quem abasteceu" lib/main_online.dart
-          grep -q "_brNumber(x\['liters'\], liters: true)" lib/main_online.dart
+          grep -q "'Abastecimento/Lubrificação'" lib/main_online.dart
+          grep -q "fullRow(Icons.local_gas_station_rounded, _movementLabelForItem(x), liters)" lib/main_online.dart
+          grep -q "halfRow(Icons.location_on_outlined, 'Localização', location)" lib/main_online.dart
+          grep -q "halfRow(Icons.water_drop_outlined, 'Combustível', fuel)" lib/main_online.dart
+          grep -q "bulletText" lib/main_online.dart
           grep -q "Estoque do \$source antes" lib/main_online.dart
           grep -q "Estoque do \$source depois" lib/main_online.dart
-          grep -q "companySubtitle" lib/main_online.dart
-          grep -q "rca_report_company" lib/main_online.dart
           ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "pw.Icon("
-          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "REGISTRO CONFERIDO"
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -qi "carimbo\|REGISTRO CONFERIDO"
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('lib/main_online.dart').read_text()
+          s=t[t.index('class FuelPdfReport'):t.index('class AdminUsersOnlineScreen')]
+          bad=[]
+          for line in s.splitlines():
+              if 'pw.Text(' in line and '•' in line and "replaceAll('•'" not in line:
+                  bad.append(line.strip())
+          if bad:
+              raise SystemExit('PDF ainda renderiza bullet como texto: '+repr(bad))
+          if "pw.Text('${_fmtDate(x['created_at'])}  •  $liters'" in s:
+              raise SystemExit('Litragem continua no cabeçalho antigo')
+          print('VALIDACAO_V18_OK')
+          PY
 
       - name: Configurar Android
         run: |
@@ -110,34 +126,38 @@ jobs:
       - name: Dependências
         run: flutter pub get
 
-      - name: Teste real de PDF com imagens
+      - name: Teste real de PDF com separador gráfico e assinaturas
         run: |
-          cat > tool/pdf_image_smoke_v17.dart <<'DART'
+          cat > tool/pdf_smoke_v18.dart <<'DART'
           import 'dart:convert';
           import 'dart:io';
           import 'package:pdf/pdf.dart';
           import 'package:pdf/widgets.dart' as pw;
 
+          pw.Widget bulletLine(List<String> parts) => pw.Wrap(children: [
+            for (var i=0;i<parts.length;i++) ...[
+              if (i>0) pw.Padding(padding: const pw.EdgeInsets.symmetric(horizontal: 6, vertical: 5), child: pw.Container(width: 3, height: 3, decoration: const pw.BoxDecoration(color: PdfColors.black, shape: pw.BoxShape.circle))),
+              pw.Text(parts[i]),
+            ]
+          ]);
+
           Future<void> main() async {
             final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
             final doc = pw.Document();
-            doc.addPage(pw.Page(
-              build: (_) => pw.Column(children: [
-                pw.Text('Hydra', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
-                pw.Text('Equipamentos'),
-                pw.Text('24/08/2026 13:48 • 30,0 L'),
-                pw.Row(children: [
-                  pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)),
-                  pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)),
-                ]),
-              ]),
-            ));
+            doc.addPage(pw.Page(build: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text('Hydra', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Equipamentos'),
+              bulletLine(['24/08/2026 13:48','Fanor']),
+              pw.Text('Combustível'), pw.Text('Diesel S10'),
+              pw.Text('Abastecimento/Lubrificação'), pw.Text('30,0 L'),
+              pw.Row(children: [pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)), pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50))]),
+            ])));
             final out = await doc.save();
             if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') throw StateError('PDF smoke test inválido');
-            stdout.writeln('PDF_V17_SMOKE_OK bytes=${out.length}');
+            stdout.writeln('PDF_V18_SMOKE_OK bytes=${out.length}');
           }
           DART
-          dart run tool/pdf_image_smoke_v17.dart
+          dart run tool/pdf_smoke_v18.dart
 
       - name: Análise estática
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
@@ -146,25 +166,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v17.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v18.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v17-build
+          TAG: rc-abastecimento-v18-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v17.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v18.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v17" \
-            --notes "R&C Abastecimento v17: refaz o PDF de Meus registros no layout visual aprovado Hydra/Equipamentos, sem carimbo, com litragem visível, estoques dinâmicos, endereço/combustível e as assinaturas de quem recebeu e de quem abasteceu. Mantém a correção de ícones rasterizados e as regras de acesso do administrador."
+            --title "R&C Abastecimento v18" \
+            --notes "R&C Abastecimento v18: aplica a ordem visual final aprovada no detalhe e no PDF. Combustível/Diesel S10 vem antes de Abastecimento/Lubrificação, com a litragem logo abaixo. Localização fica ao lado de Combustível no PDF, assinaturas permanecem no rodapé do cartão, estoques continuam dinâmicos e os separadores são desenhados graficamente para eliminar caracteres inválidos."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v17-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v18-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v17-status.txt
-          git commit -m "Resultado do build v17 [skip ci]" || exit 0
+          git add build-v18-status.txt
+          git commit -m "Resultado do build v18 [skip ci]" || exit 0
           git push

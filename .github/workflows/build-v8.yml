@@ -1,5 +1,5 @@
-# v14 com correção estrutural validada em 24/08/2026
-name: Build R&C Abastecimento v14
+# v15: PDF corrigido e acesso integral do administrador
+name: Build R&C Abastecimento v15
 
 on:
   push:
@@ -11,7 +11,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v14-public-build
+  group: rc-abastecimento-v15-public-build
   cancel-in-progress: true
 
 permissions:
@@ -79,7 +79,10 @@ jobs:
       - name: Aplicar pacote final de registros e PDF v14
         run: python3 tool/apply_v14_final_package.py
 
-      - name: Validar alterações v14
+      - name: Corrigir PDF e acesso administrativo v15
+        run: python3 tool/apply_v15_admin_pdf_fix.py
+
+      - name: Validar alterações v15
         run: |
           grep -q "rca_record_fueling_v14" lib/main_online.dart
           grep -q "package:geocoding/geocoding.dart" lib/main_online.dart
@@ -93,6 +96,8 @@ jobs:
           grep -q "Equipamentos" lib/main_online.dart
           grep -q "Estoque do \$source antes" lib/main_online.dart
           grep -q "Duration(seconds: 1)" lib/main_online.dart
+          grep -q "pw.Icon(pw.IconData(icon.codePoint)" lib/main_online.dart
+          grep -q "pw.Icon(pw.IconData(Icons.local_gas_station_rounded.codePoint)" lib/main_online.dart
           ! grep -q "Modo de seleção ativado" lib/main_online.dart
           ! grep -q "R&C Abastecimento.*REGISTRO CONFERIDO" lib/main_online.dart
 
@@ -131,25 +136,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v14.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v15.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v14-build
+          TAG: rc-abastecimento-v15-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v14.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v15.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v14" \
-            --notes "R&C Abastecimento v14: novo layout aprovado para registros e PDF, combustível selecionável, endereço completo da localização, PDF em Meus registros restrito ao próprio login, Tanque Estacionário disponível na destinação de usuário e dados da empresa configuráveis. Mantém todas as regras operacionais anteriores."
+            --title "R&C Abastecimento v15" \
+            --notes "R&C Abastecimento v15: corrige a exportação PDF usando o renderizador nativo de ícones do pacote PDF, preservando fonte, layout e ícones aprovados. O administrador passa a ter acesso total aos registros de todos os logins e todas as datas; demais usuários permanecem restritos aos próprios registros. Mantém todas as funções da v14."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v14-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v15-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v14-status.txt
-          git commit -m "Resultado do build v14 [skip ci]" || exit 0
+          git add build-v15-status.txt
+          git commit -m "Resultado do build v15 [skip ci]" || exit 0
           git push

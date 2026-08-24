@@ -51,9 +51,10 @@ jobs:
       - name: Reconstruir fonte final v8
         run: |
           mkdir -p lib
-          base64 -d payload/main_online.dart.gz.b64 | gzip -d > lib/main_online.dart
-          base64 -d payload/pubspec.yaml.gz.b64 | gzip -d > pubspec.yaml
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
           grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+          grep -q "totalizador antes/depois, KM/horímetro antes e placa ou ativo antes" lib/main_online.dart
 
       - name: Configurar Android
         run: |

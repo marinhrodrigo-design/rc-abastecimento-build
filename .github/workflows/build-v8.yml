@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v10
+name: Build R&C Abastecimento v11
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v10-public-build
+  group: rc-abastecimento-v11-public-build
   cancel-in-progress: true
 
 permissions:
@@ -63,15 +63,22 @@ jobs:
       - name: Remover textos auxiliares e usar pressão de 1 segundo v10
         run: python3 tool/apply_v10_cleanup_selection_ui.py
 
-      - name: Validar alterações v10
+      - name: Vincular comboios aos ativos e motorista ao ativo v11
+        run: python3 tool/apply_v11_comboio_asset_driver.py
+
+      - name: Validar alterações v11
         run: |
           grep -q "rca_delete_driver_user" lib/main_online.dart
           grep -q "Duration(seconds: 1)" lib/main_online.dart
           ! grep -q "Duration(seconds: 2)" lib/main_online.dart
           grep -q "Excluir usuário" lib/main_online.dart
           grep -q "selectedCodes" lib/main_online.dart
-          ! grep -q "Pressione um registro por 2 segundos para selecionar" lib/main_online.dart
           ! grep -q "Modo de seleção ativado" lib/main_online.dart
+          grep -q "rca_save_machine_v2" lib/main_online.dart
+          grep -q "Ativo que irá operar" lib/main_online.dart
+          grep -q "Capacidade do comboio (litros)" lib/main_online.dart
+          grep -q "Tanques estacionários" lib/main_online.dart
+          ! grep -q "title: 'Comboios e tanques'" lib/main_online.dart
 
       - name: Configurar Android
         run: |
@@ -106,25 +113,25 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Preparar APK
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v10.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v11.apk
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v10-build
+          TAG: rc-abastecimento-v11-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v10.apk \
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v11.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v10" \
-            --notes "R&C Abastecimento v10: mantém todas as funções da v9, remove os textos auxiliares do modo de seleção e reduz a pressão necessária para selecionar um registro de 2 para 1 segundo. A seleção múltipla para PDF permanece funcionando."
+            --title "R&C Abastecimento v11" \
+            --notes "R&C Abastecimento v11: comboios passam a ser cadastrados como ativos; o Tanque Estacionário permanece com cadastro próprio; motorista é vinculado ao ativo que irá operar; CB01 permanece ligado ao ativo 008-001 com saldo e histórico preservados. Mantém todas as funções e correções da v10."
 
       - name: Registrar resultado
         if: always()
         run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v10-status.txt
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v11-status.txt
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v10-status.txt
-          git commit -m "Resultado do build v10 [skip ci]" || exit 0
+          git add build-v11-status.txt
+          git commit -m "Resultado do build v11 [skip ci]" || exit 0
           git push

@@ -72,6 +72,9 @@ jobs:
       - name: Aplicar regra de obra por origem v13
         run: python3 tool/apply_v13_work_rule_by_source.py
 
+      - name: Preparar compatibilidade v14
+        run: python3 tool/apply_v14_compat.py
+
       - name: Aplicar pacote final de registros e PDF v14
         run: python3 tool/apply_v14_final_package.py
 

@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   diagnose:
@@ -27,9 +27,19 @@ jobs:
           payload = ast.literal_eval(m.group(1))
           inner = gzip.decompress(base64.b64decode(payload)).decode()
           lines = inner.splitlines()
+          out=[]
           for i, line in enumerate(lines):
               if 'catálogo obras' in line or "title: 'Obras'" in line or 'AdminCatalogScreen' in line:
-                  lo=max(0,i-8); hi=min(len(lines),i+12)
-                  print(f'--- linhas {lo+1}-{hi} ---')
-                  for j in range(lo,hi): print(f'{j+1}: {lines[j]}')
+                  lo=max(0,i-12); hi=min(len(lines),i+18)
+                  out.append(f'--- linhas {lo+1}-{hi} ---')
+                  for j in range(lo,hi): out.append(f'{j+1}: {lines[j]}')
+          Path('v14-diagnostic.txt').write_text('\n'.join(out) + '\n')
+          print('\n'.join(out))
           PY
+      - name: Salvar diagnóstico
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
+          git add v14-diagnostic.txt
+          git commit -m "Diagnóstico interno v14 [skip ci]" || exit 0
+          git push

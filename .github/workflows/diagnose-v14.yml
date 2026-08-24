@@ -23,7 +23,9 @@ jobs:
           {
             echo "=== reconstrução ==="
             cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
-            echo "reconstrucao=$?"
+            echo "main=$?"
+            cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+            echo "pubspec=$?"
             echo "=== v9 ==="
             python3 tool/apply_v9_user_delete_pdf_selection.py
             echo "v9=$?"
@@ -44,15 +46,16 @@ jobs:
             echo "compat=$?"
             echo "=== v14 ==="
             python3 tool/apply_v14_final_package.py
-            V14_CODE=$?
-            echo "v14=$V14_CODE"
+            echo "v14=$?"
             echo "=== validações ==="
             python3 - <<'PY'
           from pathlib import Path
           text = Path('lib/main_online.dart').read_text() if Path('lib/main_online.dart').exists() else ''
+          pub = Path('pubspec.yaml').read_text() if Path('pubspec.yaml').exists() else ''
           checks = {
             'rpc_v14': "rca_record_fueling_v14" in text,
-            'geocoding': "package:geocoding/geocoding.dart" in text,
+            'geocoding_import': "package:geocoding/geocoding.dart" in text,
+            'geocoding_dep': "geocoding:" in pub,
             'fuel_type': "Tipo de combustível *" in text,
             'location': "Localização *" in text,
             'full_address': "placemarkFromCoordinates" in text,
@@ -64,6 +67,7 @@ jobs:
             'no_selection_snackbar': "Modo de seleção ativado" not in text,
           }
           for k,v in checks.items(): print(f'{k}={v}')
+          print('status=' + ('success' if all(checks.values()) else 'failure'))
           PY
           } >> v14-patch-test.txt 2>&1
           cat v14-patch-test.txt
@@ -74,5 +78,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
           git add v14-patch-test.txt
-          git commit -m "Teste diagnosticável do patch v14 [skip ci]" || exit 0
+          git commit -m "Teste completo do patch v14 [skip ci]" || exit 0
           git push

@@ -1,5 +1,6 @@
 === reconstrução ===
-reconstrucao=0
+main=0
+pubspec=0
 === v9 ===
 Patch v9 aplicado: exclusão real de usuário com histórico preservado e seleção de registros para PDF.
 v9=0
@@ -19,21 +20,12 @@ v13=0
 v14 compat: catálogo preservado e limite da gestão de usuários corrigido.
 compat=0
 === v14 ===
-Traceback (most recent call last):
-  File "/home/runner/work/rc-abastecimento-build/rc-abastecimento-build/tool/apply_v14_final_package.py", line 3, in <module>
-    exec(compile(gzip.decompress(base64.b64decode(payload)), 'apply_v14_final_package.py', 'exec'))
-  File "apply_v14_final_package.py", line 901, in <module>
-  File "/usr/lib/python3.12/pathlib.py", line 1029, in read_text
-    with self.open(mode='r', encoding=encoding, errors=errors) as f:
-         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-  File "/usr/lib/python3.12/pathlib.py", line 1015, in open
-    return io.open(self, mode, buffering, encoding, errors, newline)
-           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-FileNotFoundError: [Errno 2] No such file or directory: 'pubspec.yaml'
-v14=1
+v14 aplicado: PDF aprovado, combustível, endereço completo, TE na destinação e Meus registros por login.
+v14=0
 === validações ===
 rpc_v14=True
-geocoding=True
+geocoding_import=True
+geocoding_dep=True
 fuel_type=True
 location=True
 full_address=True
@@ -43,3 +35,4 @@ company=True
 stock_dynamic=True
 selection_1s=True
 no_selection_snackbar=True
+status=success

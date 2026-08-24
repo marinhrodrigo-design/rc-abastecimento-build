@@ -1,4 +1,4 @@
-# v16: corrige definitivamente a fonte dos ícones no PDF e testa geração real
+# v16: corrige definitivamente os ícones do PDF rasterizando-os antes da exportação
 name: Build R&C Abastecimento v16
 
 on:
@@ -77,12 +77,13 @@ jobs:
           grep -q "Localização \*" lib/main_online.dart
           grep -q "Ativo que vai operar \*" lib/main_online.dart
           grep -q "class FuelPdfReport" lib/main_online.dart
-          grep -q "ThemeData.withFont(base: regular, bold: bold, icons: iconFont)" lib/main_online.dart
-          grep -q "pw.Icon(pw.IconData(icon.codePoint), size: size" lib/main_online.dart
-          grep -q "pw.Icon(pw.IconData(Icons.local_gas_station_rounded.codePoint), size: 22" lib/main_online.dart
-          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "String.fromCharCode("
+          grep -q "_materialIconPng" lib/main_online.dart
+          grep -q "blueIconImages" lib/main_online.dart
+          grep -q "pw.Image(headerIconImage" lib/main_online.dart
+          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "pw.Icon("
+          ! sed -n '/class FuelPdfReport/,$p' lib/main_online.dart | grep -q "MaterialIcons-Regular.otf"
 
-      - name: Configurar Android e fonte dos ícones do PDF
+      - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
           mkdir -p assets
@@ -104,38 +105,32 @@ jobs:
       - name: Dependências
         run: flutter pub get
 
-      - name: Teste real de geração de PDF com Material Icons
+      - name: Teste real de PDF sem caracteres privados
         run: |
-          cat > tool/pdf_icon_smoke_v16.dart <<'DART'
+          cat > tool/pdf_image_smoke_v16.dart <<'DART'
+          import 'dart:convert';
           import 'dart:io';
-          import 'dart:typed_data';
           import 'package:pdf/pdf.dart';
           import 'package:pdf/widgets.dart' as pw;
 
           Future<void> main() async {
-            final bytes = File('assets/MaterialIcons-Regular.otf').readAsBytesSync();
-            final iconFont = pw.Font.ttf(ByteData.sublistView(Uint8List.fromList(bytes)));
+            final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
             final doc = pw.Document();
             doc.addPage(pw.Page(
-              theme: pw.ThemeData.withFont(
-                base: pw.Font.helvetica(),
-                bold: pw.Font.helveticaBold(),
-                icons: iconFont,
-              ),
               build: (_) => pw.Row(children: [
-                pw.Icon(pw.IconData(0xe546), size: 22, color: PdfColors.blue),
+                pw.Image(pw.MemoryImage(png), width: 22, height: 22),
                 pw.SizedBox(width: 8),
-                pw.Text('PDF R&C Abastecimento'),
+                pw.Text('R&C Abastecimento - Localização - Lubrificação'),
               ]),
             ));
             final out = await doc.save();
             if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') {
               throw StateError('PDF smoke test inválido');
             }
-            stdout.writeln('PDF_ICON_SMOKE_OK bytes=${out.length}');
+            stdout.writeln('PDF_IMAGE_SMOKE_OK bytes=${out.length}');
           }
           DART
-          dart run tool/pdf_icon_smoke_v16.dart
+          dart run tool/pdf_image_smoke_v16.dart
 
       - name: Análise estática
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
@@ -155,7 +150,7 @@ jobs:
           gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v16.apk \
             --target "$GITHUB_SHA" \
             --title "R&C Abastecimento v16" \
-            --notes "R&C Abastecimento v16: corrige definitivamente a exportação PDF registrando a fonte Material Icons no tema do documento e inclui teste real de geração de PDF no build. Mantém o layout aprovado e a regra de acesso: administrador vê todos os registros; demais usuários somente os próprios."
+            --notes "R&C Abastecimento v16: corrige a exportação PDF rasterizando os mesmos ícones Material do app como imagens transparentes antes de inseri-los no documento, eliminando caracteres privados incompatíveis com o pacote PDF. Mantém o layout aprovado e a regra de acesso do administrador."
 
       - name: Registrar resultado
         if: always()

@@ -15,7 +15,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Reconstruir fonte até v13 e inspecionar marcador
+      - name: Reconstruir fonte até v13 e inspecionar limites
         run: |
           mkdir -p lib
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
@@ -29,21 +29,32 @@ jobs:
           from pathlib import Path
           import re, ast, base64, gzip
           source = Path('lib/main_online.dart').read_text()
+          src_lines = source.splitlines()
           out=[]
-          out.append('=== FONTE APÓS v13 + compat ===')
-          for i,line in enumerate(source.splitlines()):
-              if "title: 'Obras'" in line or 'AdminCatalogScreen' in line or "title: 'Cadastros'" in line:
-                  out.append(f'{i+1}: {line!r}')
+          out.append('=== POSIÇÕES NA FONTE APÓS v13 + compat ===')
+          markers = [
+            'class AdminHomeScreen', 'class AdminCatalogScreen', 'class FuelPdfReport',
+            'class AdminUsersOnlineScreen', 'class _AdminUsersOnlineScreenState',
+            'class TanksAdminScreen', 'class MovementDetailScreen', 'class MyOnlineMovementsScreen'
+          ]
+          for marker in markers:
+              found=[i+1 for i,l in enumerate(src_lines) if marker in l]
+              out.append(f'{marker}: {found}')
+          for i,line in enumerate(src_lines):
+              if "title: 'Obras'" in line:
+                  out.append(f'OBRAS {i+1}: {line!r}')
+
           wrapper = Path('tool/apply_v14_final_package.py').read_text()
           m = re.search(r"payload\s*=\s*('''.*?''')", wrapper, re.S)
           payload = ast.literal_eval(m.group(1))
           inner = gzip.decompress(base64.b64decode(payload)).decode()
           lines = inner.splitlines()
-          out.append('=== TRECHO INTERNO v14 ===')
-          for i,line in enumerate(lines):
-              if 'catálogo obras' in line or "title: 'Obras'" in line or line.strip().startswith('us =') or line.strip().startswith('ue ='):
-                  lo=max(0,i-4); hi=min(len(lines),i+7)
-                  for j in range(lo,hi): out.append(f'{j+1}: {lines[j]}')
+          out.append('=== OPERAÇÕES DO v14 ANTES DO CATÁLOGO ===')
+          for i,line in enumerate(lines[:823]):
+              if 'replace_between(' in line or 'text = text[:' in line or "text.index('class" in line:
+                  out.append(f'{i+1}: {line}')
+          out.append('=== CATÁLOGO ===')
+          for i in range(821,829): out.append(f'{i+1}: {lines[i]}')
           Path('v14-diagnostic.txt').write_text('\n'.join(out)+'\n')
           print('\n'.join(out))
           PY
@@ -52,5 +63,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "4189826+github-actions[bot]@users.noreply.github.com"
           git add v14-diagnostic.txt
-          git commit -m "Diagnóstico fonte real v14 [skip ci]" || exit 0
+          git commit -m "Diagnóstico limites v14 [skip ci]" || exit 0
           git push

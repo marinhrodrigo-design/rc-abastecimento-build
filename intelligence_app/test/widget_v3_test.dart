@@ -5,7 +5,7 @@ import 'package:rc_intelligence/main.dart';
 void main() {
   testWidgets('abre planejamento de revisões pelo dashboard', (tester) async {
     await tester.pumpWidget(const RCIntelligenceApp());
-    await tester.tap(find.text('Planejamento de revisões'));
+    await tester.tap(find.text('Revisões em ≤15 dias'));
     await tester.pumpAndSettle();
     expect(find.text('Próximas revisões'), findsOneWidget);
   });
@@ -23,7 +23,7 @@ void main() {
     await tester.pumpWidget(const RCIntelligenceApp());
     await tester.tap(find.byIcon(Icons.build_outlined));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('RUL e vida útil de componentes'));
+    await tester.tap(find.text('RUL monitorado'));
     await tester.pumpAndSettle();
     expect(find.text('Componentes monitorados'), findsOneWidget);
   });

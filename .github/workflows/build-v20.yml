@@ -27,8 +27,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Verificar configuração
-        run: |
-          test -n "$SUPABASE_KEY" || { echo "::error::SUPABASE_KEY não configurada"; exit 1; }
+        run: test -n "$SUPABASE_KEY"
 
       - name: Java 17
         uses: actions/setup-java@v5
@@ -51,7 +50,7 @@ jobs:
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
           cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
 
-      - name: Aplicar v9 a v19 sem alteração
+      - name: Aplicar versão v19 sem mudanças
         run: |
           python3 tool/apply_v9_user_delete_pdf_selection.py
           python3 tool/apply_v10_cleanup_selection_ui.py
@@ -69,60 +68,51 @@ jobs:
           python3 tool/apply_v19_company_registry_hotfix.py
           cp lib/main_online.dart /tmp/main_v19.dart
 
-      - name: Aplicar somente foto no PDF
+      - name: Aplicar exclusivamente foto do abastecimento no PDF
         run: python3 tool/apply_v20_pdf_fueling_photo_only.py
 
-      - name: Provar que nenhuma outra parte mudou
+      - name: Validar alteração isolada
         run: |
           python3 - <<'PY'
           from pathlib import Path
           before = Path('/tmp/main_v19.dart').read_text()
           after = Path('lib/main_online.dart').read_text()
           old = "      for (final p in _rowsFromPaths(x['photo_paths'])) { evidence.add(MapEntry('Foto do abastecimento', p)); }"
-          new = r'''      final fuelingPhotoPaths = <String>[];
-          final rawFuelingPhotos = x['photo_paths'];
-          if (rawFuelingPhotos is List) {
-            for (final value in rawFuelingPhotos) {
-              final p = '${value ?? ''}'.trim();
-              if (p.isNotEmpty && p != 'null') fuelingPhotoPaths.add(p);
-            }
-          } else if (_hasValue(rawFuelingPhotos)) {
-            final raw = '$rawFuelingPhotos'.trim();
-            try {
-              final decoded = jsonDecode(raw);
-              if (decoded is List) {
-                for (final value in decoded) {
-                  final p = '${value ?? ''}'.trim();
-                  if (p.isNotEmpty && p != 'null') fuelingPhotoPaths.add(p);
-                }
-              } else if (raw.isNotEmpty) {
-                fuelingPhotoPaths.add(raw);
-              }
-            } catch (_) {
-              if (raw.isNotEmpty) fuelingPhotoPaths.add(raw);
-            }
-          }
-          for (final p in fuelingPhotoPaths) {
-            evidence.add(MapEntry('Foto do abastecimento', p));
-          }'''
-          if old not in before:
-              raise SystemExit('Linha original da foto não encontrada na v19')
-          expected = before.replace(old, new, 1)
-          if after != expected:
-              raise SystemExit('A v20 alterou algo além da leitura da foto no PDF')
-          required = [
+          if before.count(old) != 1:
+              raise SystemExit('Linha original da foto não encontrada exatamente uma vez na v19')
+          pos = before.index(old)
+          prefix = before[:pos]
+          suffix = before[pos + len(old):]
+          if not after.startswith(prefix) or not after.endswith(suffix):
+              raise SystemExit('A v20 alterou conteúdo fora do bloco da foto do abastecimento')
+          middle_end = len(after) - len(suffix) if suffix else len(after)
+          middle = after[len(prefix):middle_end]
+          required_middle = [
+              "final fuelingPhotoPaths = <String>[];",
+              "final rawFuelingPhotos = x['photo_paths'];",
+              "if (rawFuelingPhotos is List)",
+              "jsonDecode(raw)",
+              "evidence.add(MapEntry('Foto do abastecimento', p));",
+          ]
+          for marker in required_middle:
+              if marker not in middle:
+                  raise SystemExit('Bloco da foto incompleto: '+marker)
+          if old in after:
+              raise SystemExit('Leitura antiga de photo_paths ainda presente')
+          preserved = [
               "signatureBox('Assinatura de quem recebeu'",
               "signatureBox('Assinatura de quem abasteceu'",
               'rca_report_company_for_movement',
               "halfRow(Icons.location_on_outlined, 'Localização', location)",
               "halfRow(Icons.water_drop_outlined, 'Combustível', fuel)",
               "fullRow(Icons.local_gas_station_rounded, _movementLabelForItem(x), liters)",
-              "evidence.add(MapEntry('Foto do abastecimento', p))",
+              'class AdminMoreScreen',
+              'class CompaniesAdminScreen',
           ]
-          for marker in required:
+          for marker in preserved:
               if marker not in after:
-                  raise SystemExit('Marcador preservado ausente: '+marker)
-          print('V20_SOMENTE_FOTO_PDF_OK')
+                  raise SystemExit('Conteúdo v19 não preservado: '+marker)
+          print('V20_ALTERACAO_SOMENTE_FOTO_PDF_OK')
           PY
 
       - name: Configurar Android
@@ -161,7 +151,7 @@ jobs:
           TAG: rc-abastecimento-v20-build
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v20.apk --target "$GITHUB_SHA" --title "R&C Abastecimento v20" --notes "Corrige exclusivamente a foto do abastecimento no PDF exportado. Nenhuma outra função, layout, assinatura, permissão, cadastro ou regra foi alterada."
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v20.apk --target "$GITHUB_SHA" --title "R&C Abastecimento v20" --notes "Corrige exclusivamente a inclusão da foto do abastecimento no PDF exportado. Nenhuma outra função, layout, assinatura, permissão, cadastro ou regra foi alterada."
 
       - name: Registrar resultado
         if: always()

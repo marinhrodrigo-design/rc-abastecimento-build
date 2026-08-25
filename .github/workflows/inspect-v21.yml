@@ -16,6 +16,7 @@ jobs:
         run: |
           mkdir -p lib
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
           python3 tool/apply_v9_user_delete_pdf_selection.py
           python3 tool/apply_v10_cleanup_selection_ui.py
           python3 tool/apply_v11_comboio_asset_driver.py

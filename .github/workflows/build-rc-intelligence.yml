@@ -44,6 +44,8 @@ jobs:
       - name: Reconstruir e validar interface v3
         run: |
           mkdir -p intelligence_app/lib intelligence_app/test
+          echo 'Hashes dos blocos v3:'
+          sha256sum intelligence_payload/v3/*.b64
           cat intelligence_payload/v3/00.b64 intelligence_payload/v3/01.b64 intelligence_payload/v3/02.b64 intelligence_payload/v3/03.b64 intelligence_payload/v3/04.b64 intelligence_payload/v3/05.b64 intelligence_payload/v3/06.b64 intelligence_payload/v3/07.b64 intelligence_payload/v3/08.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_main_v3.b64
           echo 'a826f3c43b6763fcc40c285ed47d8b65e1a0005ae43b2c50500362745b5c069f  /tmp/rc_intelligence_main_v3.b64' | sha256sum -c -
           base64 -d /tmp/rc_intelligence_main_v3.b64 | gzip -d > intelligence_app/lib/main.dart

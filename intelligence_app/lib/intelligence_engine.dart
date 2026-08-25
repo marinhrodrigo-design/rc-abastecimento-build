@@ -1,13 +1,42 @@
 class IntelligenceEngine {
   const IntelligenceEngine._();
 
+  static double remainingToService({
+    required double currentMeter,
+    required double lastServiceMeter,
+    required double interval,
+  }) {
+    return (lastServiceMeter + interval) - currentMeter;
+  }
+
+  static double forecastDays({
+    required double remaining,
+    required double averagePerDay,
+  }) {
+    if (remaining <= 0) return 0;
+    if (averagePerDay <= 0) return double.infinity;
+    return remaining / averagePerDay;
+  }
+
+  static String alertLevel({required double daysToDue}) {
+    if (daysToDue <= 0) return 'VENCIDA';
+    if (daysToDue <= 2) return 'CRÍTICO';
+    if (daysToDue <= 7) return 'URGENTE';
+    if (daysToDue <= 15) return 'ATENÇÃO';
+    if (daysToDue <= 30) return 'PLANEJAR';
+    return 'NORMAL';
+  }
+
   static double hoursToPreventive({
     required double currentHours,
     required double lastServiceHours,
     required double intervalHours,
   }) {
-    final dueAt = lastServiceHours + intervalHours;
-    return dueAt - currentHours;
+    return remainingToService(
+      currentMeter: currentHours,
+      lastServiceMeter: lastServiceHours,
+      interval: intervalHours,
+    );
   }
 
   static double expectedFuelLiters({

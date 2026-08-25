@@ -13,7 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -163,23 +163,10 @@ jobs:
       - name: Preparar APK
         run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v21.apk
 
-      - name: Publicar Release
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: rc-abastecimento-v21-build
-        run: |
-          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v21.apk \
-            --target "$GITHUB_SHA" \
-            --title "R&C Abastecimento v21" \
-            --notes "v21: inclui corretamente as fotos do abastecimento no PDF, permite até 4 fotos em Novo abastecimento e destaca em laranja os movimentos Comboio para Comboio nos registros e no PDF. Mantém assinaturas, layout aprovado, cadastro de empresas e regras de acesso."
-
-      - name: Registrar resultado
-        if: always()
-        run: |
-          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v21-status.txt
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add build-v21-status.txt
-          git commit -m "Resultado do build v21 [skip ci]" || exit 0
-          git push || true
+      - name: Salvar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-Online-Corrigido-v21
+          path: RC-Abastecimento-Online-Corrigido-v21.apk
+          if-no-files-found: error
+          retention-days: 30

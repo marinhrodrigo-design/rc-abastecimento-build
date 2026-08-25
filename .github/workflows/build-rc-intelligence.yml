@@ -55,7 +55,7 @@ jobs:
           cat intelligence_payload/v4/v4_data_entry_test.b64 | tr -d '\n\r ' > /tmp/v4_test.b64
           echo '495cea9dfed1967d57c3e22af5e476eb4126bb16bac815917de6a24160e85eb5  /tmp/data_hub.b64' | sha256sum -c -
           echo 'e76f835eec1874b96fa74990ab9d34ec31ec312af72d3e34e9974e6554aa9c84  /tmp/data_store.b64' | sha256sum -c -
-          echo '1beb962b7456b976657565bf15ea46bdd8df4c3525ac9aa9e6ca97474732420b  /tmp/v4_test.b64' | sha256sum -c -
+          echo '4c6e2b1502f660e3024515359cb594ffc5e8795ee18a489d540cbac3393f68a6  /tmp/v4_test.b64' | sha256sum -c -
           base64 -d /tmp/data_hub.b64 | gzip -d > intelligence_app/lib/data_hub.dart
           base64 -d /tmp/data_store.b64 | gzip -d > intelligence_app/lib/data_store.dart
           base64 -d /tmp/v4_test.b64 | gzip -d > intelligence_app/test/v4_data_entry_test.dart

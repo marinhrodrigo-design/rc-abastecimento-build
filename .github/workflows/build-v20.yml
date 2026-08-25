@@ -1,0 +1,199 @@
+name: Build R&C Abastecimento v20
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tool/apply_v20_pdf_fueling_photo_only.py'
+      - '.github/workflows/build-v20.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v20-public-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar configuração
+        run: |
+          if [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::Configure o segredo SUPABASE_KEY neste repositório antes de compilar."
+            exit 1
+          fi
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar plataforma Android
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+
+      - name: Reconstruir fonte final v8
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+
+      - name: Aplicar patches v9 a v19 sem alteração
+        run: |
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          cp lib/main_online.dart /tmp/main_v19_before_photo_fix.dart
+
+      - name: Aplicar somente correção da foto no PDF v20
+        run: python3 tool/apply_v20_pdf_fueling_photo_only.py
+
+      - name: Validar que somente a foto do PDF foi alterada
+        run: |
+          grep -q "final fuelingPhotoPaths = <String>\[\]>;" lib/main_online.dart
+          grep -q "final rawFuelingPhotos = x\['photo_paths'\];" lib/main_online.dart
+          grep -q "evidence.add(MapEntry('Foto do abastecimento', p));" lib/main_online.dart
+          ! grep -q "for (final p in _rowsFromPaths(x\['photo_paths'\]))" lib/main_online.dart
+          grep -q "signatureBox('Assinatura de quem recebeu'" lib/main_online.dart
+          grep -q "signatureBox('Assinatura de quem abasteceu'" lib/main_online.dart
+          grep -q "rca_report_company_for_movement" lib/main_online.dart
+          grep -q "halfRow(Icons.location_on_outlined, 'Localização', location)" lib/main_online.dart
+          grep -q "halfRow(Icons.water_drop_outlined, 'Combustível', fuel)" lib/main_online.dart
+          grep -q "fullRow(Icons.local_gas_station_rounded, _movementLabelForItem(x), liters)" lib/main_online.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          import difflib
+          before = Path('/tmp/main_v19_before_photo_fix.dart').read_text().splitlines()
+          after = Path('lib/main_online.dart').read_text().splitlines()
+          diff = list(difflib.unified_diff(before, after, lineterm=''))
+          changed = '\n'.join(diff)
+          allowed = [
+              "_rowsFromPaths(x['photo_paths'])",
+              'fuelingPhotoPaths',
+              'rawFuelingPhotos',
+              'jsonDecode(raw)',
+              "MapEntry('Foto do abastecimento', p)",
+              "'${value ?? ''}'",
+              "'$rawFuelingPhotos'",
+              "p != 'null'",
+          ]
+          suspicious = []
+          for line in diff:
+              if not line.startswith(('+','-')) or line.startswith(('+++','---')):
+                  continue
+              if line in ('+','-'):
+                  continue
+              if not any(token in line for token in allowed) and not any(fragment in line for fragment in [
+                  'if (rawFuelingPhotos is List)', 'for (final value in rawFuelingPhotos)',
+                  'if (p.isNotEmpty', '} else if (_hasValue(rawFuelingPhotos)) {',
+                  "final raw =", 'try {', 'final decoded =', 'if (decoded is List)',
+                  'for (final value in decoded)', '} else if (raw.isNotEmpty) {',
+                  'fuelingPhotoPaths.add(raw);', '} catch (_) {', 'if (raw.isNotEmpty)',
+                  'for (final p in fuelingPhotoPaths)', 'evidence.add(', '}',
+              ]):
+                  suspicious.append(line)
+          if suspicious:
+              raise SystemExit('v20 alterou linhas fora da correção de foto: '+repr(suspicious[:20]))
+          print('V20_DIFF_RESTRITO_A_FOTO_OK')
+          PY
+
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          for permission in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+              if permission not in text:
+                  text = text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
+          text = text.replace('android:label="rc_abastecimento"', 'android:label="R&amp;C Abastecimento"')
+          manifest.write_text(text)
+          gradle = Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              gradle.write_text(gradle.read_text().replace('minSdk = flutter.minSdkVersion', 'minSdk = 23'))
+          PY
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Teste de PDF com foto JPEG
+        run: |
+          cat > tool/pdf_smoke_v20.dart <<'DART'
+          import 'dart:convert';
+          import 'dart:io';
+          import 'package:pdf/widgets.dart' as pw;
+          Future<void> main() async {
+            final jpg = base64Decode('/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAP//////////////////////////////////////////////////////////////////////////////////////2wBDAf//////////////////////////////////////////////////////////////////////////////////////wAARCAABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAX/xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIQAxAAAAF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABBQJ//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAwEBPwF//8QAFBEBAAAAAAAAAAAAAAAAAAAAAP/aAAgBAgEBPwF//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQAGPwJ//8QAFBABAAAAAAAAAAAAAAAAAAAAAP/aAAgBAQABPyF//9oADAMBAAIAAwAAABD/xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAEDAQE/EH//xAAUEQEAAAAAAAAAAAAAAAAAAAAA/9oACAECAQE/EH//xAAUEAEAAAAAAAAAAAAAAAAAAAAA/9oACAEBAAE/EH//2Q==');
+            final doc = pw.Document();
+            doc.addPage(pw.Page(build: (_) => pw.Column(children: [
+              pw.Text('Foto do abastecimento'),
+              pw.Image(pw.MemoryImage(jpg), width: 200, height: 120, fit: pw.BoxFit.contain),
+            ])));
+            final out = await doc.save();
+            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') throw StateError('PDF com foto inválido');
+            stdout.writeln('PDF_V20_FOTO_OK bytes=${out.length}');
+          }
+          DART
+          dart run tool/pdf_smoke_v20.dart
+
+      - name: Análise estática
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Compilar APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Preparar APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v20.apk
+
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-abastecimento-v20-build
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v20.apk \
+            --target "$GITHUB_SHA" \
+            --title "R&C Abastecimento v20" \
+            --notes "R&C Abastecimento v20: corrige exclusivamente a inclusão da foto do abastecimento no PDF exportado. Nenhuma outra função, layout, assinatura, permissão, cadastro ou regra foi alterada."
+
+      - name: Registrar resultado
+        if: always()
+        run: |
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v20-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-v20-status.txt
+          git commit -m "Resultado do build v20 [skip ci]" || exit 0
+          git pull --rebase origin main || true
+          git push || true

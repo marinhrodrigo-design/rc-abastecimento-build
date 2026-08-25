@@ -1,0 +1,58 @@
+name: Inspect v21 context
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/inspect-v21.yml'
+  workflow_dispatch:
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruir fonte final
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          python3 tool/apply_v20_pdf_fueling_photo_only.py
+      - name: Mostrar trechos necessários
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('lib/main_online.dart').read_text()
+          keys=[
+            'class _FuelingOnlineScreenState',
+            "photoButton('Foto do abastecimento'",
+            "photos:",
+            'class _MyOnlineMovementsScreenState',
+            'class MovementDetailScreen',
+            'class FuelPdfReport',
+          ]
+          for k in keys:
+            print('\n===== KEY',k,'=====')
+            start=0
+            count=0
+            while True:
+              i=t.find(k,start)
+              if i<0: break
+              print(t[max(0,i-1800):min(len(t),i+4200)])
+              print('\n----- MATCH END -----')
+              start=i+len(k); count+=1
+              if count>=4: break
+          PY

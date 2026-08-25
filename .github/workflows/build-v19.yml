@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - 'payload/**'
+      - 'tool/apply_v19_precompat_admin_more.py'
       - 'tool/apply_v19_company_registry_pdf.py'
       - 'tool/apply_v19_company_registry_hotfix.py'
       - '.github/workflows/build-v19.yml'
@@ -74,6 +75,7 @@ jobs:
           python3 tool/apply_v16_pdf_icon_theme_fix.py
           python3 tool/apply_v17_pdf_exact_layout_signatures.py
           python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
           python3 tool/apply_v19_company_registry_pdf.py
           python3 tool/apply_v19_company_registry_hotfix.py
 
@@ -81,6 +83,7 @@ jobs:
         run: |
           grep -q "class AdminMoreScreen" lib/main_online.dart
           grep -q "class CompaniesAdminScreen" lib/main_online.dart
+          grep -q "tooltip: 'Mais'" lib/main_online.dart
           grep -q "title: 'Empresas'" lib/main_online.dart
           grep -q "rca_managed_companies" lib/main_online.dart
           grep -q "rca_save_managed_company" lib/main_online.dart

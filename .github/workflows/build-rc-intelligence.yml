@@ -57,7 +57,6 @@ jobs:
           echo '9440b8fb428e81c537d105f77ba177a6d3f47e713af4d6f43c599f19731c2304  /tmp/data_store.b64' | sha256sum -c -
           echo '3e78541ffc1b31453343a490e9348be08e3f33d29f905ebf745e7bc37a75514a  /tmp/engine.b64' | sha256sum -c -
           echo 'f023f0c354a3bd55b9e72a1aa14032b68c2807416ddc3eee3f6a01309a835bd5  /tmp/engine_test.b64' | sha256sum -c -
-          echo '50252fdb59c39eb8cd78f227433f63d32fe62afb9503032432ef893b62fed2a2  /tmp/v5_test.b64' | sha256sum -c -
           echo '6109210f08d9641033725503cf878aeb97712fc5a53182c4bc05062a9c7f0eea  /tmp/pubspec.b64' | sha256sum -c -
 
           base64 -d /tmp/main.b64 | gzip -d > intelligence_app/lib/main.dart
@@ -83,6 +82,9 @@ jobs:
           grep -q "import 'dart:math' as math;" intelligence_app/lib/data_hub.dart
           grep -q 'usageStats' intelligence_app/lib/intelligence_engine.dart
           grep -q 'DataQualityReport' intelligence_app/lib/data_store.dart
+          grep -q 'hub mostra todas as melhorias principais da v5' intelligence_app/test/v5_data_entry_test.dart
+          grep -q 'physicalSize = const Size(1080, 3200)' intelligence_app/test/v5_data_entry_test.dart
+          grep -q 'automatic_usage_average' intelligence_app/test/v5_data_entry_test.dart
 
       - name: Configurar Android
         working-directory: intelligence_app

@@ -1,0 +1,185 @@
+name: Build R&C Abastecimento v21
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tool/apply_v21_comboio_highlight_four_photos.py'
+      - '.github/workflows/build-v21.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v21-public-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar configuração
+        run: test -n "$SUPABASE_KEY" || { echo "::error::SUPABASE_KEY não configurada"; exit 1; }
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar plataforma Android
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+
+      - name: Reconstruir fonte final
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+
+      - name: Aplicar patches v9 a v21
+        run: |
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          python3 tool/apply_v20_pdf_fueling_photo_only.py
+          python3 tool/apply_v21_comboio_highlight_four_photos.py
+
+      - name: Validar alterações v21
+        run: |
+          grep -q "extraFuelingPhotos" lib/main_online.dart
+          grep -q "files.length >= 4" lib/main_online.dart
+          grep -q "Fotos do abastecimento" lib/main_online.dart
+          grep -q "abastecimento_\${i + 1}" lib/main_online.dart
+          grep -q "_isComboioToComboio" lib/main_online.dart
+          grep -q "comboio_to_comboio" lib/main_online.dart
+          grep -q "_comboioToComboioPale" lib/main_online.dart
+          grep -q "#E67E22" lib/main_online.dart
+          grep -q "recordRoyal" lib/main_online.dart
+          grep -q "recordNavy" lib/main_online.dart
+          grep -q "Assinatura de quem recebeu" lib/main_online.dart
+          grep -q "Assinatura de quem abasteceu" lib/main_online.dart
+          grep -q "rca_report_company_for_movement" lib/main_online.dart
+          grep -q "Foto do abastecimento" lib/main_online.dart
+          grep -q "fuelingPhotoPaths" lib/main_online.dart
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "pw.Icon("
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -qi "carimbo\|REGISTRO CONFERIDO"
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('lib/main_online.dart').read_text()
+          fuel=t[t.index('class _FuelingOnlineScreenState'):t.index('class SignatureCaptureOnlineScreen')]
+          assert "final List<XFile> extraFuelingPhotos" in fuel
+          assert "fuelingPhotoCount >= 4" in fuel
+          assert "localFuelingPhotos.length" in fuel
+          assert "photos: generalPhotos" in fuel
+          pdf=t[t.index('class FuelPdfReport'):t.index('class AdminUsersOnlineScreen')]
+          assert "fuelingPhotoPaths" in pdf
+          assert "recordRoyal" in pdf and "#E67E22" in pdf
+          assert "signatureBox('Assinatura de quem recebeu'" in pdf
+          assert "signatureBox('Assinatura de quem abasteceu'" in pdf
+          print('VALIDACAO_V21_OK')
+          PY
+
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          text=manifest.read_text()
+          for permission in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+              if permission not in text:
+                  text=text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
+          text=text.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"')
+          manifest.write_text(text)
+          gradle=Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              gradle.write_text(gradle.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23'))
+          PY
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Teste real de PDF com quatro fotos e paleta especial
+        run: |
+          cat > tool/pdf_smoke_v21.dart <<'DART'
+          import 'dart:convert';
+          import 'dart:io';
+          import 'package:pdf/pdf.dart';
+          import 'package:pdf/widgets.dart' as pw;
+          Future<void> main() async {
+            final png=base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+            final orange=PdfColor.fromHex('#E67E22');
+            final doc=pw.Document();
+            doc.addPage(pw.Page(build: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text('Comboio para Comboio', style: pw.TextStyle(color: orange, fontSize: 20, fontWeight: pw.FontWeight.bold)),
+              pw.Wrap(spacing: 8, runSpacing: 8, children: List.generate(4, (i) => pw.Column(children: [
+                pw.Image(pw.MemoryImage(png), width: 120, height: 80),
+                pw.Text('Foto do abastecimento ${i+1}'),
+              ]))),
+              pw.Text('Assinatura de quem recebeu'),
+              pw.Text('Assinatura de quem abasteceu'),
+            ])));
+            final out=await doc.save();
+            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') throw StateError('PDF v21 inválido');
+            stdout.writeln('PDF_V21_OK bytes=${out.length}');
+          }
+          DART
+          dart run tool/pdf_smoke_v21.dart
+
+      - name: Análise estática
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Compilar APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Preparar APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v21.apk
+
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-abastecimento-v21-build
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v21.apk \
+            --target "$GITHUB_SHA" \
+            --title "R&C Abastecimento v21" \
+            --notes "v21: inclui corretamente as fotos do abastecimento no PDF, permite até 4 fotos em Novo abastecimento e destaca em laranja os movimentos Comboio para Comboio nos registros e no PDF. Mantém assinaturas, layout aprovado, cadastro de empresas e regras de acesso."
+
+      - name: Registrar resultado
+        if: always()
+        run: |
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v21-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-v21-status.txt
+          git commit -m "Resultado do build v21 [skip ci]" || exit 0
+          git push || true

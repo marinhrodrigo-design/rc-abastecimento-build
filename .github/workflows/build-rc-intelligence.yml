@@ -54,7 +54,7 @@ jobs:
           tr -d '\n\r ' < intelligence_payload/v5/pubspec.b64 > /tmp/pubspec.b64
 
           echo 'deb6330cb8874233c3076b6be1573e5520ff852ae625cf6b51ed0a5b65beda31  /tmp/main.b64' | sha256sum -c -
-          echo '759fe9eb4dcfb8842ef36ac9a30dd27b23975dd45ccceb04b0a7a439aa21e86e  /tmp/data_hub.b64' | sha256sum -c -
+          echo 'd5dccfe0d48aaf62fa60bf828b0cc8ee84167f08d4c270606cc162d0d6e6da5b  /tmp/data_hub.b64' | sha256sum -c -
           echo '9440b8fb428e81c537d105f77ba177a6d3f47e713af4d6f43c599f19731c2304  /tmp/data_store.b64' | sha256sum -c -
           echo '3e78541ffc1b31453343a490e9348be08e3f33d29f905ebf745e7bc37a75514a  /tmp/engine.b64' | sha256sum -c -
           echo 'f023f0c354a3bd55b9e72a1aa14032b68c2807416ddc3eee3f6a01309a835bd5  /tmp/engine_test.b64' | sha256sum -c -

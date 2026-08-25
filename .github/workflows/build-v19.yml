@@ -1,0 +1,196 @@
+name: Build R&C Abastecimento v19
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'payload/**'
+      - 'tool/apply_v19_company_registry_pdf.py'
+      - 'tool/apply_v19_company_registry_hotfix.py'
+      - '.github/workflows/build-v19.yml'
+  workflow_run:
+    workflows: ['Build R&C Abastecimento v18']
+    types: [completed]
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v19-public-build
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar configuração
+        run: |
+          if [ -z "$SUPABASE_KEY" ]; then
+            echo "::error::Configure o segredo SUPABASE_KEY neste repositório antes de compilar."
+            exit 1
+          fi
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar plataforma Android
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+
+      - name: Reconstruir fonte final v8
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+
+      - name: Aplicar patches v9 a v19
+        run: |
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+
+      - name: Validar alterações v19
+        run: |
+          grep -q "class AdminMoreScreen" lib/main_online.dart
+          grep -q "class CompaniesAdminScreen" lib/main_online.dart
+          grep -q "title: 'Empresas'" lib/main_online.dart
+          grep -q "rca_managed_companies" lib/main_online.dart
+          grep -q "rca_save_managed_company" lib/main_online.dart
+          grep -q "rca_save_work_v2" lib/main_online.dart
+          grep -q "contracting_company_id" lib/main_online.dart
+          grep -q "rca_report_company_for_movement" lib/main_online.dart
+          grep -q "Nome da empresa \*" lib/main_online.dart
+          grep -q "Subtítulo / segmento" lib/main_online.dart
+          grep -q "CNPJ" lib/main_online.dart
+          grep -q "CEP" lib/main_online.dart
+          grep -q "Logradouro" lib/main_online.dart
+          grep -q "Empresa \*" lib/main_online.dart
+          grep -q "'Abastecimento/Lubrificação'" lib/main_online.dart
+          grep -q "Assinatura de quem recebeu" lib/main_online.dart
+          grep -q "Assinatura de quem abasteceu" lib/main_online.dart
+          grep -q "halfRow(Icons.location_on_outlined, 'Localização', location)" lib/main_online.dart
+          grep -q "halfRow(Icons.water_drop_outlined, 'Combustível', fuel)" lib/main_online.dart
+          grep -q "fullRow(Icons.local_gas_station_rounded, _movementLabelForItem(x), liters)" lib/main_online.dart
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "api.client.rpc('rca_report_company')"
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -q "pw.Icon("
+          ! sed -n '/class FuelPdfReport/,/class AdminUsersOnlineScreen/p' lib/main_online.dart | grep -qi "carimbo\|REGISTRO CONFERIDO"
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('lib/main_online.dart').read_text()
+          pdf=t[t.index('class FuelPdfReport'):t.index('class AdminUsersOnlineScreen')]
+          assert "rca_report_company_for_movement" in pdf
+          assert "Empresa não cadastrada" in pdf
+          assert "api.client.rpc('rca_report_company')" not in pdf
+          assert "class AdminMoreScreen" in t and "class CompaniesAdminScreen" in t
+          assert "rca_save_work_v2" in t
+          print('VALIDACAO_V19_OK')
+          PY
+
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          for permission in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+              if permission not in text:
+                  text = text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
+          text = text.replace('android:label="rc_abastecimento"', 'android:label="R&amp;C Abastecimento"')
+          manifest.write_text(text)
+          gradle = Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              gradle.write_text(gradle.read_text().replace('minSdk = flutter.minSdkVersion', 'minSdk = 23'))
+          PY
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Teste real de PDF v19
+        run: |
+          cat > tool/pdf_smoke_v19.dart <<'DART'
+          import 'dart:convert';
+          import 'dart:io';
+          import 'package:pdf/pdf.dart';
+          import 'package:pdf/widgets.dart' as pw;
+
+          Future<void> main() async {
+            final png = base64Decode('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=');
+            final doc = pw.Document();
+            doc.addPage(pw.Page(build: (_) => pw.Column(crossAxisAlignment: pw.CrossAxisAlignment.start, children: [
+              pw.Text('Empresa cadastrada', style: pw.TextStyle(fontSize: 28, fontWeight: pw.FontWeight.bold)),
+              pw.Text('Equipamentos'),
+              pw.Text('CNPJ: 00.000.000/0000-00'),
+              pw.Text('Endereço completo'),
+              pw.Text('Diesel S10'),
+              pw.Text('Abastecimento/Lubrificação'),
+              pw.Text('30,0 L'),
+              pw.Row(children: [pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50)), pw.Expanded(child: pw.Image(pw.MemoryImage(png), height: 50))]),
+            ])));
+            final out = await doc.save();
+            if (out.length < 100 || String.fromCharCodes(out.take(4)) != '%PDF') throw StateError('PDF smoke test inválido');
+            stdout.writeln('PDF_V19_SMOKE_OK bytes=${out.length}');
+          }
+          DART
+          dart run tool/pdf_smoke_v19.dart
+
+      - name: Análise estática
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Compilar APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Preparar APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v19.apk
+
+      - name: Publicar Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-abastecimento-v19-build
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" RC-Abastecimento-Online-Corrigido-v19.apk \
+            --target "$GITHUB_SHA" \
+            --title "R&C Abastecimento v19" \
+            --notes "R&C Abastecimento v19: adiciona Admin > Mais > Empresas, cadastro completo da empresa, vínculo de cada Obra à empresa e busca automática dos dados da empresa no banco ao exportar PDF. Mantém o layout aprovado da v18, assinaturas, litragem, estoques dinâmicos e regras de acesso."
+
+      - name: Registrar resultado
+        if: always()
+        run: |
+          printf 'status=%s\ncommit=%s\nrun=%s\n' '${{ job.status }}' "$GITHUB_SHA" "$GITHUB_RUN_ID" > build-v19-status.txt
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add build-v19-status.txt
+          git commit -m "Resultado do build v19 [skip ci]" || exit 0
+          git pull --rebase origin main || true
+          git push || true

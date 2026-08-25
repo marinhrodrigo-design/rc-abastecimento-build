@@ -145,3 +145,4 @@ jobs:
           git add build-v20-status.txt
           git commit -m "Resultado do build v20 [skip ci]" || exit 0
           git push || true
+# pipeline v20 simplificado: validação objetiva da foto no PDF

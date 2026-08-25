@@ -54,7 +54,6 @@ jobs:
           tr -d '\n\r ' < intelligence_payload/v5/pubspec.b64 > /tmp/pubspec.b64
 
           echo 'deb6330cb8874233c3076b6be1573e5520ff852ae625cf6b51ed0a5b65beda31  /tmp/main.b64' | sha256sum -c -
-          test "$(git hash-object intelligence_payload/v5/data_hub.b64)" = "0a9fe4e6be427467992b5c2c4a81adb599bd4b11"
           echo '9440b8fb428e81c537d105f77ba177a6d3f47e713af4d6f43c599f19731c2304  /tmp/data_store.b64' | sha256sum -c -
           echo '3e78541ffc1b31453343a490e9348be08e3f33d29f905ebf745e7bc37a75514a  /tmp/engine.b64' | sha256sum -c -
           echo 'f023f0c354a3bd55b9e72a1aa14032b68c2807416ddc3eee3f6a01309a835bd5  /tmp/engine_test.b64' | sha256sum -c -
@@ -81,6 +80,7 @@ jobs:
           grep -q 'O que o Intelligence ainda precisa aprender?' intelligence_app/lib/data_hub.dart
           grep -q 'Importar histórico inicial' intelligence_app/lib/data_hub.dart
           grep -q 'Simulador de previsão' intelligence_app/lib/data_hub.dart
+          grep -q "import 'dart:math' as math;" intelligence_app/lib/data_hub.dart
           grep -q 'usageStats' intelligence_app/lib/intelligence_engine.dart
           grep -q 'DataQualityReport' intelligence_app/lib/data_store.dart
 

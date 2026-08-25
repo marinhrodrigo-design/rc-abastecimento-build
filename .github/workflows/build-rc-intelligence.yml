@@ -1,21 +1,21 @@
-name: Build R&C Intelligence Simulador v4
+name: Build R&C Intelligence Simulador v5
 
 on:
   push:
     branches: [main]
     paths:
       - 'intelligence_app/**'
-      - 'intelligence_payload/v3/**'
-      - 'intelligence_payload/v4/**'
+      - 'intelligence_payload/v5/**'
       - '.github/workflows/build-rc-intelligence.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-intelligence-simulador-v4
+  group: rc-intelligence-simulador-v5
   cancel-in-progress: true
 
 permissions:
   contents: write
+  actions: write
 
 jobs:
   build:
@@ -42,49 +42,47 @@ jobs:
         working-directory: intelligence_app
         run: flutter create --platforms=android --org com.rc --project-name rc_intelligence .
 
-      - name: Reconstruir v4 e validar integridade
+      - name: Reconstruir v5 e validar integridade
         run: |
           mkdir -p intelligence_app/lib intelligence_app/test
+          tr -d '\n\r ' < intelligence_payload/v5/main.b64 > /tmp/main.b64
+          tr -d '\n\r ' < intelligence_payload/v5/data_hub.b64 > /tmp/data_hub.b64
+          tr -d '\n\r ' < intelligence_payload/v5/data_store.b64 > /tmp/data_store.b64
+          tr -d '\n\r ' < intelligence_payload/v5/engine.b64 > /tmp/engine.b64
+          tr -d '\n\r ' < intelligence_payload/v5/engine_test.b64 > /tmp/engine_test.b64
+          tr -d '\n\r ' < intelligence_payload/v5/v5_test.b64 > /tmp/v5_test.b64
+          tr -d '\n\r ' < intelligence_payload/v5/pubspec.b64 > /tmp/pubspec.b64
 
-          cat intelligence_payload/v3/00.b64 intelligence_payload/v3/01.b64 intelligence_payload/v3/02.b64 intelligence_payload/v3/03.b64 intelligence_payload/v3/04.b64 intelligence_payload/v3/05.b64 intelligence_payload/v3/06.b64 intelligence_payload/v3/07.b64 intelligence_payload/v3/08.b64 | tr -d '\n\r ' > /tmp/main_v3.b64
-          echo 'a826f3c43b6763fcc40c285ed47d8b65e1a0005ae43b2c50500362745b5c069f  /tmp/main_v3.b64' | sha256sum -c -
-          base64 -d /tmp/main_v3.b64 | gzip -d > intelligence_app/lib/main.dart
+          echo 'deb6330cb8874233c3076b6be1573e5520ff852ae625cf6b51ed0a5b65beda31  /tmp/main.b64' | sha256sum -c -
+          echo '759fe9eb4dcfb8842ef36ac9a30dd27b23975dd45ccceb04b0a7a439aa21e86e  /tmp/data_hub.b64' | sha256sum -c -
+          echo '9440b8fb428e81c537d105f77ba177a6d3f47e713af4d6f43c599f19731c2304  /tmp/data_store.b64' | sha256sum -c -
+          echo '3e78541ffc1b31453343a490e9348be08e3f33d29f905ebf745e7bc37a75514a  /tmp/engine.b64' | sha256sum -c -
+          echo 'f023f0c354a3bd55b9e72a1aa14032b68c2807416ddc3eee3f6a01309a835bd5  /tmp/engine_test.b64' | sha256sum -c -
+          echo '732d0ac0742c40368abad36c2b61096ebc7bda7131b5bef031a5dab252499e68  /tmp/v5_test.b64' | sha256sum -c -
+          echo '6109210f08d9641033725503cf878aeb97712fc5a53182c4bc05062a9c7f0eea  /tmp/pubspec.b64' | sha256sum -c -
 
-          cat intelligence_payload/v4/data_hub/00.part intelligence_payload/v4/data_hub/01.part intelligence_payload/v4/data_hub/02.part | tr -d '\n\r ' > /tmp/data_hub.b64
-          cat intelligence_payload/v4/data_store.b64 | tr -d '\n\r ' > /tmp/data_store.b64
-          cat intelligence_payload/v4/v4_data_entry_test.b64 | tr -d '\n\r ' > /tmp/v4_test.b64
-          echo '495cea9dfed1967d57c3e22af5e476eb4126bb16bac815917de6a24160e85eb5  /tmp/data_hub.b64' | sha256sum -c -
-          echo 'e76f835eec1874b96fa74990ab9d34ec31ec312af72d3e34e9974e6554aa9c84  /tmp/data_store.b64' | sha256sum -c -
-          echo '4c6e2b1502f660e3024515359cb594ffc5e8795ee18a489d540cbac3393f68a6  /tmp/v4_test.b64' | sha256sum -c -
+          base64 -d /tmp/main.b64 | gzip -d > intelligence_app/lib/main.dart
           base64 -d /tmp/data_hub.b64 | gzip -d > intelligence_app/lib/data_hub.dart
           base64 -d /tmp/data_store.b64 | gzip -d > intelligence_app/lib/data_store.dart
-          base64 -d /tmp/v4_test.b64 | gzip -d > intelligence_app/test/v4_data_entry_test.dart
+          base64 -d /tmp/engine.b64 | gzip -d > intelligence_app/lib/intelligence_engine.dart
+          base64 -d /tmp/engine_test.b64 | gzip -d > intelligence_app/test/intelligence_engine_v5_test.dart
+          base64 -d /tmp/v5_test.b64 | gzip -d > intelligence_app/test/v5_data_entry_test.dart
+          base64 -d /tmp/pubspec.b64 | gzip -d > intelligence_app/pubspec.yaml
 
-          python3 - <<'PY'
-          from pathlib import Path
-          p = Path('intelligence_app/lib/main.dart')
-          s = p.read_text()
-          s = s.replace("import 'intelligence_engine.dart';", "import 'intelligence_engine.dart';\nimport 'data_hub.dart';")
-          s = s.replace("Text('SIMULADOR v3'", "Text('SIMULADOR v4'")
-          s = s.replace("subtitle: 'Veja onde cada requisito foi aplicado nesta v3'", "subtitle: 'Veja onde cada requisito foi aplicado nesta v4'")
-          s = s.replace("'A v3 não transforma exemplos em regras OEM reais.'", "'A v4 não transforma exemplos em regras OEM reais.'")
-          s = s.replace("'10/10 representados na v3'", "'10/10 representados na v4'")
-          needle = "      const PageHeader('Cérebro técnico do ecossistema', 'Fontes, regras, identificação e níveis de previsão'),\n"
-          insert = needle + "      ActionCard(\n        icon: Icons.edit_note_outlined,\n        color: RCIntelligenceApp.orange,\n        title: 'Dados do Intelligence',\n        subtitle: 'Cadastrar ativos/revisões, peças, medições e regras técnicas',\n        trailing: 'Cadastrar',\n        onTap: () => Navigator.of(context).push(\n          MaterialPageRoute(builder: (_) => const IntelligenceDataHubPage()),\n        ),\n      ),\n"
-          if needle not in s:
-              raise SystemExit('Ponto de inserção do hub v4 não encontrado')
-          s = s.replace(needle, insert, 1)
-          p.write_text(s)
-          PY
+          rm -f intelligence_app/test/widget_test.dart \
+            intelligence_app/test/widget_v3_test.dart \
+            intelligence_app/test/intelligence_engine_v3_test.dart \
+            intelligence_app/test/v4_data_entry_test.dart \
+            intelligence_app/test/intelligence_engine_v4_test.dart
 
-          rm -f intelligence_app/test/widget_test.dart
-          grep -q "SIMULADOR v4" intelligence_app/lib/main.dart
-          grep -q "Dados do Intelligence" intelligence_app/lib/main.dart
-          grep -q "Ativos e Revisões" intelligence_app/lib/data_hub.dart
-          grep -q "Peças e Componentes" intelligence_app/lib/data_hub.dart
-          grep -q "Medições e Condição" intelligence_app/lib/data_hub.dart
-          grep -q "OEM VALIDADO" intelligence_app/lib/data_hub.dart
-          grep -q "SharedPreferences" intelligence_app/lib/data_store.dart
+          grep -q 'SIMULADOR v5' intelligence_app/lib/main.dart
+          grep -q 'Média de utilização: Calculada automaticamente' intelligence_app/lib/data_hub.dart
+          grep -q 'Histórico de Horímetro/Km' intelligence_app/lib/data_hub.dart
+          grep -q 'O que o Intelligence ainda precisa aprender?' intelligence_app/lib/data_hub.dart
+          grep -q 'Importar histórico inicial' intelligence_app/lib/data_hub.dart
+          grep -q 'Simulador de previsão' intelligence_app/lib/data_hub.dart
+          grep -q 'usageStats' intelligence_app/lib/intelligence_engine.dart
+          grep -q 'DataQualityReport' intelligence_app/lib/data_store.dart
 
       - name: Configurar Android
         working-directory: intelligence_app
@@ -114,7 +112,7 @@ jobs:
         working-directory: intelligence_app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Testes do motor, navegação e cadastros v4
+      - name: Testes do motor e recursos v5
         working-directory: intelligence_app
         run: flutter test
 
@@ -123,25 +121,38 @@ jobs:
         run: flutter build apk --release
 
       - name: Preparar APK
-        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v4.apk
+        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v5.apk
 
-      - name: Publicar artefato temporário
-        uses: actions/upload-artifact@v4
-        with:
-          name: RC-Intelligence-Simulador-v4-APK
-          path: RC-Intelligence-Simulador-v4.apk
-          retention-days: 7
-
-      - name: Publicar Release
+      - name: Limpar APKs antigos do R&C Intelligence
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-intelligence-simulador-v4
+        run: |
+          for tag in rc-intelligence-simulador-v1 rc-intelligence-simulador-v2 rc-intelligence-simulador-v3 rc-intelligence-simulador-v4; do
+            gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
+          done
+          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
+            --jq '.artifacts[] | select(.name | startswith("RC-Intelligence-Simulador-")) | .id' \
+            | while read -r id; do
+                [ -n "$id" ] && gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/$id" || true
+              done
+
+      - name: Publicar artefato v5
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Intelligence-Simulador-v5-APK
+          path: RC-Intelligence-Simulador-v5.apk
+          retention-days: 7
+
+      - name: Publicar Release v5
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-intelligence-simulador-v5
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Intelligence-Simulador-v4.apk \
+          gh release create "$TAG" RC-Intelligence-Simulador-v5.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Intelligence — Simulador v4" \
-            --notes "v4: módulo Dados do Intelligence com cadastros locais persistentes de ativos/revisões, peças/componentes, medições/condição e Biblioteca Técnica; validações e cálculos de próxima revisão e RUL. Dados continuam isolados da produção."
+            --title "R&C Intelligence — Simulador v5" \
+            --notes "v5: média de utilização automática, histórico de horímetro/km, dados opcionais, índice de qualidade por ativo, previsão em faixa, fontes dos dados, lacunas de aprendizado, importação inicial e simulador de previsão. APKs/releases antigos do R&C Intelligence são removidos; código-fonte é preservado."
 
       - name: Registrar resultado
         if: always()
@@ -150,5 +161,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add intelligence-build-status.txt
-          git commit -m "Resultado do build R&C Intelligence v4 [skip ci]" || exit 0
+          git commit -m "Resultado do build R&C Intelligence v5 [skip ci]" || exit 0
           git push

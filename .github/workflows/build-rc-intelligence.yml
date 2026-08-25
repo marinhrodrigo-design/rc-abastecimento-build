@@ -1,17 +1,16 @@
-name: Build R&C Intelligence Simulador v2
+name: Build R&C Intelligence Simulador v3
 
 on:
   push:
     branches: [main]
     paths:
       - 'intelligence_app/**'
-      - 'intelligence_payload/**'
-      - 'intelligence_payload_v2/**'
+      - 'intelligence_payload/v3/**'
       - '.github/workflows/build-rc-intelligence.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-intelligence-simulador-v2
+  group: rc-intelligence-simulador-v3
   cancel-in-progress: true
 
 permissions:
@@ -42,25 +41,21 @@ jobs:
         working-directory: intelligence_app
         run: flutter create --platforms=android --org com.rc --project-name rc_intelligence .
 
-      - name: Reconstruir e validar fontes v2
+      - name: Reconstruir e validar interface v3
         run: |
           mkdir -p intelligence_app/lib intelligence_app/test
-          cat intelligence_payload_v2/main.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_main_v2.b64
-          cat intelligence_payload/intelligence_engine_test.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_engine_test.b64
-          cat intelligence_payload_v2/navigation_clickability_test.dart.gz.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_nav_test_v2.b64
-          echo '563aa44a8d83342bab6ada121145f4b4ad857c1f6407c7536781fd2976d1ecae  /tmp/rc_intelligence_main_v2.b64' | sha256sum -c -
-          echo 'd3e8b9297ed9bf3b0ebdd8b683cf7c76eb90b0a47162dac0ca2ec37b34024f67  /tmp/rc_intelligence_engine_test.b64' | sha256sum -c -
-          echo '9e6c0f6eaae60f42896eba3c5336031f26f58522803dd35b375d647223a1bd3f  /tmp/rc_intelligence_nav_test_v2.b64' | sha256sum -c -
-          base64 -d /tmp/rc_intelligence_main_v2.b64 | gzip -d > intelligence_app/lib/main.dart
-          base64 -d /tmp/rc_intelligence_engine_test.b64 | gzip -d > intelligence_app/test/intelligence_engine_test.dart
-          base64 -d /tmp/rc_intelligence_nav_test_v2.b64 | gzip -d > intelligence_app/test/navigation_clickability_test.dart
+          cat intelligence_payload/v3/00.b64 intelligence_payload/v3/01.b64 intelligence_payload/v3/02.b64 intelligence_payload/v3/03.b64 intelligence_payload/v3/04.b64 intelligence_payload/v3/05.b64 intelligence_payload/v3/06.b64 intelligence_payload/v3/07.b64 intelligence_payload/v3/08.b64 | tr -d '\n\r ' > /tmp/rc_intelligence_main_v3.b64
+          echo 'a826f3c43b6763fcc40c285ed47d8b65e1a0005ae43b2c50500362745b5c069f  /tmp/rc_intelligence_main_v3.b64' | sha256sum -c -
+          base64 -d /tmp/rc_intelligence_main_v3.b64 | gzip -d > intelligence_app/lib/main.dart
           rm -f intelligence_app/test/widget_test.dart
-          grep -q "Destinatários e regras de envio" intelligence_app/lib/main.dart
-          grep -q "showRecipientConfig" intelligence_app/lib/main.dart
-          grep -q "showMtbfDetail" intelligence_app/lib/main.dart
-          grep -q "showTheoreticalBalance" intelligence_app/lib/main.dart
-          grep -q "showRecurrenceDetail" intelligence_app/lib/main.dart
-          grep -q "anomalyScore" intelligence_app/lib/intelligence_engine.dart
+          grep -q "Planejamento de revisões" intelligence_app/lib/main.dart
+          grep -q "Biblioteca Técnica R&C" intelligence_app/lib/main.dart
+          grep -q "Identificação Técnica Automática" intelligence_app/lib/main.dart
+          grep -q "3 níveis de previsão" intelligence_app/lib/main.dart
+          grep -q "RUL estimado 100–220 h" intelligence_app/lib/main.dart
+          grep -q "remainingToService" intelligence_app/lib/intelligence_engine.dart
+          grep -q "forecastDays" intelligence_app/lib/intelligence_engine.dart
+          grep -q "alertLevel" intelligence_app/lib/intelligence_engine.dart
 
       - name: Configurar Android
         working-directory: intelligence_app
@@ -90,7 +85,7 @@ jobs:
         working-directory: intelligence_app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Testes do Intelligence Engine e clicabilidade
+      - name: Testes do motor e navegação v3
         working-directory: intelligence_app
         run: flutter test
 
@@ -99,25 +94,25 @@ jobs:
         run: flutter build apk --release
 
       - name: Preparar APK
-        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v2.apk
+        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v3.apk
 
       - name: Publicar artefato temporário
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Intelligence-Simulador-v2-APK
-          path: RC-Intelligence-Simulador-v2.apk
+          name: RC-Intelligence-Simulador-v3-APK
+          path: RC-Intelligence-Simulador-v3.apk
           retention-days: 7
 
       - name: Publicar Release
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: rc-intelligence-simulador-v2
+          TAG: rc-intelligence-simulador-v3
         run: |
           gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
-          gh release create "$TAG" RC-Intelligence-Simulador-v2.apk \
+          gh release create "$TAG" RC-Intelligence-Simulador-v3.apk \
             --target "$GITHUB_SHA" \
-            --title "R&C Intelligence — Simulador v2" \
-            --notes "v2: todos os cards principais clicáveis; configuração individual dos alertas de Pedro, Darlan e Diego; detalhes de MTBF, MTTR, disponibilidade, RUL, componentes, marcas, combustível e Insights; testes automatizados de clicabilidade."
+            --title "R&C Intelligence — Simulador v3" \
+            --notes "v3: aplica os pontos 1 a 10 do planejamento inteligente: revisões por horímetro/km, previsão por ritmo de uso, alertas antecipados, plano e estoque, RUL com evidências, suficiência de dados, preditiva cruzada, identificação técnica, Biblioteca Técnica com fonte e três níveis de previsão."
 
       - name: Registrar resultado
         if: always()
@@ -126,5 +121,5 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add intelligence-build-status.txt
-          git commit -m "Resultado do build R&C Intelligence v2 [skip ci]" || exit 0
+          git commit -m "Resultado do build R&C Intelligence v3 [skip ci]" || exit 0
           git push

@@ -1,0 +1,123 @@
+name: Build R&C Intelligence v6 Branch
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-rc-intelligence-v6-branch.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+
+    steps:
+      - name: Checkout fonte v6
+        uses: actions/checkout@v4
+        with:
+          ref: rc-intelligence-v6-final
+          fetch-depth: 0
+
+      - name: Registrar commit fonte
+        id: source
+        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estavel
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar aplicativo limpo
+        run: |
+          set -euo pipefail
+          rm -rf intelligence_app
+          flutter create --platforms=android --org com.rc --project-name rc_intelligence intelligence_app
+          rm -rf intelligence_app/lib intelligence_app/test
+          mkdir -p intelligence_app/lib intelligence_app/test
+          cp -R intelligence_src/v6/lib/. intelligence_app/lib/
+          cp -R intelligence_src/v6/test/. intelligence_app/test/
+          cp intelligence_src/v6/pubspec.yaml intelligence_app/pubspec.yaml
+          grep -q 'SIMULADOR v6' intelligence_app/lib/main.dart
+          grep -q 'Central de Dados' intelligence_app/lib/main.dart
+          grep -q 'Abrir peça no catálogo' intelligence_app/lib/main.dart
+          grep -q 'Intervenção provável' intelligence_app/lib/intelligence_engine.dart
+          grep -q 'FROTAS' intelligence_app/lib/data_import.dart
+          grep -q 'mycnhstore.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'shop.deere.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'wirtgen-group.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'flutter_local_notifications' intelligence_app/pubspec.yaml
+
+      - name: Configurar Android e notificacoes
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest = Path('intelligence_app/android/app/src/main/AndroidManifest.xml')
+          text = manifest.read_text()
+          if 'android.permission.POST_NOTIFICATIONS' not in text:
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>')
+          text = text.replace('android:label="rc_intelligence"', 'android:label="R&amp;C Intelligence"')
+          manifest.write_text(text)
+
+          gradle = Path('intelligence_app/android/app/build.gradle.kts')
+          text = gradle.read_text()
+          text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
+          if 'coreLibraryDesugaring(' not in text:
+              text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(text)
+          PY
+
+      - name: Dependencias
+        working-directory: intelligence_app
+        run: flutter pub get
+
+      - name: Formatacao
+        working-directory: intelligence_app
+        run: dart format lib test
+
+      - name: Analise estatica
+        working-directory: intelligence_app
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Testes Intelligence v6
+        working-directory: intelligence_app
+        run: flutter test
+
+      - name: Compilar APK release
+        working-directory: intelligence_app
+        run: flutter build apk --release
+
+      - name: Preparar APK
+        run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v6.apk
+
+      - name: Publicar artefato v6
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Intelligence-Simulador-v6-APK
+          path: RC-Intelligence-Simulador-v6.apk
+          retention-days: 7
+
+      - name: Publicar Release v6
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: rc-intelligence-simulador-v6
+          TARGET_SHA: ${{ steps.source.outputs.sha }}
+        run: |
+          gh release delete "$TAG" --yes --cleanup-tag 2>/dev/null || true
+          gh release create "$TAG" RC-Intelligence-Simulador-v6.apk \
+            --target "$TARGET_SHA" \
+            --title "R&C Intelligence — Simulador v6" \
+            --notes "v6: biblioteca OEM por marca/modelo/série; links para catálogo e peça quando disponíveis; motor de inferência e reincidência; aprendizado por confirmação; notificações locais de anomalias; conflitos manuais; importação XLSX; regra FROTAS=OFICINA BANGU; sem alteração do Supabase de produção."

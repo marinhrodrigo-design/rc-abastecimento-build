@@ -162,6 +162,16 @@ class IntelligenceEngine {
   }
 
   Future<void> confirm(String ruleKey, String value, String reason) async {
+    final parts = ruleKey.split(':');
+    if (parts.length == 3 && parts.first == 'asset' && parts.last == 'serial') {
+      final assetId = parts[1];
+      for (final asset in store.assets) {
+        if (asset.id == assetId) {
+          await store.updateAsset(asset.copyWith(serial: value.trim()));
+          break;
+        }
+      }
+    }
     await store.learn(LearningRule(
       key: ruleKey,
       value: value,

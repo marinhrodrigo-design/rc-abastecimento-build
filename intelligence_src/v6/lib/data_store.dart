@@ -35,6 +35,7 @@ class DataStore {
 
     if (assets.isEmpty) assets.addAll(_simulatorAssets());
     if (partUsages.isEmpty) partUsages.addAll(_simulatorPartEvidence());
+    if (readings.isEmpty) readings.addAll(_simulatorReadings());
 
     _ensureConfirmedRule(
       'location:FROTAS',
@@ -87,7 +88,8 @@ class DataStore {
   Future<void> importAssetsBatch(List<Asset> incoming) async {
     for (final a in incoming) {
       final i = assets.indexWhere(
-          (x) => x.id.trim().toUpperCase() == a.id.trim().toUpperCase());
+        (x) => x.id.trim().toUpperCase() == a.id.trim().toUpperCase(),
+      );
       if (i >= 0) {
         final old = assets[i];
         if (old.serial.isNotEmpty &&
@@ -187,6 +189,54 @@ class DataStore {
     }
     return null;
   }
+
+  static List<MeterReading> _simulatorReadings() => [
+        MeterReading(
+          assetId: '034-020',
+          date: DateTime(2025, 12, 4),
+          rawValue: '1713',
+          value: 1713,
+          type: 'HORIMETRO',
+          source: 'O.S. 3552 • Revisão preventiva 250 h',
+          confidence: 1,
+        ),
+        MeterReading(
+          assetId: '034-020',
+          date: DateTime(2026, 1, 22),
+          rawValue: '1748',
+          value: 1748,
+          type: 'HORIMETRO',
+          source: 'O.S. 3692',
+          confidence: 1,
+        ),
+        MeterReading(
+          assetId: '034-020',
+          date: DateTime(2026, 3, 27),
+          rawValue: '1810',
+          value: 1810,
+          type: 'HORIMETRO',
+          source: 'O.S. 3937',
+          confidence: 1,
+        ),
+        MeterReading(
+          assetId: '034-020',
+          date: DateTime(2026, 4, 14),
+          rawValue: '1810',
+          value: 1810,
+          type: 'HORIMETRO',
+          source: 'O.S. 4005',
+          confidence: 1,
+        ),
+        MeterReading(
+          assetId: '034-020',
+          date: DateTime(2026, 5, 20),
+          rawValue: '1834',
+          value: 1834,
+          type: 'HORIMETRO',
+          source: 'O.S. 4160',
+          confidence: 1,
+        ),
+      ];
 
   static List<PartUsage> _simulatorPartEvidence() => [
         PartUsage(

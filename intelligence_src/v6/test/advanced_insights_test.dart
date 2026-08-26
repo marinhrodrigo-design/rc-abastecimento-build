@@ -102,7 +102,7 @@ void main() {
     expect(prep.notes.join(' '), contains('Estoque não é consultado'));
   });
 
-  test('feedback pode suprimir contexto equivalente', () async {
+  test('feedback pode suprimir contexto equivalente', () {
     final store = DataStore();
     final service = AdvancedInsightsService(store);
     final anomaly = Anomaly(
@@ -115,10 +115,10 @@ void main() {
       ruleKey: 'contexto:x',
     );
     expect(service.isSuppressed(anomaly), isFalse);
-    await store.learn(LearningRule(
+    store.learningRules.add(LearningRule(
       key: service.suppressionKey(anomaly),
       value: 'SUPRIMIR',
-      reason: 'Teste',
+      reason: 'Teste em memória',
       updatedAt: DateTime.now(),
       confidence: 1,
       confirmed: true,

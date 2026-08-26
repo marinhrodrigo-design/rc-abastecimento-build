@@ -147,9 +147,14 @@ class AdvancedInsightsService {
   ConfidenceAssessment confidenceForAsset(String assetId) {
     final reasons = <String>[];
     var score = .35;
-    final readings = store.readings.where((r) => r.assetId == assetId && r.confidence >= .6).toList();
+    final readings = store.readings
+        .where((r) => r.assetId == assetId && r.confidence >= .6)
+        .toList();
     final parts = store.partUsages.where((p) => p.assetId == assetId).toList();
-    final unresolved = store.anomalies.where((a) => a.assetId == assetId && !a.resolved && a.needsConfirmation).length;
+    final unresolved = store.anomalies
+        .where((a) =>
+            a.assetId == assetId && !a.resolved && a.needsConfirmation)
+        .length;
 
     if (readings.length >= 2) {
       score += .25;
@@ -173,7 +178,7 @@ class AdvancedInsightsService {
       score += .1;
       reasons.add('Série/chassi disponível para identificação técnica.');
     }
-    score = score.clamp(0, 1);
+    score = score.clamp(0, 1).toDouble();
     final label = score >= .8 ? 'Alta' : score >= .6 ? 'Média' : 'Baixa';
     return ConfidenceAssessment(score, label, reasons);
   }
@@ -184,7 +189,9 @@ class AdvancedInsightsService {
     required String assetId,
   }) {
     final confidence = confidenceForAsset(assetId);
-    if (forecast.estimatedDate == null || averagePerDay <= 0 || forecast.remaining < 0) {
+    if (forecast.estimatedDate == null ||
+        averagePerDay <= 0 ||
+        forecast.remaining < 0) {
       return ForecastRange(null, null, confidence);
     }
     final today = DateTime.now();
@@ -203,7 +210,8 @@ class AdvancedInsightsService {
     final now = DateTime.now();
     final cutoff = now.subtract(const Duration(days: 180));
     final bySystem = <String, List<PartUsage>>{};
-    for (final p in store.partUsages.where((p) => p.assetId == assetId && !p.date.isBefore(cutoff))) {
+    for (final p in store.partUsages
+        .where((p) => p.assetId == assetId && !p.date.isBefore(cutoff))) {
       final system = classifySystem('${p.partName} ${p.reference}');
       if (!meaningfulSystems.contains(system)) continue;
       bySystem.putIfAbsent(system, () => []).add(p);
@@ -211,33 +219,65 @@ class AdvancedInsightsService {
     final result = <SystemHealth>[];
     for (final system in meaningfulSystems) {
       final items = bySystem[system] ?? const <PartUsage>[];
-      final alerts = store.anomalies.where((a) =>
-          a.assetId == assetId && !a.resolved && a.message.toUpperCase().contains(system)).length;
+      final alerts = store.anomalies
+          .where((a) =>
+              a.assetId == assetId &&
+              !a.resolved &&
+              a.message.toUpperCase().contains(system))
+          .length;
       var score = 100 - items.length * 12 - alerts * 15;
-      score = score.clamp(0, 100);
-      final status = score >= 80 ? '🟢 Estável' : score >= 60 ? '🟡 Observar' : '🔴 Atenção';
+      score = score.clamp(0, 100).toInt();
+      final status = score >= 80
+          ? '🟢 Estável'
+          : score >= 60
+              ? '🟡 Observar'
+              : '🔴 Atenção';
       final evidence = <String>[];
-      if (items.isNotEmpty) evidence.add('${items.length} intervenção(ões) nos últimos 180 dias.');
-      if (alerts > 0) evidence.add('$alerts alerta(s) aberto(s) relacionado(s).');
-      if (evidence.isEmpty) evidence.add('Sem sinal relevante recente nos dados disponíveis.');
-      result.add(SystemHealth(system: system, score: score, status: status, evidence: evidence));
+      if (items.isNotEmpty) {
+        evidence.add('${items.length} intervenção(ões) nos últimos 180 dias.');
+      }
+      if (alerts > 0) {
+        evidence.add('$alerts alerta(s) aberto(s) relacionado(s).');
+      }
+      if (evidence.isEmpty) {
+        evidence.add('Sem sinal relevante recente nos dados disponíveis.');
+      }
+      result.add(SystemHealth(
+        system: system,
+        score: score,
+        status: status,
+        evidence: evidence,
+      ));
     }
     result.sort((a, b) => a.score.compareTo(b.score));
     return result;
   }
 
   PeerBenchmark compareWithPeers(Asset asset) {
-    final peers = store.assets.where((a) =>
-        a.id != asset.id &&
-        a.brand.toUpperCase() == asset.brand.toUpperCase() &&
-        a.model.toUpperCase() == asset.model.toUpperCase()).toList();
+    final peers = store.assets
+        .where((a) =>
+            a.id != asset.id &&
+            a.brand.toUpperCase() == asset.brand.toUpperCase() &&
+            a.model.toUpperCase() == asset.model.toUpperCase())
+        .toList();
     final cutoff = DateTime.now().subtract(const Duration(days: 365));
-    double countFor(String id) => store.partUsages.where((p) => p.assetId == id && !p.date.isBefore(cutoff)).length.toDouble();
+    double countFor(String id) => store.partUsages
+        .where((p) => p.assetId == id && !p.date.isBefore(cutoff))
+        .length
+        .toDouble();
     final assetRate = countFor(asset.id);
     if (peers.isEmpty) {
-      return PeerBenchmark(peerCount: 0, assetRate: assetRate, peerAverage: 0, summary: 'Não há ativos iguais suficientes para comparação.');
+      return PeerBenchmark(
+        peerCount: 0,
+        assetRate: assetRate,
+        peerAverage: 0,
+        summary: 'Não há ativos iguais suficientes para comparação.',
+      );
     }
-    final avg = peers.map((p) => countFor(p.id)).fold<double>(0, (a, b) => a + b) / peers.length;
+    final avg = peers
+            .map((p) => countFor(p.id))
+            .fold<double>(0, (a, b) => a + b) /
+        peers.length;
     final ratio = avg <= 0 ? 0 : assetRate / avg;
     final summary = avg <= 0
         ? 'Os pares ainda não têm histórico suficiente.'
@@ -246,20 +286,33 @@ class AdvancedInsightsService {
             : ratio <= .65
                 ? '${asset.id} apresenta menos intervenções que a média dos ativos iguais.'
                 : '${asset.id} está próximo da média dos ativos iguais.';
-    return PeerBenchmark(peerCount: peers.length, assetRate: assetRate, peerAverage: avg, summary: summary);
+    return PeerBenchmark(
+      peerCount: peers.length,
+      assetRate: assetRate,
+      peerAverage: avg,
+      summary: summary,
+    );
   }
 
   List<PartLifeObservation> partLife(String assetId) {
-    final usages = store.partUsages.where((p) => p.assetId == assetId && p.reference.trim().isNotEmpty).toList()
+    final usages = store.partUsages
+        .where((p) => p.assetId == assetId && p.reference.trim().isNotEmpty)
+        .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     final result = <PartLifeObservation>[];
     for (var i = 0; i < usages.length; i++) {
       for (var j = i + 1; j < usages.length; j++) {
-        if (usages[i].reference.toUpperCase() != usages[j].reference.toUpperCase()) continue;
+        if (usages[i].reference.toUpperCase() !=
+            usages[j].reference.toUpperCase()) {
+          continue;
+        }
         final meterA = _nearestReading(assetId, usages[i].date);
         final meterB = _nearestReading(assetId, usages[j].date);
         double? delta;
-        if (meterA != null && meterB != null && meterA.type == meterB.type && meterB.value >= meterA.value) {
+        if (meterA != null &&
+            meterB != null &&
+            meterA.type == meterB.type &&
+            meterB.value >= meterA.value) {
           delta = meterB.value - meterA.value;
         }
         result.add(PartLifeObservation(
@@ -278,19 +331,32 @@ class AdvancedInsightsService {
     required Asset asset,
     required List<OemMaintenanceRule> oemRules,
   }) {
-    final oemItems = oemRules.map((r) => '${r.serviceName} — ${r.interval.toStringAsFixed(0)} ${r.unit == 'H' ? 'h' : 'km'}').toList();
-    final sameModelIds = store.assets.where((a) =>
-        a.brand.toUpperCase() == asset.brand.toUpperCase() &&
-        a.model.toUpperCase() == asset.model.toUpperCase()).map((a) => a.id).toSet();
+    final oemItems = oemRules
+        .map((r) =>
+            '${r.serviceName} — ${r.interval.toStringAsFixed(0)} ${r.unit == 'H' ? 'h' : 'km'}')
+        .toList();
+    final sameModelIds = store.assets
+        .where((a) =>
+            a.brand.toUpperCase() == asset.brand.toUpperCase() &&
+            a.model.toUpperCase() == asset.model.toUpperCase())
+        .map((a) => a.id)
+        .toSet();
     final freq = <String, int>{};
-    for (final p in store.partUsages.where((p) => sameModelIds.contains(p.assetId))) {
-      final key = p.reference.trim().isNotEmpty ? '${p.partName} • ${p.reference}' : p.partName;
+    for (final p
+        in store.partUsages.where((p) => sameModelIds.contains(p.assetId))) {
+      final key = p.reference.trim().isNotEmpty
+          ? '${p.partName} • ${p.reference}'
+          : p.partName;
       freq[key] = (freq[key] ?? 0) + 1;
     }
-    final historical = freq.entries.toList()..sort((a, b) => b.value.compareTo(a.value));
+    final historical = freq.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
     return PreventivePreparation(
       oemItems: oemItems,
-      historicalItems: historical.take(8).map((e) => '${e.key} — apareceu ${e.value}x no histórico').toList(),
+      historicalItems: historical
+          .take(8)
+          .map((e) => '${e.key} — apareceu ${e.value}x no histórico')
+          .toList(),
       notes: const [
         'OEM e histórico operacional são mostrados separadamente.',
         'A lista histórica não significa recomendação OEM e deve ser conferida antes da manutenção.',
@@ -300,36 +366,58 @@ class AdvancedInsightsService {
   }
 
   List<String> maintenanceCompletenessQuestions(Asset asset) {
-    final sameModelIds = store.assets.where((a) =>
-        a.brand.toUpperCase() == asset.brand.toUpperCase() &&
-        a.model.toUpperCase() == asset.model.toUpperCase()).map((a) => a.id).toSet();
+    final sameModelIds = store.assets
+        .where((a) =>
+            a.brand.toUpperCase() == asset.brand.toUpperCase() &&
+            a.model.toUpperCase() == asset.model.toUpperCase())
+        .map((a) => a.id)
+        .toSet();
     final byOs = <String, Set<String>>{};
-    for (final p in store.partUsages.where((p) => sameModelIds.contains(p.assetId) && p.os.trim().isNotEmpty)) {
+    for (final p in store.partUsages.where(
+        (p) => sameModelIds.contains(p.assetId) && p.os.trim().isNotEmpty)) {
       final key = '${p.assetId}:${p.os}';
-      byOs.putIfAbsent(key, () => <String>{}).add(p.reference.isEmpty ? p.partName : p.reference);
+      byOs.putIfAbsent(key, () => <String>{}).add(
+            p.reference.isEmpty ? p.partName : p.reference,
+          );
     }
     if (byOs.length < 2) return const [];
     final frequency = <String, int>{};
     for (final set in byOs.values) {
-      for (final item in set) frequency[item] = (frequency[item] ?? 0) + 1;
+      for (final item in set) {
+        frequency[item] = (frequency[item] ?? 0) + 1;
+      }
     }
-    final common = frequency.entries.where((e) => e.value >= max(2, (byOs.length * .6).ceil())).map((e) => e.key).toSet();
+    final threshold = max(2, (byOs.length * .6).ceil()).toInt();
+    final common = frequency.entries
+        .where((e) => e.value >= threshold)
+        .map((e) => e.key)
+        .toSet();
     if (common.isEmpty) return const [];
     final questions = <String>[];
     for (final entry in byOs.entries) {
       final missing = common.difference(entry.value);
       if (missing.isNotEmpty) {
-        questions.add('${entry.key}: não localizei ${missing.take(3).join(', ')} entre os materiais. Confirmar se foi compra externa, reutilização ou ausência de registro.');
+        questions.add(
+          '${entry.key}: não localizei ${missing.take(3).join(', ')} entre os materiais. Confirmar se foi compra externa, reutilização ou ausência de registro.',
+        );
       }
     }
     return questions.take(5).toList();
   }
 
   ChangeDigest changesSince(DateTime since) {
-    final recent = store.anomalies.where((a) => a.createdAt.isAfter(since)).toList();
+    final recent =
+        store.anomalies.where((a) => a.createdAt.isAfter(since)).toList();
     final questions = recent.where((a) => a.needsConfirmation).length;
-    final summary = recent.take(5).map((a) => '${a.assetId.isEmpty ? '' : '${a.assetId}: '}${a.title}').toList();
-    return ChangeDigest(newAnomalies: recent.length, newQuestions: questions, summary: summary);
+    final summary = recent
+        .take(5)
+        .map((a) => '${a.assetId.isEmpty ? '' : '${a.assetId}: '}${a.title}')
+        .toList();
+    return ChangeDigest(
+      newAnomalies: recent.length,
+      newQuestions: questions,
+      summary: summary,
+    );
   }
 
   FutureRisk futureRisk(String assetId) {
@@ -360,7 +448,12 @@ class AdvancedInsightsService {
     }
     final confidence = confidenceForAsset(assetId);
     if (top == 'GERAL') {
-      return FutureRisk('baixo/indefinido', top, 'Não há evidência suficiente de aumento recente de intervenções para estimar risco de parada.', confidence);
+      return FutureRisk(
+        'baixo/indefinido',
+        top,
+        'Não há evidência suficiente de aumento recente de intervenções para estimar risco de parada.',
+        confidence,
+      );
     }
     return FutureRisk(
       maxGrowth >= 3 ? 'alto' : 'moderado',
@@ -373,10 +466,20 @@ class AdvancedInsightsService {
   List<TimelineEvent> timeline(String assetId) {
     final out = <TimelineEvent>[];
     for (final r in store.readings.where((r) => r.assetId == assetId)) {
-      out.add(TimelineEvent(r.date, 'MEDIDOR', '${r.type}: ${r.rawValue}', 'Fonte: ${r.source} • confiança ${(r.confidence * 100).round()}%'));
+      out.add(TimelineEvent(
+        r.date,
+        'MEDIDOR',
+        '${r.type}: ${r.rawValue}',
+        'Fonte: ${r.source} • confiança ${(r.confidence * 100).round()}%',
+      ));
     }
     for (final p in store.partUsages.where((p) => p.assetId == assetId)) {
-      out.add(TimelineEvent(p.date, 'PEÇA/RM', p.partName, 'Qtd. ${p.quantity} ${p.unit} • O.S. ${p.os} • RM ${p.rm} • Ref. ${p.reference}'));
+      out.add(TimelineEvent(
+        p.date,
+        'PEÇA/RM',
+        p.partName,
+        'Qtd. ${p.quantity} ${p.unit} • O.S. ${p.os} • RM ${p.rm} • Ref. ${p.reference}',
+      ));
     }
     for (final a in store.anomalies.where((a) => a.assetId == assetId)) {
       out.add(TimelineEvent(a.createdAt, 'ALERTA', a.title, a.message));
@@ -389,11 +492,21 @@ class AdvancedInsightsService {
     final evidence = <String>[];
     if (anomaly.assetId.isNotEmpty) {
       final confidence = confidenceForAsset(anomaly.assetId);
-      evidence.add('Confiança geral do ativo: ${confidence.label} (${(confidence.score * 100).round()}%).');
+      evidence.add(
+        'Confiança geral do ativo: ${confidence.label} (${(confidence.score * 100).round()}%).',
+      );
     }
-    if (anomaly.ruleKey.isNotEmpty) evidence.add('Regra/contexto: ${anomaly.ruleKey}.');
-    if (anomaly.needsConfirmation) evidence.add('A conclusão depende de confirmação humana; não será tratada como fato até ser confirmada.');
-    evidence.add('Dados originais permanecem preservados; o Intelligence não corrige a fonte silenciosamente.');
+    if (anomaly.ruleKey.isNotEmpty) {
+      evidence.add('Regra/contexto: ${anomaly.ruleKey}.');
+    }
+    if (anomaly.needsConfirmation) {
+      evidence.add(
+        'A conclusão depende de confirmação humana; não será tratada como fato até ser confirmada.',
+      );
+    }
+    evidence.add(
+      'Dados originais permanecem preservados; o Intelligence não corrige a fonte silenciosamente.',
+    );
     return evidence.join('\n');
   }
 
@@ -401,7 +514,10 @@ class AdvancedInsightsService {
     required Asset asset,
     OemMaintenanceForecast? oemForecast,
   }) {
-    final openQuestions = store.anomalies.where((a) => a.assetId == asset.id && !a.resolved && a.needsConfirmation).length;
+    final openQuestions = store.anomalies
+        .where((a) =>
+            a.assetId == asset.id && !a.resolved && a.needsConfirmation)
+        .length;
     if (openQuestions > 0) {
       return 'Resolver $openQuestions dúvida(s)/conflito(s) antes de decisões de alta confiança.';
     }
@@ -433,9 +549,17 @@ class AdvancedInsightsService {
   }
 
   MeterReading? _nearestReading(String assetId, DateTime date) {
-    final values = store.readings.where((r) => r.assetId == assetId && r.confidence >= .6).toList();
+    final values = store.readings
+        .where((r) => r.assetId == assetId && r.confidence >= .6)
+        .toList();
     if (values.isEmpty) return null;
-    values.sort((a, b) => (a.date.difference(date).inDays.abs()).compareTo(b.date.difference(date).inDays.abs()));
+    values.sort(
+      (a, b) => a.date
+          .difference(date)
+          .inDays
+          .abs()
+          .compareTo(b.date.difference(date).inDays.abs()),
+    );
     return values.first;
   }
 }

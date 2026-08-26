@@ -4,8 +4,7 @@ on:
   push:
     branches: [rc-intelligence-v6-final]
     paths:
-      - 'intelligence_app/**'
-      - 'intelligence_payload/v5/**'
+      - 'intelligence_src/v6/**'
       - '.github/workflows/build-rc-intelligence.yml'
   workflow_dispatch:
 
@@ -20,7 +19,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -32,99 +31,65 @@ jobs:
           distribution: temurin
           java-version: '17'
 
-      - name: Flutter estável
+      - name: Flutter estavel
         uses: subosito/flutter-action@v2
         with:
           channel: stable
           cache: true
 
-      - name: Criar plataforma Android
-        working-directory: intelligence_app
-        run: flutter create --platforms=android --org com.rc --project-name rc_intelligence .
-
-      - name: Reconstruir v6 e validar conteúdo
+      - name: Criar aplicativo limpo
         run: |
-          set -euo pipefail
+          rm -rf intelligence_app
+          flutter create --platforms=android --org com.rc --project-name rc_intelligence intelligence_app
+          rm -rf intelligence_app/lib intelligence_app/test
           mkdir -p intelligence_app/lib intelligence_app/test
-          tr -d '\n\r ' < intelligence_payload/v5/main.b64 > /tmp/main.b64
-          tr -d '\n\r ' < intelligence_payload/v5/data_hub.b64 > /tmp/data_hub.b64
-          tr -d '\n\r ' < intelligence_payload/v5/data_store.b64 > /tmp/data_store.b64
-          tr -d '\n\r ' < intelligence_payload/v5/engine.b64 > /tmp/engine.b64
-          tr -d '\n\r ' < intelligence_payload/v5/data_import.b64 > /tmp/data_import.b64
-          tr -d '\n\r ' < intelligence_payload/v5/central_database.b64 > /tmp/central_database.b64
-          tr -d '\n\r ' < intelligence_payload/v5/data_center.b64 > /tmp/data_center.b64
-          tr -d '\n\r ' < intelligence_payload/v5/engine_test.b64 > /tmp/engine_test.b64
-          tr -d '\n\r ' < intelligence_payload/v5/v5_test.b64 > /tmp/v6_test.b64
-          tr -d '\n\r ' < intelligence_payload/v5/import_test.b64 > /tmp/import_test.b64
-          tr -d '\n\r ' < intelligence_payload/v5/pubspec.b64 > /tmp/pubspec.b64
-
-          base64 -d /tmp/main.b64 | gzip -d > intelligence_app/lib/main.dart
-          base64 -d /tmp/data_hub.b64 | gzip -d > intelligence_app/lib/data_hub.dart
-          base64 -d /tmp/data_store.b64 | gzip -d > intelligence_app/lib/data_store.dart
-          base64 -d /tmp/engine.b64 | gzip -d > intelligence_app/lib/intelligence_engine.dart
-          base64 -d /tmp/data_import.b64 | gzip -d > intelligence_app/lib/data_import.dart
-          base64 -d /tmp/central_database.b64 | gzip -d > intelligence_app/lib/central_database.dart
-          base64 -d /tmp/data_center.b64 | gzip -d > intelligence_app/lib/data_center.dart
-          base64 -d /tmp/engine_test.b64 | gzip -d > intelligence_app/test/intelligence_engine_v6_test.dart
-          base64 -d /tmp/v6_test.b64 | gzip -d > intelligence_app/test/v6_data_entry_test.dart
-          base64 -d /tmp/import_test.b64 | gzip -d > intelligence_app/test/v6_data_import_test.dart
-          base64 -d /tmp/pubspec.b64 | gzip -d > intelligence_app/pubspec.yaml
-
-          rm -f intelligence_app/test/widget_test.dart \
-            intelligence_app/test/widget_v3_test.dart \
-            intelligence_app/test/intelligence_engine_v3_test.dart \
-            intelligence_app/test/v4_data_entry_test.dart \
-            intelligence_app/test/intelligence_engine_v4_test.dart \
-            intelligence_app/test/intelligence_engine_v5_test.dart \
-            intelligence_app/test/v5_data_entry_test.dart
-
-          test -s intelligence_app/lib/main.dart
-          test -s intelligence_app/lib/data_hub.dart
-          test -s intelligence_app/lib/data_store.dart
-          test -s intelligence_app/lib/data_import.dart
-          test -s intelligence_app/lib/central_database.dart
-          test -s intelligence_app/lib/data_center.dart
+          cp -R intelligence_src/v6/lib/. intelligence_app/lib/
+          cp -R intelligence_src/v6/test/. intelligence_app/test/
+          cp intelligence_src/v6/pubspec.yaml intelligence_app/pubspec.yaml
           grep -q 'SIMULADOR v6' intelligence_app/lib/main.dart
-          grep -q 'Central de Dados' intelligence_app/lib/data_hub.dart
-          grep -q 'edit_asset' intelligence_app/lib/data_hub.dart
-          grep -q 'Média de utilização: Calculada automaticamente' intelligence_app/lib/data_hub.dart
-          grep -q 'BASE_OFICINA_TANQUE' intelligence_app/lib/data_import.dart
-          grep -q 'Av. Brasil 33060' intelligence_app/lib/data_center.dart
-          grep -q 'Importar e analisar planilha' intelligence_app/lib/data_center.dart
-          grep -q 'importAssetsBatch' intelligence_app/lib/data_store.dart
-          grep -q 'updateAsset' intelligence_app/lib/data_store.dart
-          grep -q 'Central de Dados' intelligence_app/test/v6_data_entry_test.dart
-          grep -q 'regra da base/oficina' intelligence_app/test/v6_data_import_test.dart
+          grep -q 'Central de Dados' intelligence_app/lib/main.dart
+          grep -q 'Abrir peça no catálogo' intelligence_app/lib/main.dart
+          grep -q 'Intervenção provável' intelligence_app/lib/intelligence_engine.dart
+          grep -q 'FROTAS' intelligence_app/lib/data_import.dart
+          grep -q 'mycnhstore.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'shop.deere.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'wirtgen-group.com' intelligence_app/lib/oem_catalog.dart
+          grep -q 'flutter_local_notifications' intelligence_app/pubspec.yaml
 
-      - name: Configurar Android
-        working-directory: intelligence_app
+      - name: Configurar Android e notificacoes
         run: |
           python3 - <<'PY'
           from pathlib import Path
-          manifest = Path('android/app/src/main/AndroidManifest.xml')
+          manifest = Path('intelligence_app/android/app/src/main/AndroidManifest.xml')
           text = manifest.read_text()
+          if 'android.permission.POST_NOTIFICATIONS' not in text:
+              text = text.replace('<manifest xmlns:android="http://schemas.android.com/apk/res/android">', '<manifest xmlns:android="http://schemas.android.com/apk/res/android">\n    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>')
           text = text.replace('android:label="rc_intelligence"', 'android:label="R&amp;C Intelligence"')
           manifest.write_text(text)
-          gradle = Path('android/app/build.gradle.kts')
-          if gradle.exists():
-              text = gradle.read_text()
-              text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
-              gradle.write_text(text)
+
+          gradle = Path('intelligence_app/android/app/build.gradle.kts')
+          text = gradle.read_text()
+          text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
+          if 'isCoreLibraryDesugaringEnabled = true' not in text:
+              text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
+          if 'coreLibraryDesugaring(' not in text:
+              text += '\n\ndependencies {\n    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.4")\n}\n'
+          gradle.write_text(text)
           PY
 
-      - name: Dependências
+      - name: Dependencias
         working-directory: intelligence_app
         run: flutter pub get
 
-      - name: Formatação
+      - name: Formatacao
         working-directory: intelligence_app
         run: dart format lib test
 
-      - name: Análise estática
+      - name: Analise estatica
         working-directory: intelligence_app
         run: flutter analyze --no-fatal-infos --no-fatal-warnings
 
-      - name: Testes do motor, importação e recursos v6
+      - name: Testes Intelligence v6
         working-directory: intelligence_app
         run: flutter test
 
@@ -134,19 +99,6 @@ jobs:
 
       - name: Preparar APK
         run: cp intelligence_app/build/app/outputs/flutter-apk/app-release.apk RC-Intelligence-Simulador-v6.apk
-
-      - name: Limpar versões antigas do R&C Intelligence
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          for tag in rc-intelligence-simulador-v1 rc-intelligence-simulador-v2 rc-intelligence-simulador-v3 rc-intelligence-simulador-v4 rc-intelligence-simulador-v5; do
-            gh release delete "$tag" --yes --cleanup-tag 2>/dev/null || true
-          done
-          gh api --paginate "/repos/${GITHUB_REPOSITORY}/actions/artifacts?per_page=100" \
-            --jq '.artifacts[] | select(.name | startswith("RC-Intelligence-Simulador-")) | .id' \
-            | while read -r id; do
-                [ -n "$id" ] && gh api -X DELETE "/repos/${GITHUB_REPOSITORY}/actions/artifacts/$id" || true
-              done
 
       - name: Publicar artefato v6
         uses: actions/upload-artifact@v4
@@ -164,7 +116,7 @@ jobs:
           gh release create "$TAG" RC-Intelligence-Simulador-v6.apk \
             --target "$GITHUB_SHA" \
             --title "R&C Intelligence — Simulador v6" \
-            --notes "v6: Central de Dados para importar e validar XLSX, edição de ativos sem exclusão, prevenção de duplicidades, histórico de horímetro/km alimentado por abastecimentos, validação de datas e leituras, regra da base/oficina/tanque da Av. Brasil 33060 como evidência neutra de liberação, referências OEM em banco local e preparação para integração futura com R&C Abastecimento. Não altera o Supabase de produção."
+            --notes "v6: fontes diretos e build limpo; Central de Dados XLSX; edição de ativos; biblioteca técnica OEM por marca/modelo/série; abertura de catálogo e deep-link de peça quando disponível; motor de inferência com evidência/confiança; detecção de reincidência; conflitos para correção manual; aprendizado a partir das confirmações do administrador; notificações locais de anomalias e dúvidas; FROTAS=OFICINA BANGU e abastecimento na base como evidência neutra de liberação. Simulador local, sem alteração do Supabase de produção."
 
       - name: Registrar resultado
         if: always()

@@ -3,8 +3,6 @@ name: Build R&C Intelligence v6 Branch
 on:
   push:
     branches: [main]
-    paths:
-      - '.github/workflows/build-rc-intelligence-v6-branch.yml'
   pull_request:
     branches: [main]
   workflow_dispatch:

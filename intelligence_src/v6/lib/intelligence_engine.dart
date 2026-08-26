@@ -2,22 +2,51 @@ import 'dart:math';
 
 import 'data_store.dart';
 import 'models.dart';
+import 'oem_maintenance.dart';
 
 class IntelligenceEngine {
   IntelligenceEngine(this.store);
   final DataStore store;
+  final OemMaintenanceService oemMaintenance = OemMaintenanceService();
 
   String classifySystem(String text) {
     final t = text.toUpperCase();
-    if (t.contains('DIRE') || t.contains('TERMINAL DE DIRE') || t.contains('BARRA')) return 'DIREÇÃO';
-    if (t.contains('FREIO') || t.contains('SAPATA') || t.contains('TAMBOR')) return 'FREIO';
-    if (t.contains('HIDRAUL') || t.contains('MANGUEIRA') || t.contains('CILINDRO')) return 'HIDRÁULICO';
-    if (t.contains('MOTOR') || t.contains('LUBRIFICANTE') || t.contains('15W40') || t.contains('5W30')) return 'MOTOR/LUBRIFICAÇÃO';
+    if (t.contains('DIRE') ||
+        t.contains('TERMINAL DE DIRE') ||
+        t.contains('BARRA')) {
+      return 'DIREÇÃO';
+    }
+    if (t.contains('FREIO') || t.contains('SAPATA') || t.contains('TAMBOR')) {
+      return 'FREIO';
+    }
+    if (t.contains('HIDRAUL') ||
+        t.contains('MANGUEIRA') ||
+        t.contains('CILINDRO')) {
+      return 'HIDRÁULICO';
+    }
+    if (t.contains('MOTOR') ||
+        t.contains('LUBRIFICANTE') ||
+        t.contains('15W40') ||
+        t.contains('5W30')) {
+      return 'MOTOR/LUBRIFICAÇÃO';
+    }
     if (t.contains('COMBUST') || t.contains('RACOR')) return 'COMBUSTÍVEL';
-    if (t.contains('TRANSM') || t.contains('CAIXA') || t.contains('80W90') || t.contains('85W140')) return 'TRANSMISSÃO';
+    if (t.contains('TRANSM') ||
+        t.contains('CAIXA') ||
+        t.contains('80W90') ||
+        t.contains('85W140')) {
+      return 'TRANSMISSÃO';
+    }
     if (t.contains('CORREIA') || t.contains('POLIA')) return 'ACIONAMENTO';
-    if (t.contains('BATERIA') || t.contains('LAMP') || t.contains('FUSIVEL') || t.contains('ELÉTR')) return 'ELÉTRICO';
-    if (t.contains('PNEU') || t.contains('RODA') || t.contains('ROLAMENTO')) return 'RODAGEM';
+    if (t.contains('BATERIA') ||
+        t.contains('LAMP') ||
+        t.contains('FUSIVEL') ||
+        t.contains('ELÉTR')) {
+      return 'ELÉTRICO';
+    }
+    if (t.contains('PNEU') || t.contains('RODA') || t.contains('ROLAMENTO')) {
+      return 'RODAGEM';
+    }
     if (t.contains('FILTRO')) return 'FILTRAGEM';
     return 'OUTROS';
   }
@@ -32,7 +61,81 @@ class IntelligenceEngine {
     out.addAll(_meterAnomalies());
     out.addAll(_partRecurrences());
     out.addAll(_dataQuality());
+    out.addAll(_oemMaintenanceAlerts());
     return _dedupe(out);
+  }
+
+  List<OemMaintenanceRule> oemRulesForAsset(Asset asset) =>
+      oemMaintenance.rulesFor(asset);
+
+  OemMaintenanceForecast? oemPreventiveForecastForAsset(Asset asset) {
+    final rule = oemMaintenance.fullPreventiveRuleFor(asset);
+    if (rule == null) return null;
+    return oemMaintenance.forecastRule(
+      asset: asset,
+      rule: rule,
+      readings: store.readings,
+      averagePerDay: averageUsage(asset.id, 90),
+      lastCompletedMeter: _oemBaseline(asset.id, rule.id),
+    );
+  }
+
+  List<OemMaintenanceForecast> oemItemForecastsForAsset(Asset asset) {
+    final avg = averageUsage(asset.id, 90);
+    final result = <OemMaintenanceForecast>[];
+    for (final rule in oemMaintenance.rulesFor(asset)) {
+      final forecast = oemMaintenance.forecastRule(
+        asset: asset,
+        rule: rule,
+        readings: store.readings,
+        averagePerDay: avg,
+        lastCompletedMeter: _oemBaseline(asset.id, rule.id),
+      );
+      if (forecast != null) result.add(forecast);
+    }
+    return result;
+  }
+
+  double? _oemBaseline(String assetId, String ruleId) {
+    final value = store.rule('oem_baseline:$assetId:$ruleId')?.value;
+    if (value == null || value.trim().isEmpty) return null;
+    return double.tryParse(value.trim().replaceAll(',', '.'));
+  }
+
+  List<Anomaly> _oemMaintenanceAlerts() {
+    final out = <Anomaly>[];
+    for (final asset in store.assets) {
+      for (final forecast in oemItemForecastsForAsset(asset)) {
+        if (forecast.levelCode == 'MONITOR') continue;
+        final needsBaseline = !forecast.baselineConfirmed;
+        final levelText = forecast.remaining < 0
+            ? '${forecast.levelEmoji} ${forecast.levelLabel}: intervalo ultrapassado.'
+            : '${forecast.levelEmoji} ${forecast.levelLabel}: faltam ${forecast.remainingText}.';
+        final baselineText = needsBaseline
+            ? ' O marco foi calculado sem confirmação da última execução desta manutenção; confirme o Horímetro/Km da última realização para permitir classificação de vencimento com alta confiança.'
+            : '';
+        out.add(Anomaly(
+          id: 'oem:${asset.id}:${forecast.rule.id}:${forecast.nextTarget}:${forecast.levelCode}',
+          title: forecast.rule.fullPreventive
+              ? 'Revisão preventiva OEM'
+              : 'Manutenção OEM: ${forecast.rule.serviceName}',
+          message: '${forecast.userMessage} $levelText$baselineText',
+          severity: forecast.levelCode == 'OVERDUE' ||
+                  forecast.levelCode == 'VERY_CLOSE'
+              ? 'alta'
+              : forecast.levelCode == 'SCHEDULE'
+                  ? 'média'
+                  : 'info',
+          createdAt: DateTime.now(),
+          assetId: asset.id,
+          needsConfirmation: needsBaseline,
+          ruleKey: needsBaseline
+              ? 'oem_baseline:${asset.id}:${forecast.rule.id}'
+              : '',
+        ));
+      }
+    }
+    return out;
   }
 
   List<Anomaly> _meterAnomalies() {
@@ -51,7 +154,8 @@ class IntelligenceEngine {
           out.add(Anomaly(
             id: 'meter:${entry.key}:${cur.date.toIso8601String()}:${cur.rawValue}',
             title: 'Leitura regressiva para confirmar',
-            message: '${entry.key}: ${prev.rawValue} → ${cur.rawValue} (${cur.type}). O valor original foi preservado e não será corrigido automaticamente.',
+            message:
+                '${entry.key}: ${prev.rawValue} → ${cur.rawValue} (${cur.type}). O valor original foi preservado e não será corrigido automaticamente.',
             severity: 'alta',
             createdAt: DateTime.now(),
             assetId: entry.key,
@@ -66,7 +170,8 @@ class IntelligenceEngine {
 
   List<Anomaly> _partRecurrences() {
     final out = <Anomaly>[];
-    final usages = [...store.partUsages]..sort((a, b) => a.date.compareTo(b.date));
+    final usages = [...store.partUsages]
+      ..sort((a, b) => a.date.compareTo(b.date));
     const meaningfulSystems = {
       'DIREÇÃO',
       'FREIO',
@@ -97,7 +202,8 @@ class IntelligenceEngine {
           out.add(Anomaly(
             id: 'repeat:${a.assetId}:${a.date.toIso8601String()}:${b.date.toIso8601String()}:$label',
             title: 'Possível reincidência de manutenção',
-            message: '${a.assetId}: $label apareceu novamente após $days dias. Cruzar O.S., providência tomada e Horímetro/Km antes de concluir falha repetida.',
+            message:
+                '${a.assetId}: $label apareceu novamente após $days dias. Cruzar O.S., providência tomada e Horímetro/Km antes de concluir falha repetida.',
             severity: days <= 30 ? 'alta' : 'média',
             createdAt: DateTime.now(),
             assetId: a.assetId,
@@ -120,12 +226,14 @@ class IntelligenceEngine {
         out.add(Anomaly(
           id: 'unit:${p.assetId}:${p.date.toIso8601String()}:${p.rm}:${p.reference}',
           title: 'Unidade de fluido precisa de contexto',
-          message: '${p.assetId}: ${p.partName} está como ${p.quantity} ${p.unit}. Pode ser embalagem, unidade comercial ou volume. Confirmar antes de converter para litros.',
+          message:
+              '${p.assetId}: ${p.partName} está como ${p.quantity} ${p.unit}. Pode ser embalagem, unidade comercial ou volume. Confirmar antes de converter para litros.',
           severity: 'média',
           createdAt: DateTime.now(),
           assetId: p.assetId,
           needsConfirmation: true,
-          ruleKey: 'package:${p.internalCode.isEmpty ? p.reference : p.internalCode}',
+          ruleKey:
+              'package:${p.internalCode.isEmpty ? p.reference : p.internalCode}',
         ));
       }
       if (p.quantity <= 0) {

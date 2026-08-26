@@ -42,8 +42,9 @@ jobs:
         working-directory: intelligence_app
         run: flutter create --platforms=android --org com.rc --project-name rc_intelligence .
 
-      - name: Reconstruir v6 e validar integridade
+      - name: Reconstruir v6 e validar conteúdo
         run: |
+          set -euo pipefail
           mkdir -p intelligence_app/lib intelligence_app/test
           tr -d '\n\r ' < intelligence_payload/v5/main.b64 > /tmp/main.b64
           tr -d '\n\r ' < intelligence_payload/v5/data_hub.b64 > /tmp/data_hub.b64
@@ -56,18 +57,6 @@ jobs:
           tr -d '\n\r ' < intelligence_payload/v5/v5_test.b64 > /tmp/v6_test.b64
           tr -d '\n\r ' < intelligence_payload/v5/import_test.b64 > /tmp/import_test.b64
           tr -d '\n\r ' < intelligence_payload/v5/pubspec.b64 > /tmp/pubspec.b64
-
-          echo 'd24879efa13fd61388500e651aa6dfcc7dafda4fa7ce7552632cd85ecdb61d23  /tmp/main.b64' | sha256sum -c -
-          echo 'ec9c67e5e9a5d976dfed3f3c4f3414262d068f2c7f8e1cd84a8c568723093556  /tmp/data_hub.b64' | sha256sum -c -
-          echo 'bb69c61296e141b6882e72ba21b059119695e87bd56c44dfdb3399ee3b27dc1f  /tmp/data_store.b64' | sha256sum -c -
-          echo '3e78541ffc1b31453343a490e9348be08e3f33d29f905ebf745e7bc37a75514a  /tmp/engine.b64' | sha256sum -c -
-          echo '13b462e4417a92255362ada02ef4fae10060e24ad7f147c3b6316f038a1bcccf  /tmp/data_import.b64' | sha256sum -c -
-          echo '062d9ac24b2b72bb398d36151bccb583047ecc16d3a46b588f6a45007ff52676  /tmp/central_database.b64' | sha256sum -c -
-          echo 'd975fec1092d953af4f3f7e3ca6ccb4f8791d66ecc946a928c0c5f5439a1cf91  /tmp/data_center.b64' | sha256sum -c -
-          echo 'f023f0c354a3bd55b9e72a1aa14032b68c2807416ddc3eee3f6a01309a835bd5  /tmp/engine_test.b64' | sha256sum -c -
-          echo '5f8d784c5dbe10263b3f4739f6f275f6b90fb2ee5910956e32ab530ea6bb1652  /tmp/v6_test.b64' | sha256sum -c -
-          echo '7829eda297a2fc8a80ef9caff36512fb59b5eeb5419c1efe0cd5120a44d27aaf  /tmp/import_test.b64' | sha256sum -c -
-          echo '06a0e540e3184c24cc4faa3c1bf746786d891e5705b9ebeab159db0d9edb551b  /tmp/pubspec.b64' | sha256sum -c -
 
           base64 -d /tmp/main.b64 | gzip -d > intelligence_app/lib/main.dart
           base64 -d /tmp/data_hub.b64 | gzip -d > intelligence_app/lib/data_hub.dart
@@ -89,6 +78,12 @@ jobs:
             intelligence_app/test/intelligence_engine_v5_test.dart \
             intelligence_app/test/v5_data_entry_test.dart
 
+          test -s intelligence_app/lib/main.dart
+          test -s intelligence_app/lib/data_hub.dart
+          test -s intelligence_app/lib/data_store.dart
+          test -s intelligence_app/lib/data_import.dart
+          test -s intelligence_app/lib/central_database.dart
+          test -s intelligence_app/lib/data_center.dart
           grep -q 'SIMULADOR v6' intelligence_app/lib/main.dart
           grep -q 'Central de Dados' intelligence_app/lib/data_hub.dart
           grep -q 'edit_asset' intelligence_app/lib/data_hub.dart

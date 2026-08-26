@@ -5,6 +5,8 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/build-rc-intelligence-v6-branch.yml'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -111,6 +113,7 @@ jobs:
           retention-days: 7
 
       - name: Publicar Release v6
+        if: github.event_name != 'pull_request'
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: rc-intelligence-simulador-v6

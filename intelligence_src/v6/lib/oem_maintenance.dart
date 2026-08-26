@@ -181,7 +181,7 @@ class OemMaintenanceService {
     }
 
     final baselineConfirmed = lastCompletedMeter != null;
-    var nextTarget = baselineConfirmed
+    var nextTarget = lastCompletedMeter != null
         ? lastCompletedMeter + rule.interval
         : (estimatedCurrent / rule.interval).ceil() * rule.interval;
     if (!baselineConfirmed && (nextTarget - estimatedCurrent).abs() < .0001) {

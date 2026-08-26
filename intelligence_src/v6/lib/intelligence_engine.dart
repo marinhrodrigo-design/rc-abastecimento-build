@@ -67,17 +67,33 @@ class IntelligenceEngine {
   List<Anomaly> _partRecurrences() {
     final out = <Anomaly>[];
     final usages = [...store.partUsages]..sort((a, b) => a.date.compareTo(b.date));
+    const meaningfulSystems = {
+      'DIREÇÃO',
+      'FREIO',
+      'HIDRÁULICO',
+      'MOTOR/LUBRIFICAÇÃO',
+      'COMBUSTÍVEL',
+      'TRANSMISSÃO',
+      'ACIONAMENTO',
+      'ELÉTRICO',
+      'RODAGEM',
+    };
     for (var i = 0; i < usages.length; i++) {
       final a = usages[i];
       for (var j = i + 1; j < usages.length; j++) {
         final b = usages[j];
-        if (a.assetId != b.assetId) continue;
         final days = b.date.difference(a.date).inDays;
         if (days > 180) break;
-        final sameRef = a.reference.isNotEmpty && a.reference.toUpperCase() == b.reference.toUpperCase();
-        final sameSystem = classifySystem(a.partName) == classifySystem(b.partName) && classifySystem(a.partName) != 'OUTROS';
+        if (a.assetId != b.assetId) continue;
+        final sameRef = a.reference.isNotEmpty &&
+            a.reference.toUpperCase() == b.reference.toUpperCase();
+        final systemA = classifySystem(a.partName);
+        final sameSystem = meaningfulSystems.contains(systemA) &&
+            systemA == classifySystem(b.partName);
         if (sameRef || sameSystem) {
-          final label = sameRef ? 'mesma referência ${a.reference}' : 'mesmo sistema ${classifySystem(a.partName)}';
+          final label = sameRef
+              ? 'mesma referência ${a.reference}'
+              : 'mesmo sistema $systemA';
           out.add(Anomaly(
             id: 'repeat:${a.assetId}:${a.date.toIso8601String()}:${b.date.toIso8601String()}:$label',
             title: 'Possível reincidência de manutenção',
@@ -96,7 +112,10 @@ class IntelligenceEngine {
     final out = <Anomaly>[];
     for (final p in store.partUsages) {
       final unit = p.unit.trim().toLowerCase();
-      final oil = RegExp(r'óleo|oleo|lubrificante|hydro|hydraulic|15w|5w|80w|85w', caseSensitive: false).hasMatch(p.partName);
+      final oil = RegExp(
+        r'óleo|oleo|lubrificante|hidraul|hydro|hydraulic|15w|5w|10w|80w|85w|sae|atf',
+        caseSensitive: false,
+      ).hasMatch(p.partName);
       if (oil && unit == 'un') {
         out.add(Anomaly(
           id: 'unit:${p.assetId}:${p.date.toIso8601String()}:${p.rm}:${p.reference}',
@@ -125,7 +144,9 @@ class IntelligenceEngine {
   }
 
   double averageUsage(String assetId, int days) {
-    final list = store.readings.where((r) => r.assetId == assetId && r.confidence >= .6).toList()
+    final list = store.readings
+        .where((r) => r.assetId == assetId && r.confidence >= .6)
+        .toList()
       ..sort((a, b) => a.date.compareTo(b.date));
     if (list.length < 2) return 0;
     final end = list.last.date;

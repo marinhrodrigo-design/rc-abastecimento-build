@@ -46,6 +46,7 @@ class OemMaintenanceForecast {
     required this.currentMeterEstimated,
     required this.nextTarget,
     required this.remaining,
+    required this.baselineConfirmed,
     required this.levelCode,
     required this.levelLabel,
     required this.levelEmoji,
@@ -59,6 +60,7 @@ class OemMaintenanceForecast {
   final bool currentMeterEstimated;
   final double nextTarget;
   final double remaining;
+  final bool baselineConfirmed;
   final String levelCode;
   final String levelLabel;
   final String levelEmoji;
@@ -69,7 +71,7 @@ class OemMaintenanceForecast {
   String get targetText => '${_fmt(nextTarget)} $unitLabel';
 
   String get remainingText => remaining < 0
-      ? '${_fmt(remaining.abs())} $unitLabel vencidas'
+      ? '${_fmt(remaining.abs())} $unitLabel ultrapassadas'
       : '${_fmt(remaining)} $unitLabel';
 
   String get estimatedDateText {
@@ -78,9 +80,14 @@ class OemMaintenanceForecast {
     return '${d.day.toString().padLeft(2, '0')}/${d.month.toString().padLeft(2, '0')}/${d.year}';
   }
 
-  String get userMessage =>
-      'De acordo com a regra OEM, a próxima revisão preventiva deve ser em $targetText. '
-      'A estimativa para a revisão de acordo com a OEM é $estimatedDateText.';
+  String get userMessage {
+    if (rule.fullPreventive) {
+      return 'De acordo com a regra OEM, a próxima revisão preventiva deve ser em $targetText. '
+          'A estimativa para a revisão de acordo com a OEM é $estimatedDateText.';
+    }
+    return 'De acordo com a regra OEM, ${rule.serviceName} deve ocorrer em $targetText. '
+        'A estimativa é $estimatedDateText.';
+  }
 
   static String _fmt(double value) {
     if ((value - value.roundToDouble()).abs() < .05) return value.round().toString();
@@ -127,6 +134,7 @@ class OemMaintenanceService {
     required Asset asset,
     required List<MeterReading> readings,
     required double averagePerDay,
+    double? lastCompletedMeter,
     DateTime? now,
   }) {
     final rule = fullPreventiveRuleFor(asset);
@@ -136,6 +144,7 @@ class OemMaintenanceService {
       rule: rule,
       readings: readings,
       averagePerDay: averagePerDay,
+      lastCompletedMeter: lastCompletedMeter,
       now: now,
     );
   }
@@ -145,6 +154,7 @@ class OemMaintenanceService {
     required OemMaintenanceRule rule,
     required List<MeterReading> readings,
     required double averagePerDay,
+    double? lastCompletedMeter,
     DateTime? now,
   }) {
     final expectedType = rule.unit == 'H' ? 'HORIMETRO' : 'KM';
@@ -170,15 +180,19 @@ class OemMaintenanceService {
       }
     }
 
-    var nextTarget = (estimatedCurrent / rule.interval).ceil() * rule.interval;
-    if ((nextTarget - estimatedCurrent).abs() < .0001) {
+    final baselineConfirmed = lastCompletedMeter != null;
+    var nextTarget = baselineConfirmed
+        ? lastCompletedMeter + rule.interval
+        : (estimatedCurrent / rule.interval).ceil() * rule.interval;
+    if (!baselineConfirmed && (nextTarget - estimatedCurrent).abs() < .0001) {
       nextTarget += rule.interval;
     }
+
     final remaining = nextTarget - estimatedCurrent;
     final level = levelForRemaining(remaining);
 
     DateTime? estimatedDate;
-    if (averagePerDay > 0) {
+    if (averagePerDay > 0 && remaining >= 0) {
       final days = max(0, remaining / averagePerDay).ceil();
       estimatedDate = referenceNow.add(Duration(days: days));
     }
@@ -191,6 +205,7 @@ class OemMaintenanceService {
       currentMeterEstimated: estimated,
       nextTarget: nextTarget,
       remaining: remaining,
+      baselineConfirmed: baselineConfirmed,
       levelCode: level.code,
       levelLabel: level.label,
       levelEmoji: level.emoji,

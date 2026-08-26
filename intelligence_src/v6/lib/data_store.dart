@@ -32,26 +32,47 @@ class DataStore {
     learningRules
       ..clear()
       ..addAll(decodeList(p.getString(_rulesKey)).map(LearningRule.fromJson));
-    if (assets.isEmpty) {
-      assets.addAll(_simulatorAssets());
-      learningRules.add(LearningRule(
-        key: 'location:FROTAS',
-        value: 'OFICINA BANGU / BASE_OFICINA_TANQUE',
-        reason: 'Regra operacional confirmada pelo administrador.',
-        updatedAt: DateTime.now(),
-        confidence: 1,
-        confirmed: true,
+
+    if (assets.isEmpty) assets.addAll(_simulatorAssets());
+    if (partUsages.isEmpty) partUsages.addAll(_simulatorPartEvidence());
+
+    _ensureConfirmedRule(
+      'location:FROTAS',
+      'OFICINA BANGU / BASE_OFICINA_TANQUE',
+      'Regra operacional confirmada pelo administrador.',
+    );
+    _ensureConfirmedRule(
+      'fueling:passenger_cars',
+      'PLUXEE_EXTERNO',
+      'Carros leves não abastecem no tanque interno.',
+    );
+
+    if (!anomalies.any((a) => a.id == 'asset:034-028:serial-conflict')) {
+      anomalies.add(Anomaly(
+        id: 'asset:034-028:serial-conflict',
+        title: 'Série do ativo 034-028 precisa de confirmação',
+        message:
+            'Duas fontes apresentam séries diferentes para o 034-028: O.S. = HBZNB95CCRAH35053; relatório de estoque/PDF = HR7NB95CCRAH35053. O Intelligence não escolheu nenhuma automaticamente.',
+        severity: 'alta',
+        createdAt: DateTime.now(),
+        assetId: '034-028',
+        needsConfirmation: true,
+        ruleKey: 'asset:034-028:serial',
       ));
-      learningRules.add(LearningRule(
-        key: 'fueling:passenger_cars',
-        value: 'PLUXEE_EXTERNO',
-        reason: 'Carros leves não abastecem no tanque interno.',
-        updatedAt: DateTime.now(),
-        confidence: 1,
-        confirmed: true,
-      ));
-      await saveAll();
     }
+    await saveAll();
+  }
+
+  void _ensureConfirmedRule(String key, String value, String reason) {
+    if (learningRules.any((r) => r.key == key)) return;
+    learningRules.add(LearningRule(
+      key: key,
+      value: value,
+      reason: reason,
+      updatedAt: DateTime.now(),
+      confidence: 1,
+      confirmed: true,
+    ));
   }
 
   Future<void> saveAll() async {
@@ -65,18 +86,35 @@ class DataStore {
 
   Future<void> importAssetsBatch(List<Asset> incoming) async {
     for (final a in incoming) {
-      final i = assets.indexWhere((x) => x.id.trim().toUpperCase() == a.id.trim().toUpperCase());
+      final i = assets.indexWhere(
+          (x) => x.id.trim().toUpperCase() == a.id.trim().toUpperCase());
       if (i >= 0) {
         final old = assets[i];
+        if (old.serial.isNotEmpty &&
+            a.serial.isNotEmpty &&
+            old.serial.toUpperCase() != a.serial.toUpperCase()) {
+          await addAnomaly(Anomaly(
+            id: 'asset:${old.id}:serial:${old.serial}:${a.serial}',
+            title: 'Conflito de chassi/série',
+            message:
+                '${old.id}: valor atual "${old.serial}" e nova fonte "${a.serial}". Confirme manualmente antes de substituir.',
+            severity: 'alta',
+            createdAt: DateTime.now(),
+            assetId: old.id,
+            needsConfirmation: true,
+            ruleKey: 'asset:${old.id}:serial',
+          ));
+        }
         assets[i] = Asset(
           id: old.id,
           description: a.description.isEmpty ? old.description : a.description,
           brand: a.brand.isEmpty ? old.brand : a.brand,
           model: a.model.isEmpty ? old.model : a.model,
           year: a.year.isEmpty ? old.year : a.year,
-          serial: a.serial.isEmpty ? old.serial : a.serial,
+          serial: old.serial.isEmpty ? a.serial : old.serial,
           plate: a.plate.isEmpty ? old.plate : a.plate,
-          meterType: a.meterType == 'NAO_INFORMADO' ? old.meterType : a.meterType,
+          meterType:
+              a.meterType == 'NAO_INFORMADO' ? old.meterType : a.meterType,
         );
       } else {
         assets.add(a);
@@ -150,6 +188,57 @@ class DataStore {
     return null;
   }
 
+  static List<PartUsage> _simulatorPartEvidence() => [
+        PartUsage(
+          assetId: '034-024',
+          date: DateTime(2025, 1, 2),
+          os: '2231',
+          rm: '2178/2',
+          internalCode: '983',
+          partName: 'FILTRO OLEO HIDRAULICO - JOHN DEERE 310K',
+          reference: 'AT367840',
+          quantity: 1,
+          unit: 'un',
+          source: 'relatorio certo desde 2025.pdf • página 5',
+        ),
+        PartUsage(
+          assetId: '034-024',
+          date: DateTime(2025, 1, 2),
+          os: '2231',
+          rm: '2178**/4',
+          internalCode: '1702',
+          partName: 'M-HIDRAULICO AW68 HLP DRUM 200L',
+          reference: '122537',
+          quantity: 80,
+          unit: 'l',
+          source: 'relatorio certo desde 2025.pdf • página 4',
+        ),
+        PartUsage(
+          assetId: '034-020',
+          date: DateTime(2025, 1, 20),
+          os: '2368',
+          rm: '2305/3',
+          internalCode: '427',
+          partName: 'FILTRO LUBRIFICANTE DO MOTOR',
+          reference: '84228488',
+          quantity: 1,
+          unit: 'un',
+          source: 'relatorio certo desde 2025.pdf • página 95',
+        ),
+        PartUsage(
+          assetId: '034-020',
+          date: DateTime(2025, 1, 20),
+          os: '2368',
+          rm: '2326**',
+          internalCode: '1610',
+          partName: 'M-DELVAC MODERN 15W40 SD V3',
+          reference: '123738',
+          quantity: 15,
+          unit: 'l',
+          source: 'relatorio certo desde 2025.pdf • página 96',
+        ),
+      ];
+
   static List<Asset> _simulatorAssets() => [
         Asset(id: '034-012', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B90B', serial: 'HBZNB90BPCAH03860', meterType: 'HORIMETRO'),
         Asset(id: '034-014', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B110BT4', serial: 'HBZN110BCDAH09466', meterType: 'HORIMETRO'),
@@ -163,7 +252,7 @@ class DataStore {
         Asset(id: '034-024', description: 'Retroescavadeira', brand: 'JOHN DEERE', model: '310K', serial: 'IT0310KXPDC251347', meterType: 'HORIMETRO'),
         Asset(id: '034-025', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B95BT4', serial: 'HBZNB95BJEAH11696', meterType: 'HORIMETRO'),
         Asset(id: '034-027', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B95BT4', serial: 'HBZNB95BKEAH11681', meterType: 'HORIMETRO'),
-        Asset(id: '034-028', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B95C', serial: 'HR7NB95CCRAH35053', meterType: 'HORIMETRO'),
+        Asset(id: '034-028', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B95C', serial: '', meterType: 'HORIMETRO'),
         Asset(id: '034-036', description: 'Retroescavadeira', brand: 'NEW HOLLAND', model: 'B95C', serial: 'HBZNB95CTSAH38283', meterType: 'HORIMETRO'),
         Asset(id: '035-001', description: 'Escavadeira', brand: 'NEW HOLLAND', model: 'E215BLCH', serial: 'NAAA05857', meterType: 'HORIMETRO'),
         Asset(id: '033-003', description: 'Pá carregadeira', brand: 'NEW HOLLAND', model: '12C', serial: 'HBZN012CCCAE01891', meterType: 'HORIMETRO'),

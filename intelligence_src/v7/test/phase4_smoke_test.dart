@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:rc_intelligence/backend_service.dart';
 import 'package:rc_intelligence/models.dart';
 import 'package:rc_intelligence/oem_catalog.dart';
 import 'package:rc_intelligence/phase4_theme.dart';
@@ -9,6 +10,20 @@ void main() {
     expect(RCTheme.severityLabel('high'), 'Alto');
     expect(RCTheme.statusLabel('in_review'), 'Em análise');
     expect(RCTheme.statusLabel('dismissed'), 'Não procede');
+  });
+
+  test('alias admin cobre as identidades administrativas reais do ecossistema', () {
+    final candidates = IntelligenceApi.loginCandidates('admin');
+    expect(candidates, contains('admin@rcmanutencao.app'));
+    expect(candidates, contains('adminfuel@rccombustivel.app'));
+    expect(candidates, isNot(contains('admin@rccombustivel.app')));
+  });
+
+  test('e-mail informado diretamente não é alterado', () {
+    expect(
+      IntelligenceApi.loginCandidates('AdminFuel@rccombustivel.app'),
+      ['adminfuel@rccombustivel.app'],
+    );
   });
 
   test('biblioteca OEM continua sem inventar catálogo desconhecido', () {

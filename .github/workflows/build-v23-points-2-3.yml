@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v23 Correções + Localização
+name: Build R&C Abastecimento v23 Correções de Registro
 
 on:
   push:
@@ -7,11 +7,12 @@ on:
       - 'tool/apply_v23_points_2_3.py'
       - 'tool/apply_v23_targeted_fixes.py'
       - 'tool/apply_v23_auto_location.py'
+      - 'tool/apply_v23_submit_fix.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v23-correcoes-localizacao
+  group: rc-abastecimento-v23-correcoes-registro
   cancel-in-progress: true
 permissions:
   contents: read
@@ -29,7 +30,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: {channel: stable, cache: true}
       - run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
-      - name: Reconstruir fonte v23 e aplicar correções aprovadas
+      - name: Reconstruir fonte e aplicar correções
         run: |
           mkdir -p lib
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
@@ -53,25 +54,23 @@ jobs:
           python3 tool/apply_v23_points_2_3.py
           python3 tool/apply_v23_targeted_fixes.py
           python3 tool/apply_v23_auto_location.py
-      - name: Validar escopo e localização automática
+          python3 tool/apply_v23_submit_fix.py
+      - name: Validar correções do formulário e conclusão
         run: |
-          grep -q "p_responsible" lib/main_online.dart
-          grep -q "Responsável \*" lib/main_online.dart
-          grep -q "p_fuel_tank_capacity_liters" lib/main_online.dart
-          grep -q "Capacidade do tanque de combustível do ativo" lib/main_online.dart
-          grep -q "Placa (quando houver)" lib/main_online.dart
-          grep -q "Sem placa" lib/main_online.dart
-          grep -q "rca_save_truck_role" lib/main_online.dart
-          grep -q "Função Caminhão-tanque" lib/main_online.dart
-          grep -q "Caminhão-tanque → Comboio" lib/main_online.dart
-          grep -q "Comboio → Comboio" lib/main_online.dart
-          grep -q "rca_record_refinery_to_te_v22" lib/main_online.dart
-          grep -q "rca_record_fueling_v22" lib/main_online.dart
           grep -q "Localização automática" lib/main_online.dart
           grep -q "Coordenadas GPS:" lib/main_online.dart
           grep -q "placemarkFromCoordinates" lib/main_online.dart
-          grep -q "'p_latitude':latitude" lib/main_online.dart
-          grep -q "'p_longitude':longitude" lib/main_online.dart
+          grep -q "Foto da placa ou identificação \*" lib/main_online.dart
+          grep -q "Assinatura de quem recebeu ✓" lib/main_online.dart
+          grep -q "Assinatura de quem abasteceu ✓" lib/main_online.dart
+          grep -q "Preencha KM e Horímetro. Quando não se aplicar, informe 0000." lib/main_online.dart
+          grep -q "Preenchimento obrigatório. Quando não se aplicar, use 0000." lib/main_online.dart
+          grep -q "Future.wait<String?>" lib/main_online.dart
+          grep -q "Enviando evidências..." lib/main_online.dart
+          grep -q "Finalizando abastecimento..." lib/main_online.dart
+          grep -q "offlineStore.executeOrQueue('rca_record_fueling_v22'" lib/main_online.dart
+          grep -q "Duration(seconds: 45)" lib/main_online.dart
+          grep -q "Duration(seconds: 8)" lib/main_online.dart
           grep -q "latitude:capturedPosition?.latitude" lib/main_online.dart
           grep -q "longitude:capturedPosition?.longitude" lib/main_online.dart
       - name: Configurar Android
@@ -96,14 +95,14 @@ jobs:
       - name: Upload fonte validado
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-localizacao-source
+          name: RC-Abastecimento-v23-registro-source
           path: |
             lib/main_online.dart
             pubspec.yaml
           retention-days: 7
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Correcoes-Localizacao.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Correcoes-Registro.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-Correcoes-Localizacao
-          path: RC-Abastecimento-v23-Correcoes-Localizacao.apk
+          name: RC-Abastecimento-v23-Correcoes-Registro
+          path: RC-Abastecimento-v23-Correcoes-Registro.apk
           retention-days: 30

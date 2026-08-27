@@ -43,3 +43,5 @@ jobs:
             lib/main_online.dart
             pubspec.yaml
           retention-days: 1
+
+# Trigger manual source snapshot for implementation points 2 and 3.

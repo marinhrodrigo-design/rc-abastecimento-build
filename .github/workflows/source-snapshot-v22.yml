@@ -1,0 +1,45 @@
+name: Source snapshot v22
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/source-snapshot-v22.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reconstruct current source
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          python3 tool/apply_v20_pdf_fueling_photo_only.py
+          python3 tool/apply_v21_comboio_highlight_four_photos.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: rc-abastecimento-source-v21
+          path: |
+            lib/main_online.dart
+            pubspec.yaml
+          retention-days: 1

@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v23 Correções de Registro
+name: Build R&C Abastecimento v23 Rodada de Correções
 
 on:
   push:
@@ -8,11 +8,12 @@ on:
       - 'tool/apply_v23_targeted_fixes.py'
       - 'tool/apply_v23_auto_location.py'
       - 'tool/apply_v23_submit_fix.py'
+      - 'tool/apply_v23_user_reported_fixes.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v23-correcoes-registro
+  group: rc-abastecimento-v23-rodada-correcoes
   cancel-in-progress: true
 permissions:
   contents: read
@@ -55,24 +56,29 @@ jobs:
           python3 tool/apply_v23_targeted_fixes.py
           python3 tool/apply_v23_auto_location.py
           python3 tool/apply_v23_submit_fix.py
-      - name: Validar correções do formulário e conclusão
+          python3 tool/apply_v23_user_reported_fixes.py
+      - name: Validar rodada de correções
         run: |
+          grep -q "KM/Horímetro registrado ✓" lib/main_online.dart
+          grep -q "Totalizador registrado ✓" lib/main_online.dart
+          grep -q "Confirmar abastecimento?" lib/main_online.dart
+          grep -q "Confirmar transferência?" lib/main_online.dart
+          grep -q "Abastecimento registrado com sucesso ✓" lib/main_online.dart
+          grep -q "Transferência registrada com sucesso ✓" lib/main_online.dart
+          grep -q "Erro ao registrar abastecimento:" lib/main_online.dart
+          grep -q "Erro ao registrar transferência:" lib/main_online.dart
+          grep -q "Duration(seconds: 12)" lib/main_online.dart
+          grep -q "Tentar novamente" lib/main_online.dart
+          grep -q "Cadastrar supervisor/gerente" lib/main_online.dart
+          grep -q "Hall de permissões" lib/main_online.dart
+          grep -q "Editar cadastro e permissões" lib/main_online.dart
+          grep -q "Empresa / locadora" lib/main_online.dart
+          grep -q "Sem empresa vinculada" lib/main_online.dart
+          grep -q "api.managedCompanies()" lib/main_online.dart
           grep -q "Localização automática" lib/main_online.dart
-          grep -q "Coordenadas GPS:" lib/main_online.dart
           grep -q "placemarkFromCoordinates" lib/main_online.dart
-          grep -q "Foto da placa ou identificação \*" lib/main_online.dart
-          grep -q "Assinatura de quem recebeu ✓" lib/main_online.dart
-          grep -q "Assinatura de quem abasteceu ✓" lib/main_online.dart
-          grep -q "Preencha KM e Horímetro. Quando não se aplicar, informe 0000." lib/main_online.dart
-          grep -q "Preenchimento obrigatório. Quando não se aplicar, use 0000." lib/main_online.dart
           grep -q "Future.wait<String?>" lib/main_online.dart
-          grep -q "Enviando evidências..." lib/main_online.dart
-          grep -q "Finalizando abastecimento..." lib/main_online.dart
           grep -q "offlineStore.executeOrQueue('rca_record_fueling_v22'" lib/main_online.dart
-          grep -q "Duration(seconds: 45)" lib/main_online.dart
-          grep -q "Duration(seconds: 8)" lib/main_online.dart
-          grep -q "latitude:capturedPosition?.latitude" lib/main_online.dart
-          grep -q "longitude:capturedPosition?.longitude" lib/main_online.dart
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -95,14 +101,14 @@ jobs:
       - name: Upload fonte validado
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-registro-source
+          name: RC-Abastecimento-v23-rodada-source
           path: |
             lib/main_online.dart
             pubspec.yaml
           retention-days: 7
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Correcoes-Registro.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Rodada-Correcoes.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-Correcoes-Registro
-          path: RC-Abastecimento-v23-Correcoes-Registro.apk
+          name: RC-Abastecimento-v23-Rodada-Correcoes
+          path: RC-Abastecimento-v23-Rodada-Correcoes.apk
           retention-days: 30

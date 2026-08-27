@@ -9,6 +9,7 @@ on:
       - 'tool/apply_v23_auto_location.py'
       - 'tool/apply_v23_submit_fix.py'
       - 'tool/apply_v23_user_reported_fixes.py'
+      - 'tool/apply_v23_user_reported_hotfix.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
@@ -57,6 +58,7 @@ jobs:
           python3 tool/apply_v23_auto_location.py
           python3 tool/apply_v23_submit_fix.py
           python3 tool/apply_v23_user_reported_fixes.py
+          python3 tool/apply_v23_user_reported_hotfix.py
       - name: Validar rodada de correções
         run: |
           grep -q "KM/Horímetro registrado ✓" lib/main_online.dart

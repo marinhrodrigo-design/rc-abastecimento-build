@@ -69,6 +69,7 @@ jobs:
 
           gradle = Path('intelligence_app/android/app/build.gradle.kts')
           text = gradle.read_text()
+          text = text.replace('compileSdk = flutter.compileSdkVersion', 'compileSdk = 36')
           text = text.replace('minSdk = flutter.minSdkVersion', 'minSdk = 23')
           if 'isCoreLibraryDesugaringEnabled = true' not in text:
               text = text.replace('compileOptions {', 'compileOptions {\n        isCoreLibraryDesugaringEnabled = true')
@@ -116,7 +117,7 @@ jobs:
           gh release create "$TAG" RC-Intelligence-Simulador-v6.apk \
             --target "$GITHUB_SHA" \
             --title "R&C Intelligence — Simulador v6" \
-            --notes "v6: fontes diretos e build limpo; Central de Dados XLSX; edição de ativos; biblioteca técnica OEM por marca/modelo/série; abertura de catálogo e deep-link de peça quando disponível; motor de inferência com evidência/confiança; detecção de reincidência; conflitos para correção manual; aprendizado a partir das confirmações do administrador; notificações locais de anomalias e dúvidas; FROTAS=OFICINA BANGU e abastecimento na base como evidência neutra de liberação. Simulador local, sem alteração do Supabase de produção."
+            --notes "v6: fontes diretos e build limpo; Central de Dados XLSX; edição de ativos; biblioteca técnica OEM por marca/modelo/série; abertura de catálogo e deep-link de peça quando disponível; motor de inferência com evidência/confiança; detecção de reincidência; saúde por sistemas; comparação entre ativos iguais; vida observada de peças; preparação preventiva sem consulta a estoque; linha do tempo; próxima ação recomendada; aprendizado a partir das confirmações e rejeições do administrador; notificações locais de anomalias e dúvidas. Simulador local, sem alteração do Supabase de produção."
 
       - name: Registrar resultado
         if: always()

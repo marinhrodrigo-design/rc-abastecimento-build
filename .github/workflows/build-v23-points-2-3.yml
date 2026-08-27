@@ -11,6 +11,7 @@ on:
       - 'tool/apply_v23_user_reported_fixes.py'
       - 'tool/apply_v23_user_reported_hotfix.py'
       - 'tool/apply_v23_followup_fixes.py'
+      - 'tool/apply_v23_followup_hotfix.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
@@ -61,6 +62,7 @@ jobs:
           python3 tool/apply_v23_user_reported_fixes.py
           python3 tool/apply_v23_user_reported_hotfix.py
           python3 tool/apply_v23_followup_fixes.py
+          python3 tool/apply_v23_followup_hotfix.py
       - name: Validar correções acumuladas
         run: |
           grep -q "KM/Horímetro registrado ✓" lib/main_online.dart

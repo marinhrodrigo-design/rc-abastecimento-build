@@ -12,7 +12,7 @@ dependencies:
   cupertino_icons: ^1.0.8
   shared_preferences: ^2.3.2
   url_launcher: ^6.3.0
-  file_picker: ^12.1.1
+  file_picker: 10.3.8
   excel: ^4.0.6
   flutter_local_notifications: ^17.2.4
 

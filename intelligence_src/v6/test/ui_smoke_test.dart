@@ -23,6 +23,11 @@ Future<void> _pumpApp(WidgetTester tester, DataStore store) async {
   await tester.pumpAndSettle();
 }
 
+Finder _navLabel(String label) => find.descendant(
+      of: find.byType(NavigationBar),
+      matching: find.text(label),
+    );
+
 Future<void> _tapAndCloseDialog(
   WidgetTester tester,
   String buttonText,
@@ -49,23 +54,23 @@ void main() {
     expect(find.text('R&C Intelligence • SIMULADOR v6'), findsOneWidget);
     expect(find.text('Executar análise agora'), findsOneWidget);
 
-    await tester.tap(find.text('Ativos'));
+    await tester.tap(_navLabel('Ativos'));
     await tester.pumpAndSettle();
     expect(find.textContaining('034-020'), findsWidgets);
 
-    await tester.tap(find.text('Central de Dados'));
+    await tester.tap(_navLabel('Central de Dados'));
     await tester.pumpAndSettle();
     expect(find.text('Importar e analisar planilha XLSX'), findsOneWidget);
 
-    await tester.tap(find.text('OEM'));
+    await tester.tap(_navLabel('OEM'));
     await tester.pumpAndSettle();
     expect(find.textContaining('034-020'), findsWidgets);
 
-    await tester.tap(find.text('Alertas'));
+    await tester.tap(_navLabel('Alertas'));
     await tester.pumpAndSettle();
     expect(find.textContaining('Série do ativo 034-028'), findsWidgets);
 
-    await tester.tap(find.text('Intelligence'));
+    await tester.tap(_navLabel('Intelligence'));
     await tester.pumpAndSettle();
     expect(find.text('Executar análise agora'), findsOneWidget);
   });
@@ -74,7 +79,7 @@ void main() {
     final store = await _store();
     await _pumpApp(tester, store);
 
-    await tester.tap(find.text('Ativos'));
+    await tester.tap(_navLabel('Ativos'));
     await tester.pumpAndSettle();
     await tester.tap(find.textContaining('034-020').first);
     await tester.pumpAndSettle();
@@ -96,7 +101,7 @@ void main() {
     final store = await _store();
     await _pumpApp(tester, store);
 
-    await tester.tap(find.text('Ativos'));
+    await tester.tap(_navLabel('Ativos'));
     await tester.pumpAndSettle();
 
     final edit = find.byIcon(Icons.edit).first;
@@ -117,7 +122,7 @@ void main() {
     final store = await _store();
     await _pumpApp(tester, store);
 
-    await tester.tap(find.text('Alertas'));
+    await tester.tap(_navLabel('Alertas'));
     await tester.pumpAndSettle();
     final alert = find.textContaining('Série do ativo 034-028').first;
     await tester.tap(alert);

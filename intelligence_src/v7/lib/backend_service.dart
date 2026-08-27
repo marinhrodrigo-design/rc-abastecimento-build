@@ -19,20 +19,20 @@ class IntelligenceApi {
     if (raw.isEmpty) return const [];
     if (raw.contains('@')) return [raw];
 
-    final candidates = <String>[];
-
-    // O alias "admin" deve funcionar nos dois módulos administrativos
-    // históricos do ecossistema. No Combustível, o usuário técnico real é
-    // "adminfuel", portanto não pode ser derivado apenas como admin@... .
+    // O alias "admin" representa duas identidades administrativas históricas
+    // reais do ecossistema R&C. Não fabricamos admin@rccombustivel.app porque
+    // essa conta não existe; no módulo Combustível o usuário técnico é adminfuel.
     if (raw == 'admin') {
-      candidates.add('admin@rcmanutencao.app');
-      candidates.add('adminfuel@rccombustivel.app');
+      return const [
+        'admin@rcmanutencao.app',
+        'adminfuel@rccombustivel.app',
+      ];
     }
 
-    candidates.add('$raw@rcmanutencao.app');
-    candidates.add('$raw@rccombustivel.app');
-
-    return candidates.toSet().toList(growable: false);
+    return [
+      '$raw@rcmanutencao.app',
+      '$raw@rccombustivel.app',
+    ];
   }
 
   Future<void> signIn({

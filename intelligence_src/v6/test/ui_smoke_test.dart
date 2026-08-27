@@ -49,6 +49,7 @@ void main() {
 
   testWidgets('navegacao principal abre as cinco areas', (tester) async {
     final store = await _store();
+    final firstAssetId = store.assets.first.id;
     await _pumpApp(tester, store);
 
     expect(find.text('R&C Intelligence • SIMULADOR v6'), findsOneWidget);
@@ -56,7 +57,7 @@ void main() {
 
     await tester.tap(_navLabel('Ativos'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('034-020'), findsWidgets);
+    expect(find.textContaining(firstAssetId), findsWidgets);
 
     await tester.tap(_navLabel('Central de Dados'));
     await tester.pumpAndSettle();
@@ -64,7 +65,7 @@ void main() {
 
     await tester.tap(_navLabel('OEM'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('034-020'), findsWidgets);
+    expect(find.textContaining(firstAssetId), findsWidgets);
 
     await tester.tap(_navLabel('Alertas'));
     await tester.pumpAndSettle();
@@ -77,11 +78,12 @@ void main() {
 
   testWidgets('ficha do ativo abre os seis botoes de inteligencia', (tester) async {
     final store = await _store();
+    final firstAssetId = store.assets.first.id;
     await _pumpApp(tester, store);
 
     await tester.tap(_navLabel('Ativos'));
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('034-020').first);
+    await tester.tap(find.textContaining(firstAssetId).first);
     await tester.pumpAndSettle();
 
     expect(find.text('Próxima ação recomendada'), findsOneWidget);

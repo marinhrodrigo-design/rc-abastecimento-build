@@ -14,6 +14,27 @@ class IntelligenceApi {
 
   bool get hasSession => client.auth.currentSession != null;
 
+  static List<String> loginCandidates(String usernameOrEmail) {
+    final raw = usernameOrEmail.trim().toLowerCase();
+    if (raw.isEmpty) return const [];
+    if (raw.contains('@')) return [raw];
+
+    final candidates = <String>[];
+
+    // O alias "admin" deve funcionar nos dois módulos administrativos
+    // históricos do ecossistema. No Combustível, o usuário técnico real é
+    // "adminfuel", portanto não pode ser derivado apenas como admin@... .
+    if (raw == 'admin') {
+      candidates.add('admin@rcmanutencao.app');
+      candidates.add('adminfuel@rccombustivel.app');
+    }
+
+    candidates.add('$raw@rcmanutencao.app');
+    candidates.add('$raw@rccombustivel.app');
+
+    return candidates.toSet().toList(growable: false);
+  }
+
   Future<void> signIn({
     required String usernameOrEmail,
     required String password,
@@ -23,18 +44,7 @@ class IntelligenceApi {
       throw const AuthException('Informe usuário e senha.');
     }
 
-    if (raw.contains('@')) {
-      await client.auth.signInWithPassword(email: raw, password: password);
-      return;
-    }
-
-    // O ecossistema R&C possui usuários históricos criados por módulos
-    // diferentes. O Intelligence aceita o mesmo nome de usuário em todos
-    // eles, sem obrigar o usuário a conhecer o e-mail técnico usado no Auth.
-    final candidates = <String>[
-      '$raw@rcmanutencao.app',
-      '$raw@rccombustivel.app',
-    ];
+    final candidates = loginCandidates(raw);
 
     AuthException? lastAuthError;
     for (final email in candidates) {

@@ -22,8 +22,31 @@ class IntelligenceApi {
     if (raw.isEmpty || password.isEmpty) {
       throw const AuthException('Informe usuário e senha.');
     }
-    final email = raw.contains('@') ? raw : '$raw@rccombustivel.app';
-    await client.auth.signInWithPassword(email: email, password: password);
+
+    if (raw.contains('@')) {
+      await client.auth.signInWithPassword(email: raw, password: password);
+      return;
+    }
+
+    // O ecossistema R&C possui usuários históricos criados por módulos
+    // diferentes. O Intelligence aceita o mesmo nome de usuário em todos
+    // eles, sem obrigar o usuário a conhecer o e-mail técnico usado no Auth.
+    final candidates = <String>[
+      '$raw@rcmanutencao.app',
+      '$raw@rccombustivel.app',
+    ];
+
+    AuthException? lastAuthError;
+    for (final email in candidates) {
+      try {
+        await client.auth.signInWithPassword(email: email, password: password);
+        return;
+      } on AuthException catch (e) {
+        lastAuthError = e;
+      }
+    }
+
+    throw lastAuthError ?? const AuthException('Usuário ou senha inválidos.');
   }
 
   Future<void> signOut() => client.auth.signOut();

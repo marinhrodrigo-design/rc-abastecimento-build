@@ -1,15 +1,16 @@
-name: Build R&C Abastecimento v23 Points 2 3
+name: Build R&C Abastecimento v23 Targeted Fixes
 
 on:
   push:
     branches: ['feature/rc-abastecimento-v23-pontos-2-3']
     paths:
       - 'tool/apply_v23_points_2_3.py'
+      - 'tool/apply_v23_targeted_fixes.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v23-points-2-3
+  group: rc-abastecimento-v23-targeted-fixes
   cancel-in-progress: true
 permissions:
   contents: read
@@ -27,7 +28,7 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: {channel: stable, cache: true}
       - run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
-      - name: Reconstruir fonte v21 e aplicar v23
+      - name: Reconstruir fonte v23 e aplicar somente correções aprovadas
         run: |
           mkdir -p lib
           cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
@@ -49,18 +50,21 @@ jobs:
           python3 tool/apply_v20_pdf_fueling_photo_only.py
           python3 tool/apply_v21_comboio_highlight_four_photos.py
           python3 tool/apply_v23_points_2_3.py
-      - name: Validar escopo
+          python3 tool/apply_v23_targeted_fixes.py
+      - name: Validar somente o escopo aprovado
         run: |
-          grep -q "rca_record_transfer_v22" lib/main_online.dart
-          grep -q "rca_record_refinery_load_v22" lib/main_online.dart
-          grep -q "rca_record_refinery_to_te_v22" lib/main_online.dart
-          grep -q "rca_record_fueling_v22" lib/main_online.dart
+          grep -q "p_responsible" lib/main_online.dart
+          grep -q "Responsável \*" lib/main_online.dart
+          grep -q "p_fuel_tank_capacity_liters" lib/main_online.dart
+          grep -q "Capacidade do tanque de combustível do ativo" lib/main_online.dart
+          grep -q "Placa (quando houver)" lib/main_online.dart
+          grep -q "Sem placa" lib/main_online.dart
+          grep -q "rca_save_truck_role" lib/main_online.dart
+          grep -q "Função Caminhão-tanque" lib/main_online.dart
           grep -q "Caminhão-tanque → Comboio" lib/main_online.dart
           grep -q "Comboio → Comboio" lib/main_online.dart
-          grep -q "Supervisor, gerente e permissões" lib/main_online.dart
-          grep -q "Foto lateral do equipamento" lib/main_online.dart
-          grep -q "Totalizador',_brNumber" lib/main_online.dart
-          grep -q "Arla 32" lib/main_online.dart
+          grep -q "rca_record_refinery_to_te_v22" lib/main_online.dart
+          grep -q "rca_record_fueling_v22" lib/main_online.dart
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -76,12 +80,21 @@ jobs:
           if g.exists():g.write_text(g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23'))
           PY
       - run: flutter pub get
-      - run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
-      - run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Pontos-2-3.apk
+      - name: Análise estática Flutter
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+      - name: Compilar APK de validação
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+      - name: Upload fonte validado
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v23-targeted-source
+          path: |
+            lib/main_online.dart
+            pubspec.yaml
+          retention-days: 7
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Correcoes-Aprovadas.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-Pontos-2-3
-          path: RC-Abastecimento-v23-Pontos-2-3.apk
+          name: RC-Abastecimento-v23-Correcoes-Aprovadas
+          path: RC-Abastecimento-v23-Correcoes-Aprovadas.apk
           retention-days: 30
-# trigger validation

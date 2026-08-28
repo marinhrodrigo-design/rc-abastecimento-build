@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v28 Management Records Audit
+name: Build R&C Abastecimento v29 Permission UI Cleanup
 
 on:
   push:
@@ -12,6 +12,7 @@ on:
       - 'tool/apply_v24_compile_hotfix.py'
       - 'tool/apply_v28_management_records_audit.py'
       - 'tool/apply_v28b_general_records_completeness.py'
+      - 'tool/apply_v29_hide_permission_keys.py'
       - '.github/workflows/build-v23-reports-hotfix.yml'
   workflow_dispatch:
 
@@ -74,6 +75,7 @@ jobs:
           python3 tool/apply_v24_compile_hotfix.py
           python3 tool/apply_v28_management_records_audit.py
           python3 tool/apply_v28b_general_records_completeness.py
+          python3 tool/apply_v29_hide_permission_keys.py
       - name: Validar recursos principais
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart
@@ -97,6 +99,8 @@ jobs:
           grep -q "Obras ativas" lib/main_online.dart
           grep -q "Empresa cliente / contratante" lib/main_online.dart
           grep -q "Por ativo / equipamento" lib/main_online.dart
+          grep -q "_permissionLabelV23(k)" lib/main_online.dart
+          ! grep -q "subtitle:Text(k,style:const TextStyle(fontSize:11))" lib/main_online.dart
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -119,14 +123,14 @@ jobs:
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v28-approved-source
+          name: RC-Abastecimento-v29-approved-source
           path: |
             lib/main_online.dart
             pubspec.yaml
           retention-days: 7
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v28-Gestao-Registros-Auditoria.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v29-Permissoes-Limpas.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v28-Gestao-Registros-Auditoria
-          path: RC-Abastecimento-v28-Gestao-Registros-Auditoria.apk
+          name: RC-Abastecimento-v29-Permissoes-Limpas
+          path: RC-Abastecimento-v29-Permissoes-Limpas.apk
           retention-days: 30

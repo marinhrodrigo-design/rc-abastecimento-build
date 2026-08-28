@@ -1,0 +1,20 @@
+R&C Abastecimento — patches aprovados e ainda não compilados
+
+No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py:
+python3 tool/apply_v23_pdf_export_standard_pending.py
+
+Este patch consolida o padrão oficial aprovado de PDF:
+- página principal em uma única página;
+- títulos azul-marinho e valores pretos;
+- cabeçalho Abastecimento + origem (ex. CB01) + Nº: 0001 em vermelho;
+- sequência exibida com 4 dígitos e vinculada ao contador já existente por unidade de origem;
+- sem NF/Lote na página de abastecimento;
+- KM/Horímetro na mesma linha;
+- Quem abasteceu/Quem recebeu na mesma linha;
+- Preço de venda/Valor total na mesma linha;
+- Volume/Totalizador na mesma linha;
+- Observações abaixo e assinaturas no final;
+- evidências em grade 2x2, até 4 fotos por página;
+- número sequencial repetido em todas as páginas de evidências.
+
+Não disparar build automaticamente só por este arquivo.

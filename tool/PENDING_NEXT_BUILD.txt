@@ -3,6 +3,7 @@ R&C Abastecimento — patches aprovados e ainda não compilados
 No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py, nesta ordem:
 python3 tool/apply_v23_pdf_export_standard_pending.py
 python3 tool/apply_v24_company_roles_ui.py
+python3 tool/apply_v24_dashboard_layout.py
 
 1) PDF oficial aprovado:
 - página principal em uma única página;
@@ -28,6 +29,14 @@ python3 tool/apply_v24_company_roles_ui.py
 - responsável da obra continua sendo pessoa, separado da empresa cliente;
 - mão de obra continua sendo da empresa operadora; locadora fornece somente o equipamento;
 - nomenclaturas antigas ambíguas como “Empresa da obra” e “Empresas vinculadas” são substituídas.
+
+3) Página inicial / Dashboard aprovado:
+- atalhos em grade compacta, no padrão visual mostrado ao usuário;
+- Novo abastecimento, Transferir e Recebimento (NF) em destaque;
+- atalhos para Meus registros, Registros, Relatórios, Obras, Empresas, Ativos e Equipamentos de terceiros;
+- Admin também vê Tanques estacionários, Caminhão-tanque, Usuários, Permissões e Dados da empresa;
+- saldos em tempo real permanecem na página inicial;
+- Painel de combustível permanece disponível.
 
 Backend já recebeu a migration rc_abastecimento_company_relation_roles_v24 com compatibilidade para o app atualmente instalado.
 

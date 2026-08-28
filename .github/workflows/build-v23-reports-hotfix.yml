@@ -5,6 +5,7 @@ on:
     branches: ['feature/rc-abastecimento-v23-pontos-2-3']
     paths:
       - 'tool/apply_v23_reports_compile_hotfix.py'
+      - 'tool/apply_v23_trace_syntax_hotfix.py'
       - '.github/workflows/build-v23-reports-hotfix.yml'
   workflow_dispatch:
 
@@ -60,6 +61,7 @@ jobs:
           python3 tool/apply_v23_business_reports_3c.py
           python3 tool/apply_v23_business_reports_4.py
           python3 tool/apply_v23_reports_compile_hotfix.py
+          python3 tool/apply_v23_trace_syntax_hotfix.py
       - name: Validar recursos principais
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart
@@ -71,16 +73,6 @@ jobs:
           grep -q "Rastrear origem do combustível" lib/main_online.dart
           grep -q "Transferência interna — sem venda" lib/main_online.dart
           grep -q "A mão de obra é da própria empresa" lib/main_online.dart
-      - name: Diagnóstico linhas do analisador
-        run: nl -ba lib/main_online.dart | sed -n '3028,3048p'
-      - name: Upload source para diagnóstico
-        uses: actions/upload-artifact@v4
-        with:
-          name: RC-Abastecimento-v23-relatorios-debug-source
-          path: |
-            lib/main_online.dart
-            pubspec.yaml
-          retention-days: 2
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart

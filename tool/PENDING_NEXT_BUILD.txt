@@ -6,6 +6,7 @@ python3 tool/apply_v24_company_roles_ui.py
 python3 tool/apply_v24_dashboard_layout.py
 python3 tool/apply_v24_direct_dashboard_shortcuts.py
 python3 tool/apply_v25_admin_delete_work.py
+python3 tool/apply_v27_general_records_summary.py
 
 1) PDF oficial aprovado:
 - página principal em uma única página;
@@ -58,6 +59,22 @@ python3 tool/apply_v25_admin_delete_work.py
 - abastecimentos, transferências, PDFs, relatórios e rastreabilidade existentes são preservados;
 - Gerente e Supervisor não podem excluir obras.
 
-Backend já recebeu as migrations rc_abastecimento_company_relation_roles_v24 e rc_abastecimento_admin_delete_work_v25.
+6) Registro Geral completo:
+- nome da página: Registro Geral;
+- pesquisa por período continua definindo exatamente o conjunto de registros consultado;
+- ao pesquisar um único dia, por exemplo 01/01/2027, o final da página mostra “Resumo do dia • 01/01/2027” e “Total abastecido no dia”;
+- Total abastecido soma SOMENTE movimentos do tipo abastecimento/fueling, evitando duplicidade de litros;
+- transferências internas aparecem em total separado “Transferido internamente”;
+- recebimentos de combustível/NF aparecem em total separado “Recebido por NF”;
+- mostrar quantidade de abastecimentos e total de registros encontrados;
+- quando o usuário tiver permissão financeira, mostrar também valor abastecido/vendido e lucro do período;
+- em pesquisa de intervalo de datas, o rodapé muda para “Resumo do período pesquisado” e recalcula todos os totais;
+- os totais são calculados no backend sobre todos os registros que atendem aos filtros, sem depender do limite visual da lista;
+- cada registro terá botão PDF diretamente na lista;
+- ao abrir o detalhe, a exportação individual em PDF continua disponível;
+- seleção múltipla para PDF continua disponível;
+- todo PDF deve seguir o padrão oficial já aprovado para cada tipo de registro, incluindo páginas de evidências quando aplicável.
+
+Backend já recebeu as migrations rc_abastecimento_company_relation_roles_v24, rc_abastecimento_admin_delete_work_v25 e rc_abastecimento_general_records_summary_v27.
 
 Não disparar build automaticamente só por este arquivo.

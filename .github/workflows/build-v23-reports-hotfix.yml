@@ -9,6 +9,7 @@ on:
       - 'tool/apply_v23_pdf_export_standard_pending.py'
       - 'tool/apply_v24_company_roles_ui.py'
       - 'tool/apply_v24_dashboard_layout.py'
+      - 'tool/apply_v24_compile_hotfix.py'
       - '.github/workflows/build-v23-reports-hotfix.yml'
   workflow_dispatch:
 
@@ -68,6 +69,7 @@ jobs:
           python3 tool/apply_v23_pdf_export_standard_pending.py
           python3 tool/apply_v24_company_roles_ui.py
           python3 tool/apply_v24_dashboard_layout.py
+          python3 tool/apply_v24_compile_hotfix.py
       - name: Validar recursos principais
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart

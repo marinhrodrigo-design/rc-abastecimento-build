@@ -4,6 +4,7 @@ No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py, nesta or
 python3 tool/apply_v23_pdf_export_standard_pending.py
 python3 tool/apply_v24_company_roles_ui.py
 python3 tool/apply_v24_dashboard_layout.py
+python3 tool/apply_v24_direct_dashboard_shortcuts.py
 python3 tool/apply_v25_admin_delete_work.py
 
 1) PDF oficial aprovado:
@@ -39,7 +40,16 @@ python3 tool/apply_v25_admin_delete_work.py
 - saldos em tempo real permanecem na página inicial;
 - Painel de combustível permanece disponível.
 
-4) Exclusão de obra pelo Admin:
+4) Atalhos do Dashboard são atalhos reais:
+- cada card abre diretamente a função escrita nele;
+- Novo abastecimento abre o formulário de abastecimento; se houver mais de uma unidade possível, mostra apenas uma seleção rápida da origem e em seguida abre o formulário, sem passar pelo menu da unidade;
+- Transferir abre diretamente o formulário de transferência; se houver mais de uma origem possível, mostra somente a seleção rápida da unidade doadora;
+- Recebimento (NF) abre diretamente o formulário de recebimento; se houver mais de um caminhão-tanque, mostra somente a seleção rápida do caminhão que receberá a carga;
+- quando existir apenas uma origem compatível, o formulário abre imediatamente;
+- Meus registros, Registros, Relatórios, Obras, Empresas, Ativos, Equipamentos de terceiros, Tanques estacionários, Caminhão-tanque, Usuários, Permissões e Dados da empresa continuam abrindo diretamente suas próprias páginas;
+- não usar UnitSelectionScreen como destino desses três cards principais.
+
+5) Exclusão de obra pelo Admin:
 - somente Admin pode excluir obra;
 - opção “Excluir obra” em vermelho no menu da obra;
 - funciona para obra ativa ou finalizada;

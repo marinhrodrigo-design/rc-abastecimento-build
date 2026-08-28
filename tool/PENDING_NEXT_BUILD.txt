@@ -4,6 +4,7 @@ No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py, nesta or
 python3 tool/apply_v23_pdf_export_standard_pending.py
 python3 tool/apply_v24_company_roles_ui.py
 python3 tool/apply_v24_dashboard_layout.py
+python3 tool/apply_v25_admin_delete_work.py
 
 1) PDF oficial aprovado:
 - página principal em uma única página;
@@ -38,6 +39,15 @@ python3 tool/apply_v24_dashboard_layout.py
 - saldos em tempo real permanecem na página inicial;
 - Painel de combustível permanece disponível.
 
-Backend já recebeu a migration rc_abastecimento_company_relation_roles_v24 com compatibilidade para o app atualmente instalado.
+4) Exclusão de obra pelo Admin:
+- somente Admin pode excluir obra;
+- opção “Excluir obra” em vermelho no menu da obra;
+- funciona para obra ativa ou finalizada;
+- exige confirmação antes de excluir;
+- a obra sai das telas operacionais e deixa de aceitar novas operações;
+- abastecimentos, transferências, PDFs, relatórios e rastreabilidade existentes são preservados;
+- Gerente e Supervisor não podem excluir obras.
+
+Backend já recebeu as migrations rc_abastecimento_company_relation_roles_v24 e rc_abastecimento_admin_delete_work_v25.
 
 Não disparar build automaticamente só por este arquivo.

@@ -2,130 +2,121 @@ R&C Abastecimento — alterações aprovadas e ainda NÃO compiladas
 
 IMPORTANTE: não criar APK até autorização explícita do usuário.
 
-No próximo build, manter a sequência v24 já validada pelo workflow até:
+PRÓXIMO BUILD
+Manter toda a sequência v24 atualmente validada no workflow até:
 python3 tool/apply_v24_compile_hotfix.py
 
-Depois executar SOMENTE o patch consolidado mais novo:
+Depois executar, nesta ordem:
 python3 tool/apply_v28_management_records_audit.py
+python3 tool/apply_v28b_general_records_completeness.py
 
-Os patches de interface apply_v24_direct_dashboard_shortcuts.py, apply_v25_admin_delete_work.py e apply_v27_general_records_summary.py foram incorporados/supersededidos pelo v28 e não precisam ser executados em conjunto com ele.
+Os patches de interface apply_v24_direct_dashboard_shortcuts.py, apply_v25_admin_delete_work.py e apply_v27_general_records_summary.py estão incorporados/supersededidos pelo conjunto v28 + v28b e não devem ser executados adicionalmente.
 
-1) PDF oficial aprovado — PRESERVAR:
-- página principal do abastecimento em uma única página;
-- títulos azul-marinho e valores pretos;
-- cabeçalho Abastecimento + origem (ex. CB01) + Nº: 0001 em vermelho;
-- sequência com 4 dígitos vinculada ao contador por unidade de origem;
+PADRÃO PDF — PRESERVAR
+- layout oficial Hydra já aprovado;
+- abastecimento em uma página principal;
+- títulos azul-marinho, valores pretos;
+- Abastecimento • ORIGEM • Nº sequencial vermelho;
 - sem NF/Lote na página principal do abastecimento;
-- KM/Horímetro na mesma linha;
-- Quem abasteceu/Quem recebeu na mesma linha;
-- Preço de venda/Valor total na mesma linha;
-- Volume/Totalizador na mesma linha;
-- Observações e assinaturas no final;
-- evidências em grade 2x2, até 4 fotos por página;
-- número sequencial repetido em todas as páginas de evidências.
+- KM/Horímetro, Quem abasteceu/Quem recebeu, Preço/Valor total e Volume/Totalizador nas linhas aprovadas;
+- evidências 2x2, até 4 fotos por página, mantendo proporção;
+- sequência repetida nas páginas de evidências;
+- antes de compartilhar/exportar registros, abrir PRÉVIA do PDF;
+- PDF individual e seleção múltipla usam o mesmo padrão oficial.
 
-2) Empresas e papéis — PRESERVAR:
+EMPRESAS
 - Dados da empresa = empresa operadora/prestadora institucional;
-- Empresas = cadastro único de empresas externas;
-- papéis: Cliente/Contratante, Proprietária/Locadora e Fornecedor de combustível;
-- cartões exibem etiquetas claras: CLIENTE, LOCADORA, FORNECEDOR;
-- Obras usam somente Cliente/Contratante;
-- Equipamentos de terceiros usam somente Proprietária/Locadora;
-- Recebimento de combustível/NF usa somente Fornecedor de combustível;
-- responsável da obra é uma pessoa separada da empresa cliente.
+- Empresas externas têm um ou mais papéis: CLIENTE, LOCADORA, FORNECEDOR;
+- Obra usa Cliente/Contratante;
+- equipamento de terceiro usa Proprietária/Locadora;
+- recebimento/NF usa Fornecedor de combustível;
+- responsável da obra é pessoa, separado da empresa cliente.
 
-3) Dashboard e atalhos reais:
-- Novo abastecimento abre diretamente o formulário de abastecimento;
-- Transferir abre diretamente o formulário de transferência;
-- Recebimento (NF) abre diretamente o formulário de recebimento;
-- se houver mais de uma origem compatível, mostrar apenas seleção rápida da origem; se houver uma, abrir imediatamente;
-- não passar pelo menu genérico UnitSelectionScreen;
-- manter os demais cards abrindo diretamente seus destinos;
-- topo do Dashboard com pesquisa global;
-- indicadores: Estoque atual, Consumo hoje, Abastecimentos hoje e Obras ativas;
-- saldos em tempo real e Painel de combustível permanecem.
+DASHBOARD
+- atalhos são diretos de verdade;
+- Novo abastecimento → formulário de abastecimento;
+- Transferir → formulário de transferência;
+- Recebimento (NF) → formulário de recebimento;
+- com múltiplas origens, mostrar somente seleção rápida; com uma origem, abrir imediatamente;
+- sem passagem pelo UnitSelectionScreen para os três cards principais;
+- cards separados Registro Diário e Registro Geral;
+- pesquisa global no topo;
+- KPIs: Estoque atual, Consumo hoje, Abastecimentos hoje, Obras ativas;
+- manter saldos em tempo real e Painel de combustível.
 
-4) Registro Diário:
-- card próprio no Dashboard;
+REGISTRO DIÁRIO
 - hoje por padrão;
-- botões Hoje, Ontem e escolher Data;
+- Hoje | Ontem | escolher Data;
 - lista cronológica das operações do dia;
-- resumo do dia com Total abastecido, quantidade de abastecimentos, total de registros, Transferido e Recebido por NF;
-- valores financeiros somente quando houver permissão;
-- cada registro abre detalhes e prévia do PDF oficial.
+- resumo do dia: Total abastecido, nº de abastecimentos, nº total de registros, Transferido e Recebido por NF;
+- financeiros somente com permissão;
+- detalhe e prévia/PDF por registro.
 
-5) Registro Geral — área completa de consulta/auditoria:
-- card separado do Registro Diário;
-- filtros principais: Data inicial, Data final e Obra;
-- Obra é uma lista pesquisável por nome, cliente ou responsável e fica no mesmo nível da pesquisa por data;
+REGISTRO GERAL
+- histórico completo por padrão, sem restringir automaticamente aos últimos 30 dias;
+- filtros Data inicial e Data final;
+- filtro Obra no mesmo nível da data, com lista pesquisável por nome, cliente ou responsável;
+- filtro dedicado Empresa cliente/contratante;
 - filtros adicionais: pesquisa geral/sequencial, ativo/equipamento, placa, origem/unidade, NF/lote, operador/recebedor, responsável, tipo e combustível;
-- filtros podem ser combinados (Data + Obra + Ativo etc.);
-- pesquisa por obra inclui obras ativas, finalizadas e, para Admin, excluídas;
-- cada registro mostra origem + sequencial, ex.: CB01 • Nº: 0042;
-- tocar no indicador de origem/sequencial de um abastecimento abre a rastreabilidade;
-- cada registro possui botão de PDF;
-- seleção múltipla para PDF permanece;
-- todo PDF de registro passa primeiro por PRÉVIA e segue o padrão oficial já aprovado;
-- o resumo é calculado no backend sobre TODOS os registros que atendem aos filtros, não apenas os carregados na tela;
-- Total abastecido soma somente movement_type=fueling;
-- Transferido internamente e Recebido por NF aparecem separados para evitar duplicidade;
-- ao pesquisar um único dia, exibir “Resumo do dia • DD/MM/AAAA” e “Total abastecido no dia”;
-- em intervalos/filtros, recalcular todos os totais;
-- incluir detalhamento por combustível e ativos no backend;
-- financeiros só aparecem com permissão.
+- filtros combináveis, ex.: Data + Obra + Ativo;
+- pesquisa de obra inclui ativas/finalizadas e, para Admin, excluídas;
+- cada registro exibe ORIGEM • Nº sequencial;
+- tocar origem/sequencial de abastecimento abre rastreabilidade;
+- botão PDF em todo registro;
+- seleção múltipla de registros para PDF;
+- PDF sempre passa por prévia antes de compartilhar;
+- resumo calculado no BACKEND sobre todos os resultados do filtro, não apenas os itens carregados;
+- Total abastecido soma somente fueling;
+- Transferido e Recebido por NF ficam separados para evitar duplicidade;
+- pesquisa de um dia mostra Resumo do dia e Total abastecido no dia;
+- resumo inclui detalhamento por combustível e por ativo/equipamento;
+- financeiros somente com permissão.
 
-6) Obras — gestão completa:
-- três abas: Ativas | Finalizadas | Excluídas;
-- cartão mostra Nome, Cliente/Contratante, Responsável, Local, Status, Total abastecido, quantidade de abastecimentos e quantidade de equipamentos;
-- ao tocar, abrir ficha completa da obra;
-- ficha mostra cliente, responsável, local/status, consumo acumulado, quantidade de registros, consumo por combustível, equipamentos próprios, equipamentos de terceiros, valores quando permitido e relatórios;
-- botão para abrir o Registro Geral já filtrado pela obra;
-- Gerente/Admin pode finalizar obra conforme regra existente;
-- Admin pode mover obra para Excluídas;
-- exclusão mostra confirmação inteligente com quantidade de registros/relatórios que serão preservados;
-- Admin pode restaurar obra excluída;
+OBRAS — GESTÃO COMPLETA
+- abas Ativas | Finalizadas | Excluídas;
+- cartão: Nome, Cliente, Responsável, Local, Status, Total abastecido, quantidade de abastecimentos e equipamentos;
+- ficha completa ao tocar na obra;
+- ficha: cliente, responsável, local/status, consumo acumulado, registros, consumo por combustível, próprios, terceiros, valores permitidos e relatórios;
+- botão para abrir Registro Geral já filtrado pela obra;
+- Gerente/Admin pode finalizar conforme permissão existente;
+- Admin pode mover para Excluídas;
+- confirmação de exclusão informa registros/relatórios preservados;
+- Admin pode restaurar;
 - obra finalizada restaurada volta para Finalizadas; obra não finalizada volta para Ativas;
-- exclusão definitiva só é permitida se a obra NÃO possuir nenhum registro nem relatório;
-- se houver histórico, excluir definitivamente é bloqueado no backend.
+- excluir definitivamente só quando NÃO houver movimentos nem relatórios;
+- backend bloqueia exclusão definitiva quando existe histórico.
 
-7) Confirmações inteligentes:
-- ações destrutivas/gerenciais devem explicar claramente o efeito;
-- Finalizar obra informa registros/litros e que novas operações serão bloqueadas;
-- Excluir obra informa quantos registros/relatórios serão preservados;
-- Restaurar informa para qual estado a obra retornará;
-- Exclusão definitiva informa que só é possível quando não existe histórico.
+CONFIRMAÇÕES INTELIGENTES
+- Finalizar: informar registros/litros e bloqueio de novas operações;
+- Excluir: informar registros/relatórios que serão preservados;
+- Restaurar: informar para qual estado voltará;
+- Exclusão definitiva: informar irreversibilidade e só permitir sem histórico.
 
-8) Auditoria administrativa:
-- página Auditoria disponível ao Admin;
-- mostrar data/hora, usuário, tabela/recurso, ação e registro;
-- permitir pesquisa;
-- ao tocar, mostrar Antes/Depois;
-- auditoria unificada deve considerar fuel.audit_log e public.audit_log (incluindo ativos próprios);
-- triggers de fuel devem registrar nome do usuário para novas alterações.
+AUDITORIA
+- página Auditoria para Admin;
+- pesquisar histórico;
+- mostrar data/hora, usuário, recurso/tabela, ação e registro;
+- detalhe Antes/Depois;
+- combinar fuel.audit_log + public.audit_log para também incluir ativos próprios;
+- novas alterações em fuel registram nome do usuário.
 
-9) Pesquisa global:
-- campo no Dashboard e página dedicada;
-- pesquisar por obra, empresa, ativo, placa, NF/lote, CB/TE, número sequencial e responsável;
+PESQUISA GLOBAL
+- pesquisar obra, empresa, ativo, placa, NF/lote, CB/TE, sequencial e responsável;
 - resultados agrupados em Registros, Obras, Empresas, Ativos, Equipamentos de terceiros e Notas Fiscais;
-- resultado deve levar para a área relacionada.
+- resultado abre a área correspondente.
 
-10) Prévia de PDF:
-- antes de compartilhar/exportar um registro, abrir PdfPreview;
-- PDF individual no Registro Diário, Registro Geral, Detalhe do registro e Meus registros passa pela prévia;
-- seleção múltipla também passa pela prévia;
-- não alterar o layout oficial do PDF aprovado.
-
-11) Bloqueios contra erros operacionais — PRESERVAR/REFORÇAR:
-- empresa externa exige pelo menos um papel;
+BLOQUEIOS OPERACIONAIS — PRESERVAR/REFORÇAR
+- empresa exige ao menos um papel;
 - obra exige Cliente/Contratante e Responsável;
-- obra finalizada/excluída não aceita novo abastecimento;
-- abastecimento não pode exceder saldo disponível;
-- transferência não pode exceder saldo da origem nem capacidade do destino;
-- recebimento/NF não pode exceder capacidade do caminhão-tanque;
-- campos obrigatórios, assinaturas e fotos continuam validados;
-- mensagens devem ser específicas e orientadas ao campo/erro, sem erro técnico genérico.
+- obra finalizada/excluída não recebe novo abastecimento;
+- abastecimento não excede saldo;
+- transferência não excede saldo da origem nem capacidade do destino;
+- recebimento/NF não excede capacidade do caminhão-tanque;
+- assinaturas/fotos/campos obrigatórios permanecem validados;
+- totalizador do abastecimento permanece cumulativo pelo accounting_meter da unidade;
+- mensagens específicas e orientadas ao erro, sem mensagem técnica genérica.
 
-12) Backend v28 já aplicado no Supabase:
+BACKEND JÁ APLICADO NO SUPABASE
 - rca_dashboard_kpis_v28
 - rca_works_catalog_v28
 - rca_restore_work_v28
@@ -134,14 +125,21 @@ Os patches de interface apply_v24_direct_dashboard_shortcuts.py, apply_v25_admin
 - rca_audit_history_v28
 - rca_global_search_v28
 - rca_general_records_v28
-- auditoria fuel unificada com nome do usuário e leitura conjunta de fuel.audit_log + public.audit_log.
+- fuel.audit_trigger atualizado para guardar o nome do usuário;
+- rca_audit_history_v28 unifica fuel.audit_log e public.audit_log.
 
-Migrations já aplicadas: company_relation_roles_v24, admin_delete_work_v25, general_records_summary_v27, rc_abastecimento_v28_management_records_search_audit e rc_abastecimento_v28_unified_audit_actor.
+Migrations já aplicadas incluem:
+- company_relation_roles_v24
+- admin_delete_work_v25
+- general_records_summary_v27
+- rc_abastecimento_v28_management_records_search_audit
+- rc_abastecimento_v28_unified_audit_actor
 
-Validação feita SEM build:
-- patch v28 aplicado localmente sobre o source v24 que já havia compilado;
-- Python do patch validado;
-- delimitadores do Dart gerado verificados estruturalmente sem desbalanceamento;
-- NÃO foi executado Flutter Analyze para v28 e NÃO foi criado APK.
-
-Não disparar build automaticamente só por este arquivo.
+VALIDAÇÃO SEM BUILD
+- v28 aplicado localmente sobre o source v24 que já havia compilado;
+- v28b aplicado localmente em seguida;
+- scripts Python validados;
+- delimitadores do Dart resultante verificados estruturalmente sem desbalanceamento;
+- NÃO foi executado Flutter Analyze para v28/v28b;
+- NÃO foi criado APK;
+- nenhuma alteração foi feita no workflow para disparar build.

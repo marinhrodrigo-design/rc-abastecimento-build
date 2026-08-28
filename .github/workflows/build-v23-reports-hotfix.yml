@@ -1,0 +1,106 @@
+name: Build R&C Abastecimento v23 Reports Hotfix
+
+on:
+  push:
+    branches: ['feature/rc-abastecimento-v23-pontos-2-3']
+    paths:
+      - 'tool/apply_v23_reports_compile_hotfix.py'
+      - '.github/workflows/build-v23-reports-hotfix.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - run: test -n "$SUPABASE_KEY"
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+      - run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+      - name: Reconstruir fonte e aplicar todas as correções
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          python3 tool/apply_v20_pdf_fueling_photo_only.py
+          python3 tool/apply_v21_comboio_highlight_four_photos.py
+          python3 tool/apply_v23_points_2_3.py
+          python3 tool/apply_v23_targeted_fixes.py
+          python3 tool/apply_v23_auto_location.py
+          python3 tool/apply_v23_submit_fix.py
+          python3 tool/apply_v23_user_reported_fixes.py
+          python3 tool/apply_v23_user_reported_hotfix.py
+          python3 tool/apply_v23_followup_fixes.py
+          python3 tool/apply_v23_followup_hotfix.py
+          python3 tool/apply_v23_business_reports_1.py
+          python3 tool/apply_v23_business_reports_2.py
+          python3 tool/apply_v23_business_reports_3a.py
+          python3 tool/apply_v23_business_reports_3b.py
+          python3 tool/apply_v23_business_reports_3c.py
+          python3 tool/apply_v23_business_reports_4.py
+          python3 tool/apply_v23_reports_compile_hotfix.py
+      - name: Validar recursos principais
+        run: |
+          grep -q "Relatório Final da Obra" lib/main_online.dart
+          grep -q "Relatórios gerados" lib/main_online.dart
+          grep -q "Foto da placa do caminhão-tanque" lib/main_online.dart
+          grep -q "Foto legível da Nota Fiscal" lib/main_online.dart
+          grep -q "Empresa fornecedora/vendedora do combustível" lib/main_online.dart
+          grep -q "Responsável da obra" lib/main_online.dart
+          grep -q "Rastrear origem do combustível" lib/main_online.dart
+          grep -q "Transferência interna — sem venda" lib/main_online.dart
+          grep -q "A mão de obra é da própria empresa" lib/main_online.dart
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml');t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"');m.write_text(t)
+          g=Path('android/app/build.gradle.kts')
+          if g.exists():g.write_text(g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23'))
+          PY
+      - run: flutter pub get
+      - name: Flutter Analyze
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+      - name: Build APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v23-relatorios-hotfix-source
+          path: |
+            lib/main_online.dart
+            pubspec.yaml
+          retention-days: 7
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v23-Relatorios-Rastreabilidade
+          path: RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
+          retention-days: 30

@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v23 Reports Hotfix
+name: Build R&C Abastecimento v24 Approved Layout
 
 on:
   push:
@@ -6,6 +6,9 @@ on:
     paths:
       - 'tool/apply_v23_reports_compile_hotfix.py'
       - 'tool/apply_v23_trace_syntax_hotfix.py'
+      - 'tool/apply_v23_pdf_export_standard_pending.py'
+      - 'tool/apply_v24_company_roles_ui.py'
+      - 'tool/apply_v24_dashboard_layout.py'
       - '.github/workflows/build-v23-reports-hotfix.yml'
   workflow_dispatch:
 
@@ -62,6 +65,9 @@ jobs:
           python3 tool/apply_v23_business_reports_4.py
           python3 tool/apply_v23_reports_compile_hotfix.py
           python3 tool/apply_v23_trace_syntax_hotfix.py
+          python3 tool/apply_v23_pdf_export_standard_pending.py
+          python3 tool/apply_v24_company_roles_ui.py
+          python3 tool/apply_v24_dashboard_layout.py
       - name: Validar recursos principais
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart
@@ -73,6 +79,13 @@ jobs:
           grep -q "Rastrear origem do combustível" lib/main_online.dart
           grep -q "Transferência interna — sem venda" lib/main_online.dart
           grep -q "A mão de obra é da própria empresa" lib/main_online.dart
+          grep -q "Cliente / Contratante" lib/main_online.dart
+          grep -q "Proprietária / Locadora" lib/main_online.dart
+          grep -q "Fornecedor de combustível" lib/main_online.dart
+          grep -q "Nº: \$fuelSequence" lib/main_online.dart
+          grep -q "4ª foto (opcional)" lib/main_online.dart
+          grep -q "Novo abastecimento" lib/main_online.dart
+          grep -q "Dados da empresa" lib/main_online.dart
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -95,14 +108,14 @@ jobs:
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-relatorios-hotfix-source
+          name: RC-Abastecimento-v24-approved-source
           path: |
             lib/main_online.dart
             pubspec.yaml
           retention-days: 7
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v24-Empresas-PDF.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-Relatorios-Rastreabilidade
-          path: RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
+          name: RC-Abastecimento-v24-Empresas-PDF
+          path: RC-Abastecimento-v24-Empresas-PDF.apk
           retention-days: 30

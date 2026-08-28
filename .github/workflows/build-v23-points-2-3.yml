@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v23 Correções 2
+name: Build R&C Abastecimento v23 Relatórios e Rastreabilidade
 
 on:
   push:
@@ -12,11 +12,12 @@ on:
       - 'tool/apply_v23_user_reported_hotfix.py'
       - 'tool/apply_v23_followup_fixes.py'
       - 'tool/apply_v23_followup_hotfix.py'
+      - 'tool/apply_v23_business_reports.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v23-correcoes-2
+  group: rc-abastecimento-v23-relatorios-rastreabilidade
   cancel-in-progress: true
 permissions:
   contents: read
@@ -63,7 +64,8 @@ jobs:
           python3 tool/apply_v23_user_reported_hotfix.py
           python3 tool/apply_v23_followup_fixes.py
           python3 tool/apply_v23_followup_hotfix.py
-      - name: Validar correções acumuladas
+          python3 tool/apply_v23_business_reports.py
+      - name: Validar funcionalidades acumuladas
         run: |
           grep -q "KM/Horímetro registrado ✓" lib/main_online.dart
           grep -q "Totalizador registrado ✓" lib/main_online.dart
@@ -73,17 +75,36 @@ jobs:
           grep -q "Transferência registrada com sucesso ✓" lib/main_online.dart
           grep -q "Cadastrar supervisor/gerente" lib/main_online.dart
           grep -q "Hall de permissões" lib/main_online.dart
-          grep -q "Empresa / locadora" lib/main_online.dart
           grep -q "Localização automática" lib/main_online.dart
           grep -q "Responsável doador • identificado pelo login" lib/main_online.dart
-          grep -q "kind': 'machine'" lib/main_online.dart
-          grep -q "Não foi possível carregar os registros" lib/main_online.dart
-          grep -q "Erro ao carregar registros" lib/main_online.dart
-          grep -q "Dados da empresa atualizados com sucesso ✓" lib/main_online.dart
-          grep -q "Cadastro institucional" lib/main_online.dart
-          grep -q "Cadastrar empresa" lib/main_online.dart
-          grep -q "Obra atualizada com sucesso ✓" lib/main_online.dart
-          grep -q "openCompanies" lib/main_online.dart
+          grep -q "Foto da placa do caminhão-tanque" lib/main_online.dart
+          grep -q "Foto legível da Nota Fiscal" lib/main_online.dart
+          grep -q "A data e a hora da chegada serão registradas automaticamente" lib/main_online.dart
+          grep -q "Abastecer como comboio" lib/main_online.dart
+          grep -q "Empresa fornecedora/vendedora do combustível" lib/main_online.dart
+          grep -q "Empresa recebedora/compradora" lib/main_online.dart
+          grep -q "Responsável da obra" lib/main_online.dart
+          grep -q "Proprietário do equipamento" lib/main_online.dart
+          grep -q "Transferência interna — sem venda" lib/main_online.dart
+          grep -q "Relatório Final da Obra" lib/main_online.dart
+          grep -q "Obra finalizada e Relatório Final gerado com sucesso ✓" lib/main_online.dart
+          grep -q "Relatórios gerados" lib/main_online.dart
+          grep -q "Nome da obra" lib/main_online.dart
+          grep -q "Ativo / placa / identificação" lib/main_online.dart
+          grep -q "Rastrear origem do combustível" lib/main_online.dart
+          grep -q "Quando há mistura de NFs" lib/main_online.dart
+          grep -q "Empresa proprietária do equipamento" lib/main_online.dart
+          grep -q "A mão de obra é da própria empresa" lib/main_online.dart
+          grep -q "Empresas vinculadas" lib/main_online.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('lib/main_online.dart').read_text()
+          a=s.index('class ThirdPartyAdminScreen')
+          b=s.index('class TanksAdminScreen',a) if 'class TanksAdminScreen' in s[a:] else len(s)
+          section=s[a:b]
+          assert 'Motorista' not in section and 'driverName:' in section
+          assert "driverName:null" in section
+          PY
       - name: Configurar Android
         run: |
           rm -f test/widget_test.dart
@@ -106,14 +127,14 @@ jobs:
       - name: Upload fonte validado
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-correcoes-2-source
+          name: RC-Abastecimento-v23-relatorios-rastreabilidade-source
           path: |
             lib/main_online.dart
             pubspec.yaml
           retention-days: 7
-      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Correcoes-2.apk
+      - run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
       - uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v23-Correcoes-2
-          path: RC-Abastecimento-v23-Correcoes-2.apk
+          name: RC-Abastecimento-v23-Relatorios-Rastreabilidade
+          path: RC-Abastecimento-v23-Relatorios-Rastreabilidade.apk
           retention-days: 30

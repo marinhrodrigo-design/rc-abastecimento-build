@@ -1,9 +1,10 @@
 R&C Abastecimento — patches aprovados e ainda não compilados
 
-No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py:
+No próximo build, executar DEPOIS de apply_v23_trace_syntax_hotfix.py, nesta ordem:
 python3 tool/apply_v23_pdf_export_standard_pending.py
+python3 tool/apply_v24_company_roles_ui.py
 
-Este patch consolida o padrão oficial aprovado de PDF:
+1) PDF oficial aprovado:
 - página principal em uma única página;
 - títulos azul-marinho e valores pretos;
 - cabeçalho Abastecimento + origem (ex. CB01) + Nº: 0001 em vermelho;
@@ -16,5 +17,18 @@ Este patch consolida o padrão oficial aprovado de PDF:
 - Observações abaixo e assinaturas no final;
 - evidências em grade 2x2, até 4 fotos por página;
 - número sequencial repetido em todas as páginas de evidências.
+
+2) Cadastro de empresas e telas aprovado:
+- Dados da empresa = empresa operadora/prestadora (institucional);
+- Empresas = cadastro único de empresas externas com um ou mais papéis;
+- papéis: Cliente/Contratante, Proprietária/Locadora de equipamento e Fornecedor de combustível;
+- Obras selecionam somente empresas marcadas como Cliente/Contratante;
+- Equipamentos de terceiros selecionam somente empresas marcadas como Proprietária/Locadora;
+- Recebimento de combustível/NF seleciona somente empresas marcadas como Fornecedor de combustível;
+- responsável da obra continua sendo pessoa, separado da empresa cliente;
+- mão de obra continua sendo da empresa operadora; locadora fornece somente o equipamento;
+- nomenclaturas antigas ambíguas como “Empresa da obra” e “Empresas vinculadas” são substituídas.
+
+Backend já recebeu a migration rc_abastecimento_company_relation_roles_v24 com compatibilidade para o app atualmente instalado.
 
 Não disparar build automaticamente só por este arquivo.

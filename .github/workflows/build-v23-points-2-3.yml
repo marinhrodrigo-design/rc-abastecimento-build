@@ -12,7 +12,12 @@ on:
       - 'tool/apply_v23_user_reported_hotfix.py'
       - 'tool/apply_v23_followup_fixes.py'
       - 'tool/apply_v23_followup_hotfix.py'
-      - 'tool/apply_v23_business_reports.py'
+      - 'tool/apply_v23_business_reports_1.py'
+      - 'tool/apply_v23_business_reports_2.py'
+      - 'tool/apply_v23_business_reports_3a.py'
+      - 'tool/apply_v23_business_reports_3b.py'
+      - 'tool/apply_v23_business_reports_3c.py'
+      - 'tool/apply_v23_business_reports_4.py'
       - '.github/workflows/build-v23-points-2-3.yml'
   workflow_dispatch:
 
@@ -64,7 +69,12 @@ jobs:
           python3 tool/apply_v23_user_reported_hotfix.py
           python3 tool/apply_v23_followup_fixes.py
           python3 tool/apply_v23_followup_hotfix.py
-          python3 tool/apply_v23_business_reports.py
+          python3 tool/apply_v23_business_reports_1.py
+          python3 tool/apply_v23_business_reports_2.py
+          python3 tool/apply_v23_business_reports_3a.py
+          python3 tool/apply_v23_business_reports_3b.py
+          python3 tool/apply_v23_business_reports_3c.py
+          python3 tool/apply_v23_business_reports_4.py
       - name: Validar funcionalidades acumuladas
         run: |
           grep -q "KM/Horímetro registrado ✓" lib/main_online.dart
@@ -100,8 +110,7 @@ jobs:
           from pathlib import Path
           s=Path('lib/main_online.dart').read_text()
           a=s.index('class ThirdPartyAdminScreen')
-          b=s.index('class TanksAdminScreen',a) if 'class TanksAdminScreen' in s[a:] else len(s)
-          section=s[a:b]
+          section=s[a:]
           assert 'Motorista' not in section and 'driverName:' in section
           assert "driverName:null" in section
           PY

@@ -1,0 +1,134 @@
+name: Build R&C Abastecimento v22
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tool/apply_v22_operational_my_fuelings.py'
+      - '.github/workflows/build-v22.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v22-public-build
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Verificar configuração
+        run: test -n "$SUPABASE_KEY" || { echo "::error::SUPABASE_KEY não configurada"; exit 1; }
+
+      - name: Java 17
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Flutter estável
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Criar plataforma Android
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+
+      - name: Reconstruir fonte final
+        run: |
+          mkdir -p lib
+          cat payload/final-main-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > lib/main_online.dart
+          cat payload/final-pubspec-*.b64 | tr -d '\n\r ' | base64 -d | gzip -d > pubspec.yaml
+          grep -q "String.fromEnvironment('SUPABASE_KEY')" lib/main_online.dart
+
+      - name: Aplicar patches v9 a v22
+        run: |
+          python3 tool/apply_v9_user_delete_pdf_selection.py
+          python3 tool/apply_v10_cleanup_selection_ui.py
+          python3 tool/apply_v11_comboio_asset_driver.py
+          python3 tool/apply_v12_comboio_prefix_008.py
+          python3 tool/apply_v13_work_rule_by_source.py
+          python3 tool/apply_v14_compat.py
+          python3 tool/apply_v14_final_package.py
+          python3 tool/apply_v15_admin_pdf_fix.py
+          python3 tool/apply_v16_pdf_icon_theme_fix.py
+          python3 tool/apply_v17_pdf_exact_layout_signatures.py
+          python3 tool/apply_v18_approved_final_order.py
+          python3 tool/apply_v19_precompat_admin_more.py
+          python3 tool/apply_v19_company_registry_pdf.py
+          python3 tool/apply_v19_company_registry_hotfix.py
+          python3 tool/apply_v20_pdf_fueling_photo_only.py
+          python3 tool/apply_v21_comboio_highlight_four_photos.py
+          python3 tool/apply_v22_operational_my_fuelings.py
+
+      - name: Validar alterações v22
+        run: |
+          grep -q "class MyFuelingsOnlineScreen extends StatefulWidget" lib/main_online.dart
+          grep -q "rca_my_fuelings" lib/main_online.dart
+          grep -q "Meus abastecimentos" lib/main_online.dart
+          grep -q "Origem do combustível" lib/main_online.dart
+          grep -q "Tipo de combustível" lib/main_online.dart
+          grep -q "_operationalHomeBody" lib/main_online.dart
+          grep -q "rca_user_role" lib/main_online.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          t=Path('lib/main_online.dart').read_text()
+          assert "title: 'Novo abastecimento'" in t
+          assert "title: 'Meus abastecimentos'" in t
+          assert "rpc('rca_my_fuelings'" in t
+          assert "'p_asset_query'" in t
+          assert "'p_work_query'" in t
+          assert "'p_fuel_type'" in t
+          assert "'p_source_code'" in t
+          assert "_homeRoleLoading" in t and "_isOperationalHome" in t
+          print('VALIDACAO_V22_OK')
+          PY
+
+      - name: Configurar Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          manifest=Path('android/app/src/main/AndroidManifest.xml')
+          text=manifest.read_text()
+          for permission in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+              if permission not in text:
+                  text=text.replace('<application', f'<uses-permission android:name="{permission}" />\n\n    <application', 1)
+          text=text.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"')
+          manifest.write_text(text)
+          gradle=Path('android/app/build.gradle.kts')
+          if gradle.exists():
+              gradle.write_text(gradle.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23'))
+          PY
+
+      - name: Dependências
+        run: flutter pub get
+
+      - name: Análise estática
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+
+      - name: Compilar APK
+        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Preparar APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-Online-Corrigido-v22.apk
+
+      - name: Salvar APK como artefato
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-Online-Corrigido-v22
+          path: RC-Abastecimento-Online-Corrigido-v22.apk
+          if-no-files-found: error
+          retention-days: 30

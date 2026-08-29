@@ -30,4 +30,15 @@ if 'UnifiedUsersV29Screen(referenceData:ref!)' not in t:
 for x in ["part 'v29_features.dart';",'return OperationalHomeV29Screen(profile:','UnifiedUsersV29Screen(referenceData:ref!)']:
     if x not in t: raise SystemExit('marker missing: '+x)
 p.write_text(t)
-print('v29 patch ok')
+
+# Release compiler catches part-file syntax too; fix the exact v29 detail-card closure.
+f=Path('lib/v29_features.dart')
+s=f.read_text()
+bad="onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>MovementDetailScreen(item:x))));"
+good="onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>MovementDetailScreen(item:x)))));"
+if bad in s:
+    s=s.replace(bad,good,1)
+if bad in s or good not in s:
+    raise SystemExit('v29 feature syntax fix failed')
+f.write_text(s)
+print('v29 patch ok; My Fuelings syntax fixed')

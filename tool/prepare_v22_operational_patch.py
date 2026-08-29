@@ -13,11 +13,11 @@ text = text.replace("        elif ch == '}}':", "        elif ch == '}':")
 text = text.replace("${_friendlyError(e)}", "${e.toString()}")
 text = text.replace("${_hasValue(assetText) ? ' • $assetText' : ''}", "${assetText.toString().trim().isNotEmpty ? ' • $assetText' : ''}")
 
-# O card Novo abastecimento já usa o tanque/origem selecionado no FieldHomeScreen.
-# Como o v22 o move para um método separado, recriamos a variável local `t` nesse
-# método para preservar exatamente o fluxo atual sem hardcode de CB/CT/TE.
-method_needle = "  Widget _operationalHomeBody() {\n    return SafeArea("
-method_replacement = "  Widget _operationalHomeBody() {\n    final t = tank;\n    if (t == null || ref == null) {\n      return const Center(child: CircularProgressIndicator());\n    }\n    return SafeArea("
+# O card Novo abastecimento reaproveitado usa `t`, a origem já selecionada no
+# FieldHomeScreen. Como o método é gerado dentro de uma f-string Python, as
+# chaves Dart aparecem duplicadas no script-fonte e precisam permanecer assim.
+method_needle = "  Widget _operationalHomeBody() {{\n    return SafeArea("
+method_replacement = "  Widget _operationalHomeBody() {{\n    final t = tank;\n    if (t == null || ref == null) {{\n      return const Center(child: CircularProgressIndicator());\n    }}\n    return SafeArea("
 if method_needle in text:
     text = text.replace(method_needle, method_replacement, 1)
 elif "final t = tank;" not in text:

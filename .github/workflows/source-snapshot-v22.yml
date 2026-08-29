@@ -45,3 +45,4 @@ jobs:
           retention-days: 1
 
 # Trigger manual source snapshot for implementation points 2 and 3.
+# Re-triggered on 2026-08-28 for Operacional / Meus abastecimentos update.

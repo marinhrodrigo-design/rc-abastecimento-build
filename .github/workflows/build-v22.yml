@@ -6,6 +6,7 @@ on:
     paths:
       - 'tool/apply_v22_operational_my_fuelings.py'
       - 'tool/prepare_v22_operational_patch.py'
+      - 'tool/apply_v22b_operational_entry.py'
       - '.github/workflows/build-v22.yml'
   workflow_dispatch:
 
@@ -74,16 +75,16 @@ jobs:
           python3 tool/apply_v20_pdf_fueling_photo_only.py
           python3 tool/apply_v21_comboio_highlight_four_photos.py
           python3 tool/apply_v22_operational_my_fuelings.py
+          python3 tool/apply_v22b_operational_entry.py
 
       - name: Validar alterações v22
         run: |
           grep -q "class MyFuelingsOnlineScreen extends StatefulWidget" lib/main_online.dart
+          grep -q "class OperationalHomeScreen extends StatefulWidget" lib/main_online.dart
           grep -q "rca_my_fuelings" lib/main_online.dart
-          grep -q "Meus abastecimentos" lib/main_online.dart
           grep -q "Origem do combustível" lib/main_online.dart
           grep -q "Tipo de combustível" lib/main_online.dart
-          grep -q "_operationalHomeBody" lib/main_online.dart
-          grep -q "rca_user_role" lib/main_online.dart
+          grep -q "if (operational) return OperationalHomeScreen" lib/main_online.dart
           python3 - <<'PY'
           from pathlib import Path
           t=Path('lib/main_online.dart').read_text()
@@ -94,7 +95,8 @@ jobs:
           assert "'p_work_query'" in t
           assert "'p_fuel_type'" in t
           assert "'p_source_code'" in t
-          assert "_homeRoleLoading" in t and "_isOperationalHome" in t
+          assert "role == 'fuel_driver' || role == 'operator' || role == 'operational'" in t
+          assert "FuelingOnlineScreen(sourceTank: source, referenceData: reference!)" in t
           print('VALIDACAO_V22_OK')
           PY
 

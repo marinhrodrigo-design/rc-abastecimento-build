@@ -112,7 +112,7 @@ class _AdminSecurityV35ScreenState extends State<AdminSecurityV35Screen>{
         const Text(ownerEmail,style:TextStyle(fontWeight:FontWeight.w900)),
         const SizedBox(height:12),
         FilledButton.icon(onPressed:sending||saving?null:sendPin,icon:sending?const SizedBox(width:18,height:18,child:CircularProgressIndicator(strokeWidth:2)):const Icon(Icons.email_outlined),label:Text(pinSent?'Reenviar PIN':'Enviar PIN para o e-mail')),
-      ])),
+      ]))),
       if(pinSent)...[
         const SizedBox(height:12),
         Card(child:Padding(padding:const EdgeInsets.all(16),child:Column(children:[
@@ -139,6 +139,7 @@ new_actions=old_actions+"      if(isAdmin)quick(Icons.shield_outlined,'Seguranç
 assert old_actions in s
 s=s.replace(old_actions,new_actions,1)
 
+# Friendly errors for the new security flow.
 needle="  if (s.contains('managed_account_use_current_username_and_password')) return 'Use o usuário e a senha/PIN definidos pelo administrador.';\n"
 replacement=needle+"  if (s.contains('recovery_email_in_use')) return 'O e-mail de segurança já está vinculado a outra conta.';\n  if (s.contains('admin_only')) return 'Somente o Admin pode alterar esta configuração.';\n  if (s.contains('otp') || s.contains('nonce') || s.contains('reauth')) return 'PIN inválido ou expirado. Solicite um novo código e tente novamente.';\n"
 assert needle in s

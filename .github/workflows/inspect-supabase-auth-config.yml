@@ -37,3 +37,5 @@ jobs:
             "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
             -o /tmp/auth.json
           jq '{smtp_host,smtp_port,smtp_admin_email,smtp_user,smtp_sender_name,mailer_subjects_magic_link,mailer_otp_exp,mailer_otp_length,smtp_max_frequency,has_magic_link_template:(.mailer_templates_magic_link_content != null)}' /tmp/auth.json
+      - name: Checkpoint
+        run: echo "SMTP inspection after dashboard save"

@@ -1,0 +1,53 @@
+name: Apply Supabase Auth OTP Config
+
+on:
+  push:
+    branches: ['feature/rc-abastecimento-v37-recovery-code-3m']
+    paths:
+      - '.github/workflows/apply-supabase-auth-otp.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  apply:
+    runs-on: ubuntu-latest
+    env:
+      SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      PROJECT_REF: zitwhbfplafvarivgzdr
+    steps:
+      - name: Check management token
+        run: |
+          test -n "$SUPABASE_ACCESS_TOKEN"
+
+      - name: Apply OTP email template and 3 minute expiry
+        run: |
+          cat >/tmp/payload.json <<'JSON'
+          {
+            "mailer_subjects_magic_link": "Código de recuperação do Admin — R&C Abastecimento",
+            "mailer_templates_magic_link_content": "<div style=\"font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px\"><h2>R&C Abastecimento</h2><p>Seu código de recuperação do Admin é:</p><p style=\"font-size:32px;font-weight:700;letter-spacing:8px;margin:24px 0\">{{ .Token }}</p><p>Digite este código no aplicativo. Ele expira em 3 minutos e só pode ser usado uma vez.</p><p>Se você não solicitou esta recuperação, ignore este e-mail.</p></div>",
+            "mailer_otp_exp": 180,
+            "mailer_otp_length": 6
+          }
+          JSON
+          curl --fail-with-body -sS -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/payload.json \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+            -o /tmp/patch-response.json
+          echo "AUTH_CONFIG_PATCH_OK"
+
+      - name: Verify OTP configuration
+        run: |
+          curl --fail-with-body -sS \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
+            -o /tmp/auth.json
+          jq -e '.mailer_otp_exp == 180' /tmp/auth.json >/dev/null
+          jq -e '.mailer_otp_length == 6' /tmp/auth.json >/dev/null
+          jq -e '.mailer_subjects_magic_link == "Código de recuperação do Admin — R&C Abastecimento"' /tmp/auth.json >/dev/null
+          jq -e '.mailer_templates_magic_link_content | contains("{{ .Token }}")' /tmp/auth.json >/dev/null
+          jq -e '.mailer_templates_magic_link_content | (contains("ConfirmationURL") | not)' /tmp/auth.json >/dev/null
+          echo "AUTH_OTP_CONFIG_VERIFIED: 6 digits, 180 seconds, no magic-link URL"

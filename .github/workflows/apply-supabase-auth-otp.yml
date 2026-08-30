@@ -20,6 +20,22 @@ jobs:
       - name: Check management token
         run: test -n "$SUPABASE_ACCESS_TOKEN"
 
+      - name: Apply Admin recovery OTP email template
+        run: |
+          SUBJECT='Código de recuperação do Admin - R&C Abastecimento'
+          CONTENT='<div style="font-family:Arial,sans-serif;max-width:560px;margin:auto;padding:24px"><h2>R&C Abastecimento</h2><p>Seu código de recuperação do Admin é:</p><p style="font-size:32px;font-weight:700;letter-spacing:8px;margin:24px 0">{{ .Token }}</p><p>Digite este código no aplicativo. Ele expira em 3 minutos e só pode ser usado uma vez.</p><p>Se você não solicitou esta recuperação, ignore este e-mail.</p></div>'
+          jq -n --arg subject "$SUBJECT" --arg content "$CONTENT" '{mailer_subjects_magic_link:$subject,mailer_templates_magic_link_content:$content}' >/tmp/template.json
+          status=$(curl -sS -o /tmp/response.json -w '%{http_code}' -X PATCH \
+            -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @/tmp/template.json \
+            "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth")
+          echo "TEMPLATE_HTTP_STATUS=$status"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            jq '{message,error,error_code}' /tmp/response.json 2>/dev/null || cat /tmp/response.json
+            exit 1
+          fi
+
       - name: Enforce three minute six digit OTP and short resend interval
         run: |
           printf '%s\n' '{"mailer_otp_exp":180,"mailer_otp_length":6,"smtp_max_frequency":5}' >/tmp/otp.json
@@ -34,13 +50,17 @@ jobs:
             exit 1
           fi
 
-      - name: Verify OTP configuration
+      - name: Verify final recovery email configuration
         run: |
           curl --fail-with-body -sS \
             -H "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
             "https://api.supabase.com/v1/projects/$PROJECT_REF/config/auth" \
             -o /tmp/auth.json
+          jq -e '.smtp_host == "smtp.gmail.com"' /tmp/auth.json >/dev/null
           jq -e '.mailer_otp_exp == 180' /tmp/auth.json >/dev/null
           jq -e '.mailer_otp_length == 6' /tmp/auth.json >/dev/null
           jq -e '.smtp_max_frequency == 5' /tmp/auth.json >/dev/null
-          echo "AUTH_OTP_CONFIG_VERIFIED: 6 digits, 180 seconds, 5 second resend interval"
+          jq -e '.mailer_subjects_magic_link == "Código de recuperação do Admin - R&C Abastecimento"' /tmp/auth.json >/dev/null
+          jq -e '.mailer_templates_magic_link_content | contains("{{ .Token }}")' /tmp/auth.json >/dev/null
+          jq -e '.mailer_templates_magic_link_content | (contains("ConfirmationURL") | not)' /tmp/auth.json >/dev/null
+          echo "ADMIN_RECOVERY_EMAIL_VERIFIED: Gmail SMTP, 6 digits, 180 seconds, no magic link"

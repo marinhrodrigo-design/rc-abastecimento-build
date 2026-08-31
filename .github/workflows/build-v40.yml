@@ -1,0 +1,146 @@
+name: Build R&C Abastecimento v40
+
+on:
+  push:
+    branches: ['feature/rc-abastecimento-v40-price-all-users']
+    paths:
+      - 'tool/apply_v40_price_all_users.py'
+      - '.github/workflows/build-v40.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v40
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify configuration
+        run: test -n "$SUPABASE_KEY"
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
+      - name: Rebuild exact approved v28 source chain
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text=Path('.github/workflows/build-v34.yml').read_text().splitlines()
+          start=None; out=[]
+          for i,line in enumerate(text):
+            if line.strip()=='- name: Rebuild exact approved v28 source chain': start=i; continue
+            if start is not None and i>start:
+              if line.startswith('      - name:'): break
+              if line.startswith('          '): out.append(line[10:])
+          if not out: raise SystemExit('Não foi possível extrair cadeia v28')
+          Path('/tmp/rebuild_v28.sh').write_text('\n'.join(out)+'\n')
+          PY
+          bash /tmp/rebuild_v28.sh
+      - name: Apply approved v29-v34 changes
+        run: |
+          python3 tool/apply_v29_from_v28.py
+          python3 tool/apply_v30_from_v29.py
+          python3 tool/apply_v31_from_v30.py
+          python3 tool/apply_v32_fueling_location_metrics.py
+          python3 tool/apply_v33_measurement_type.py
+          python3 tool/apply_v34_single_login.py
+      - name: Apply approved v35 security
+        run: python3 tool/apply_v35_admin_email_pin.py
+      - name: Apply approved v36 Admin recovery
+        run: python3 tool/apply_v36_admin_recovery.py
+      - name: Apply approved v37 recovery
+        run: python3 tool/apply_v37_recovery_code_3m.py
+      - name: Preserve PDF equipment separator fix
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart'); s=p.read_text()
+          old="row(Icons.precision_manufacturing_outlined, 'Equipamento abastecido', equipment.isEmpty ? '-' : equipment, navy),"
+          new=r"row(Icons.precision_manufacturing_outlined, 'Equipamento abastecido', equipment.isEmpty ? '-' : equipment.replaceAll('\u2022', '-').replaceAll('\u00B7', '-').replaceAll('\u2013', '-').replaceAll('\u2014', '-').replaceAll('\uFFFD', '-'), navy),"
+          if s.count(old)!=1: raise SystemExit('Campo equipamento PDF inesperado')
+          p.write_text(s.replace(old,new,1))
+          PY
+      - name: Apply v38 unit lock and lifecycle
+        run: python3 tool/apply_v38_unit_lock_lifecycle.py
+      - name: Apply v39 same-device session recovery
+        run: python3 tool/apply_v39_device_session.py
+      - name: Apply v40 price fields for every fueling user
+        run: python3 tool/apply_v40_price_all_users.py
+      - name: Validate v40 and preserve approved features
+        run: |
+          grep -q "Preço de venda/L" lib/main_online.dart
+          grep -q "Preço total • automático e somente leitura" lib/main_online.dart
+          grep -q "Valor total" lib/main_online.dart
+          grep -q "Relatório Final da Obra" lib/main_online.dart
+          grep -q "Registro Diário" lib/main_online.dart
+          grep -q "Registro Geral" lib/main_online.dart
+          grep -q "Unidades em uso ficam bloqueadas imediatamente" lib/main_online.dart
+          grep -q "device_id_v39" lib/v30_features.dart
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('lib/main_online.dart').read_text()
+          assert "bool get financial=>true;" in m
+          assert "if(financial)...[" in m
+          assert "salePrice:sale.text.trim().isNotEmpty?" in m
+          assert "widget.profile['is_admin']==true||widget.profile['is_manager']==true||widget.profile['can_financial']==true" not in m
+          assert "labelText:'Preço de venda/L'" in m
+          assert "labelText:'Preço total • automático e somente leitura'" in m
+          assert "_num(liters.text.replaceAll(',','.'))*_num(sale.text.replaceAll(',','.'))" in m
+          assert "equipment.replaceAll('\\u2022', '-')" in m
+          assert "await api.claimUnitV31(id)" in m
+          assert "ensureDeviceIdV39()" in m
+          print('VALIDACAO_V40_OK')
+          PY
+      - name: Configure Android
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml');t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"');m.write_text(t)
+          g=Path('android/app/build.gradle.kts')
+          if g.exists():g.write_text(g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23'))
+          PY
+      - name: Dependencies
+        run: flutter pub get
+      - name: Flutter Analyze
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+      - name: Build APK
+        run: flutter build apk --release --target lib/main_online.dart --build-number=8 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+      - name: Prepare artifact
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v40.apk
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v40-approved-source
+          path: |
+            lib/main_online.dart
+            lib/v29_features.dart
+            lib/v30_features.dart
+            lib/v31_features.dart
+            pubspec.yaml
+            tool/apply_v38_unit_lock_lifecycle.py
+            tool/apply_v39_device_session.py
+            tool/apply_v40_price_all_users.py
+          retention-days: 30
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v40
+          path: RC-Abastecimento-v40.apk
+          retention-days: 30

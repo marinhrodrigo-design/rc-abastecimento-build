@@ -81,7 +81,7 @@ jobs:
           p.write_text(s)
           print('PDF_EQUIPMENT_SEPARATOR_FIX_OK')
           PY
-      - name: Validate preservation and v37 rules
+      - name: Validate complete approved app and requested fix
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart
           grep -q "Registro Diário" lib/main_online.dart
@@ -90,6 +90,8 @@ jobs:
           grep -q "Auditoria" lib/main_online.dart
           grep -q "Trocar unidade" lib/v31_features.dart
           grep -q "Liberar unidade" lib/v31_features.dart
+          grep -q "Novo abastecimento" lib/v31_features.dart
+          grep -q "Meus abastecimentos" lib/v31_features.dart
           grep -q "Desconectar usuário" lib/v29_features.dart
           grep -q "Tipo de medição \*" lib/main_online.dart
           grep -q "sessionClaimV34" lib/v30_features.dart
@@ -102,11 +104,15 @@ jobs:
           grep -q "Gerar novo código" lib/main_online.dart
           grep -q "Duration(minutes:3)" lib/main_online.dart
           grep -q "marinhrodrigo@gmail.com" lib/main_online.dart
+          grep -q "Preço de venda/L" lib/main_online.dart
+          grep -q "Preço total • automático e somente leitura" lib/main_online.dart
+          grep -q "Valor total" lib/main_online.dart
           ! grep -q "Acesso de teste: admin / 1234" lib/main_online.dart
           ! grep -q "subtitle: Text(subtitle)" lib/main_online.dart
           python3 - <<'PY'
           from pathlib import Path
           m=Path('lib/main_online.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
           assert "body:{'action':'request_recovery'}" in m
           assert "'challenge_id':challengeId" in m
           assert "Duration(minutes:3)" in m
@@ -116,7 +122,15 @@ jobs:
           assert "measurement_type" in m
           assert "ensureAppSessionIdV30(renew:false)" in m
           assert "equipment.replaceAll('\\u2022', '-')" in m
-          print('VALIDACAO_V37_OK')
+          assert "TextField(controller:sale" in m
+          assert "labelText:'Preço de venda/L'" in m
+          assert "labelText:'Preço total • automático e somente leitura'" in m
+          assert "_num(liters.text.replaceAll(',','.'))*_num(sale.text.replaceAll(',','.'))" in m
+          assert "'Preço de venda/L', x['sale_price_per_liter']" in m
+          assert "'Valor total', x['sale_price_per_liter']" in m
+          assert "title:'Novo abastecimento'" in v31
+          assert "title:'Meus abastecimentos'" in v31
+          print('VALIDACAO_COMPLETA_V37_OK')
           PY
       - name: Configure Android
         run: |
@@ -137,13 +151,13 @@ jobs:
       - name: Flutter Analyze
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
       - name: Build APK
-        run: flutter build apk --release --target lib/main_online.dart --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+        run: flutter build apk --release --target lib/main_online.dart --build-number=5 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
       - name: Prepare artifact
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v37.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v37-completo-corrigido.apk
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v37-approved-source
+          name: RC-Abastecimento-v37-completo-approved-source
           path: |
             lib/main_online.dart
             lib/v29_features.dart
@@ -157,6 +171,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v37
-          path: RC-Abastecimento-v37.apk
+          name: RC-Abastecimento-v37-completo-corrigido
+          path: RC-Abastecimento-v37-completo-corrigido.apk
           retention-days: 30

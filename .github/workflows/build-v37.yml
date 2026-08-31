@@ -67,6 +67,20 @@ jobs:
         run: python3 tool/apply_v36_admin_recovery.py
       - name: Apply v37 fresh recovery code and 3-minute timer
         run: python3 tool/apply_v37_recovery_code_3m.py
+      - name: Fix only PDF equipment separator
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart')
+          s=p.read_text()
+          old="row(Icons.precision_manufacturing_outlined, 'Equipamento abastecido', equipment.isEmpty ? '-' : equipment, navy),"
+          new=r"row(Icons.precision_manufacturing_outlined, 'Equipamento abastecido', equipment.isEmpty ? '-' : equipment.replaceAll('\u2022', '-').replaceAll('\u00B7', '-').replaceAll('\u2013', '-').replaceAll('\u2014', '-').replaceAll('\uFFFD', '-'), navy),"
+          if s.count(old)!=1:
+            raise SystemExit(f'Esperava exatamente 1 campo Equipamento abastecido para corrigir; encontrado: {s.count(old)}')
+          s=s.replace(old,new,1)
+          p.write_text(s)
+          print('PDF_EQUIPMENT_SEPARATOR_FIX_OK')
+          PY
       - name: Validate preservation and v37 rules
         run: |
           grep -q "Relatório Final da Obra" lib/main_online.dart
@@ -101,6 +115,7 @@ jobs:
           assert "rca_record_fueling_v33" in m
           assert "measurement_type" in m
           assert "ensureAppSessionIdV30(renew:false)" in m
+          assert "equipment.replaceAll('\\u2022', '-')" in m
           print('VALIDACAO_V37_OK')
           PY
       - name: Configure Android

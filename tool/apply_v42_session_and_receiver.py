@@ -27,6 +27,11 @@ new_ctrl="  final liters=TextEditingController(),km=TextEditingController(),hour
 if s.count(old_ctrl)!=1: raise SystemExit('v42 controller anchor missing')
 s=s.replace(old_ctrl,new_ctrl,1)
 
+old_dispose="  @override void dispose(){for(final c in [liters,km,hour,responsible,receiver,location,sale,thirdDescription,thirdPlate]){c.dispose();}super.dispose();}"
+new_dispose="  @override void dispose(){for(final c in [liters,km,hour,receiver,location,sale,thirdDescription,thirdPlate]){c.dispose();}super.dispose();}"
+if s.count(old_dispose)!=1: raise SystemExit('v42 dispose anchor missing')
+s=s.replace(old_dispose,new_dispose,1)
+
 old_work="      if(needsWork)DropdownButtonFormField<int>(value:work,decoration:const InputDecoration(labelText:'Obra *'),items:ws.map((x)=>DropdownMenuItem(value:_intOrNull(x['id']),child:Text('${x['name']}'))).toList(),onChanged:saving?null:(v){setState(()=>work=v);final w=selected(ws,v);if(responsible.text.trim().isEmpty&&_hasValue(w?['responsible']))responsible.text='${w?['responsible']}';}),\n      const SizedBox(height:8),TextField(controller:responsible,enabled:!saving,decoration:const InputDecoration(labelText:'Responsável')),const SizedBox(height:12),"
 new_work="      if(needsWork)DropdownButtonFormField<int>(value:work,decoration:const InputDecoration(labelText:'Obra *'),items:ws.map((x)=>DropdownMenuItem(value:_intOrNull(x['id']),child:Text('${x['name']}'))).toList(),onChanged:saving?null:(v)=>setState(()=>work=v)),\n      const SizedBox(height:12),"
 if s.count(old_work)!=1: raise SystemExit('v42 duplicate responsible field anchor missing')
@@ -83,4 +88,5 @@ checks=[
 for x in checks:
     if x not in s and x not in v: raise SystemExit('v42 missing marker: '+x)
 if "TextField(controller:responsible,enabled:!saving,decoration:const InputDecoration(labelText:'Responsável'))" in s: raise SystemExit('v42 duplicate fueling responsible input remains')
+if "[liters,km,hour,responsible,receiver,location,sale,thirdDescription,thirdPlate]" in s: raise SystemExit('v42 removed controller still referenced in fueling dispose')
 print('V42_SESSION_RECEIVER_PATCH_OK')

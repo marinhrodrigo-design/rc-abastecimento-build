@@ -35,6 +35,7 @@ jobs:
         with:
           path: ~/.android/rc-abastecimento.keystore
           key: rc-abastecimento-signing-v1
+          save-always: true
       - name: Ensure persistent APK signing key
         run: |
           mkdir -p "$HOME/.android"
@@ -163,6 +164,7 @@ jobs:
           assert "labelText:'Quem recebeu *'" not in m
           assert "labelText: 'Quem recebeu o combustível *'" not in m
           assert "TextField(controller:responsible,enabled:!saving,decoration:const InputDecoration(labelText:'Responsável'))" not in m
+          assert "[liters,km,hour,responsible,receiver,location,sale,thirdDescription,thirdPlate]" not in m
           assert "responsible:null,receiver:receiver.text.trim()" in m
           assert "'Responsável pelo recebimento do abastecimento', receiver, navy" in m
           assert "salePriceRaw = pdfSale['sale_price_per_liter']" in m
@@ -179,7 +181,15 @@ jobs:
         run: flutter build apk --release --target lib/main_online.dart --build-number=10 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
       - name: Verify APK signing certificate
         run: |
-          keytool -printcert -jarfile build/app/outputs/flutter-apk/app-release.apk | grep -E "Owner:|SHA256:"
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apk-signature.txt
+          APK_FP="$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}' /tmp/apk-signature.txt | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          KEY_FP="$(keytool -list -v -keystore "$HOME/.android/rc-abastecimento.keystore" -storepass android -alias rcabastecimento | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test -n "$APK_FP"
+          test -n "$KEY_FP"
+          test "$APK_FP" = "$KEY_FP"
+          echo "APK_SIGNING_CERTIFICATE_OK"
       - name: Prepare artifact
         run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v42.apk
       - name: Upload source

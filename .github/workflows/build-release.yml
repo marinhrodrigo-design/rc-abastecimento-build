@@ -31,11 +31,11 @@ jobs:
       - uses: subosito/flutter-action@v2
         with: {channel: stable, cache: true}
       - name: Restore persistent APK signing key
-        uses: actions/cache@v4
+        id: signing-key-cache
+        uses: actions/cache/restore@v4
         with:
           path: ~/.android/rc-abastecimento.keystore
           key: rc-abastecimento-signing-v1
-          save-always: true
       - name: Ensure persistent APK signing key
         run: |
           mkdir -p "$HOME/.android"
@@ -49,6 +49,12 @@ jobs:
               -dname "CN=R&C Abastecimento, OU=R&C, O=Hydra Equipamentos, L=Rio de Janeiro, ST=RJ, C=BR"
           fi
           test -f "$HOME/.android/rc-abastecimento.keystore"
+      - name: Save persistent APK signing key
+        if: steps.signing-key-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
       - name: Create Android platform
         run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento .
       - name: Rebuild exact approved v28 source chain
@@ -184,7 +190,7 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apk-signature.txt
-          APK_FP="$(awk -F': ' '/Signer #1 certificate SHA-256 digest:/{print $2; exit}' /tmp/apk-signature.txt | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          APK_FP="$(awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}' /tmp/apk-signature.txt | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           KEY_FP="$(keytool -list -v -keystore "$HOME/.android/rc-abastecimento.keystore" -storepass android -alias rcabastecimento | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           test -n "$APK_FP"
           test -n "$KEY_FP"

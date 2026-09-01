@@ -16,13 +16,13 @@ old="""      Position? best;
       return best!=null&&best.accuracy<=15?best:null;
 """
 new="""      Position? best;
-      for(var attempt=0;attempt<4;attempt++){
+      for(var attempt=0;attempt<3;attempt++){
         try{
           final p=await Geolocator.getCurrentPosition(locationSettings:const LocationSettings(accuracy:LocationAccuracy.bestForNavigation,timeLimit:Duration(seconds:20)));
           if(best==null||p.accuracy<best.accuracy)best=p;
           if(p.accuracy<=30)return p;
         }catch(_){}
-        if(attempt<3)await Future<void>.delayed(const Duration(seconds:2));
+        if(attempt<2)await Future<void>.delayed(const Duration(seconds:2));
       }
       return best!=null&&best.accuracy<=30?best:null;
 """
@@ -33,7 +33,7 @@ s=s.replace(old,new,1)
 p.write_text(s)
 
 checks=[
-    'for(var attempt=0;attempt<4;attempt++)',
+    'for(var attempt=0;attempt<3;attempt++)',
     'timeLimit:Duration(seconds:20)',
     'if(p.accuracy<=30)return p;',
     'best.accuracy<=30?best:null',

@@ -190,10 +190,12 @@ jobs:
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
           test -x "$APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apk-signature.txt
-          APK_FP="$(awk -F': ' '/certificate SHA-256 digest:/{print $2; exit}' /tmp/apk-signature.txt | tr -d ':' | tr '[:upper:]' '[:lower:]')"
-          KEY_FP="$(keytool -list -v -keystore "$HOME/.android/rc-abastecimento.keystore" -storepass android -alias rcabastecimento | awk -F': ' '/SHA256:/{print $2; exit}' | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          APK_FP="$(sed -n 's/.*certificate SHA-256 digest: //p' /tmp/apk-signature.txt | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          KEY_FP="$(keytool -list -v -keystore "$HOME/.android/rc-abastecimento.keystore" -storepass android -alias rcabastecimento | sed -n 's/.*SHA256: //p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
           test -n "$APK_FP"
           test -n "$KEY_FP"
+          echo "APK cert: $APK_FP"
+          echo "KEY cert: $KEY_FP"
           test "$APK_FP" = "$KEY_FP"
           echo "APK_SIGNING_CERTIFICATE_OK"
       - name: Prepare artifact

@@ -5,6 +5,7 @@ on:
     branches: ['release/rc-abastecimento']
     paths:
       - 'tool/apply_v42_session_and_receiver.py'
+      - 'tool/apply_v43_precise_location.py'
       - '.github/workflows/build-release.yml'
   workflow_dispatch:
 
@@ -103,6 +104,8 @@ jobs:
           python3 tool/apply_v41_fueling_fields_pdf.py
       - name: Apply v42 stable session and receiving responsible
         run: python3 tool/apply_v42_session_and_receiver.py
+      - name: Apply v43 precise fueling location
+        run: python3 tool/apply_v43_precise_location.py
       - name: Configure Android stable device identity and signing
         run: |
           rm -f test/widget_test.dart
@@ -146,7 +149,7 @@ jobs:
           x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
           g.write_text(x)
           PY
-      - name: Regression checks v42
+      - name: Regression checks v43
         run: |
           grep -q "rca_session_claim_v42" lib/v30_features.dart
           grep -q "_stableDeviceIdV42" lib/main_online.dart
@@ -157,6 +160,10 @@ jobs:
           grep -q "labelText:'Placa/Identificação'" lib/main_online.dart
           grep -q "rca_pdf_sale_v41" lib/main_online.dart
           grep -q "Unidades em uso ficam bloqueadas imediatamente" lib/main_online.dart
+          grep -q "LocationAccuracy.bestForNavigation" lib/main_online.dart
+          grep -q "Localização deve estar ativada" lib/main_online.dart
+          grep -q "Endereço do abastecimento:" lib/main_online.dart
+          grep -q "Coordenadas:" lib/main_online.dart
           grep -q "rc.abastecimento/device" android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt
           grep -q 'signingConfigs.getByName("rcRelease")' android/app/build.gradle.kts
           test -f "$HOME/.android/rc-abastecimento.keystore"
@@ -177,14 +184,20 @@ jobs:
           assert "equipment.replaceAll('\\u2022', '-')" in m
           assert "await api.claimUnitV31(id)" in m
           assert "rca_session_claim_v42" in v30
-          print('VALIDACAO_V42_OK')
+          assert "LocationAccuracy.bestForNavigation" in m
+          assert "p.accuracy<=15" in m
+          assert m.count("Localização deve estar ativada") >= 2
+          assert "Endereço do abastecimento: ${location.text.trim()}" in m
+          assert "Coordenadas: ${capturedPosition!.latitude.toStringAsFixed(6)}, ${capturedPosition!.longitude.toStringAsFixed(6)}" in m
+          assert "Padding(padding:const EdgeInsets.only(top:5,bottom:12),child:Text(locationMeta()" not in m
+          print('VALIDACAO_V43_OK')
           PY
       - name: Dependencies
         run: flutter pub get
       - name: Flutter Analyze
         run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
       - name: Build APK
-        run: flutter build apk --release --target lib/main_online.dart --build-number=10 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+        run: flutter build apk --release --target lib/main_online.dart --build-number=11 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
       - name: Verify APK signing certificate
         run: |
           APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
@@ -199,11 +212,11 @@ jobs:
           test "$APK_FP" = "$KEY_FP"
           echo "APK_SIGNING_CERTIFICATE_OK"
       - name: Prepare artifact
-        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v42.apk
+        run: cp build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v43.apk
       - name: Upload source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v42-approved-source
+          name: RC-Abastecimento-v43-approved-source
           path: |
             lib/main_online.dart
             lib/v29_features.dart
@@ -215,11 +228,12 @@ jobs:
             tool/apply_v40_price_all_users.py
             tool/apply_v41_fueling_fields_pdf.py
             tool/apply_v42_session_and_receiver.py
+            tool/apply_v43_precise_location.py
             .github/workflows/build-release.yml
           retention-days: 30
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v42
-          path: RC-Abastecimento-v42.apk
+          name: RC-Abastecimento-v43
+          path: RC-Abastecimento-v43.apk
           retention-days: 30

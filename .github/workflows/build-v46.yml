@@ -114,13 +114,12 @@ jobs:
           assert 'p.accuracy<=30' in m and 'best.accuracy<=30' in m
           assert 'p.accuracy<=15' not in m and 'best.accuracy<=15' not in m
           assert 'manualLocationV44&&autoLocationAttemptedV44' in m
-          start=m.index('class FuelingV23Screen')
-          end=m.index('class ',start+10)
-          f=m[start:end]
           marker='A localização será buscada automaticamente primeiro. Se não for possível, o endereço poderá ser informado manualmente.'
-          assert 'Localização deve estar ativada' in f
-          assert marker in f
-          assert f.index('Localização deve estar ativada') < f.index("labelText:'Origem do combustível'")
+          marker_idx=m.index(marker)
+          warning_idx=m.rfind("title:Text('Localização deve estar ativada'",0,marker_idx)
+          assert warning_idx >= 0 and marker_idx-warning_idx < 500
+          origin_idx=m.index("labelText:'Origem do combustível'",marker_idx)
+          assert warning_idx < marker_idx < origin_idx
           print('VALIDACAO_V46_OK')
           PY
 

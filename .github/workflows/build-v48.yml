@@ -1,0 +1,174 @@
+name: Build R&C Abastecimento v48
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths:
+      - 'tool/apply_v48_admin_meter_protection.py'
+      - 'tool/v48_editor_fragment.tmp'
+      - 'tool/v48_hourmeter_fragment.tmp'
+      - '.github/workflows/build-v48.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v48
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify configuration
+        run: test -n "$SUPABASE_KEY"
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: '17'}
+      - uses: subosito/flutter-action@v2
+        with: {channel: stable, cache: true}
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore approved v47 source
+        run: |
+          mkdir -p /tmp/v47src
+          gh run download 33637056474 -n RC-Abastecimento-v47-approved-source -D /tmp/v47src
+          rm -rf app/lib
+          cp -r /tmp/v47src/app/lib app/lib
+          cp /tmp/v47src/app/pubspec.yaml app/pubspec.yaml
+
+      - name: Apply v48 Admin full edit and meter protection
+        working-directory: app
+        run: python3 ../tool/apply_v48_admin_meter_protection.py
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID))
+                      else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml'); t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"'); m.write_text(t)
+          g=Path('android/app/build.gradle.kts'); x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          if marker not in x: raise SystemExit('Bloco buildTypes não encontrado')
+          x=x.replace(marker,signing+marker,1)
+          if 'signingConfig = signingConfigs.getByName("debug")' not in x: raise SystemExit('Assinatura release padrão não encontrada')
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Regression checks v48
+        working-directory: app
+        run: |
+          grep -q "rca_meter_check_v48" lib/main_online.dart
+          grep -q "rca_admin_replace_hourmeter_v48" lib/main_online.dart
+          grep -q "rca_admin_edit_fueling_v48" lib/main_online.dart
+          grep -q "Substituição de horímetro" lib/main_online.dart
+          grep -q "Salvar correção completa" lib/main_online.dart
+          grep -q "Valor muito acima do último registro" lib/main_online.dart
+          grep -q "onChanged:(saving||third!=null||manualThird)?null" lib/main_online.dart
+          grep -q "onChanged:(saving||machine!=null)?null" lib/main_online.dart
+          grep -q "LocationAccuracy.bestForNavigation" lib/main_online.dart
+          grep -q "timeLimit:Duration(seconds:20)" lib/main_online.dart
+          grep -q "p.accuracy<=30" lib/main_online.dart
+          grep -q "Localização deve estar ativada" lib/main_online.dart
+          grep -q 'signingConfigs.getByName("rcRelease")' android/app/build.gradle.kts
+          test -f "$HOME/.android/rc-abastecimento.keystore"
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('lib/main_online.dart').read_text()
+          assert "client.rpc('rca_admin_edit_fueling_v48'" in m
+          assert "client.rpc('rca_meter_check_v48'" in m
+          assert "client.rpc('rca_admin_replace_hourmeter_v48'" in m
+          assert "AdminEditFuelingV48Screen" in m
+          assert "HourmeterReplacementV48Screen" in m
+          assert "if(check['regression']==true)" in m
+          assert "if(check['large_jump']==true" in m
+          assert "third=null;thirdPlate.clear();thirdDescription.clear();" in m
+          print('VALIDACAO_V48_OK')
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+      - name: Flutter Analyze
+        working-directory: app
+        run: flutter analyze lib/main_online.dart --no-fatal-infos --no-fatal-warnings
+      - name: Build APK
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-number=16 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk | tee /tmp/apk-signature-v48.txt
+          APK_FP="$(sed -n 's/.*certificate SHA-256 digest: //p' /tmp/apk-signature-v48.txt | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          KEY_FP="$(keytool -list -v -keystore "$HOME/.android/rc-abastecimento.keystore" -storepass android -alias rcabastecimento | sed -n 's/.*SHA256: //p' | head -n 1 | tr -d ':' | tr '[:upper:]' '[:lower:]')"
+          test -n "$APK_FP" && test -n "$KEY_FP" && test "$APK_FP" = "$KEY_FP"
+          echo "APK_SIGNING_CERTIFICATE_OK"
+
+      - name: Prepare artifact
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v48.apk
+      - name: Upload source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v48-approved-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+            tool/apply_v48_admin_meter_protection.py
+            tool/v48_editor_fragment.tmp
+            tool/v48_hourmeter_fragment.tmp
+            .github/workflows/build-v48.yml
+          retention-days: 30
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v48
+          path: RC-Abastecimento-v48.apk
+          retention-days: 30

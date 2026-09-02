@@ -45,3 +45,4 @@ s=s.replace(old,new,1)
 
 p.write_text(s)
 print('VALIDACAO_PATCH_V49_OK')
+# trigger v49 build

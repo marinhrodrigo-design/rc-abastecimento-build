@@ -14,7 +14,7 @@ new="""onChanged:(saving||third!=null)?null:(v){setState((){machine=v;if(v!=null
 assert old in s
 s=s.replace(old,new,1)
 old="""    final measurementNotApplicable=sm!=null&&st==null&&'${sm['measurement_type']??''}'.trim().toLowerCase()=='none';"""
-new="""    final smId=_intOrNull(sm?['id']);\n    final rawSmMeasurement=smId==null?sm?['measurement_type']:(measurementOverridesV51[smId]??sm?['measurement_type']);\n    final smMeasurement='${rawSmMeasurement??''}'.trim().toLowerCase();\n    final measurementNotApplicable=sm!=null&&st==null&&smMeasurement=='none';"""
+new="""    dynamic rawSmMeasurement;\n    if(sm!=null){\n      final smId=_intOrNull(sm['id']);\n      rawSmMeasurement=smId==null?sm['measurement_type']:(measurementOverridesV51[smId]??sm['measurement_type']);\n    }\n    final smMeasurement='${rawSmMeasurement??''}'.trim().toLowerCase();\n    final measurementNotApplicable=sm!=null&&st==null&&smMeasurement=='none';"""
 assert old in s
 s=s.replace(old,new,1)
 p.write_text(s)

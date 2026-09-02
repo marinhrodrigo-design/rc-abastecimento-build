@@ -34,3 +34,4 @@ s=s.replace(old,new,1)
 
 p.write_text(s)
 print('VALIDACAO_PATCH_LOCALIZACAO_V52_OK')
+# touch v53

@@ -19,3 +19,4 @@ assert old in s
 s=s.replace(old,new,1)
 p.write_text(s)
 print('VALIDACAO_PATCH_V51_OK')
+# trigger v51 build

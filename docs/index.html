@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>R&C Controle</title>
+  <style>
+    html,body{height:100%;margin:0;font-family:Segoe UI,Arial,sans-serif;background:#f4f7fb;color:#10284a}
+    .boot{height:100%;display:grid;place-items:center;text-align:center;padding:24px;box-sizing:border-box}
+    .card{background:#fff;border:1px solid #e3eaf3;border-radius:18px;padding:30px 34px;box-shadow:0 14px 38px rgba(16,40,74,.08);max-width:460px}
+    .brand{font-size:25px;font-weight:700;margin-bottom:8px}.muted{color:#66758c;font-size:14px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;background:#0b63d8;margin-right:7px;animation:pulse 1s infinite alternate}@keyframes pulse{to{opacity:.25}}
+  </style>
+</head>
+<body>
+  <div class="boot"><div class="card"><div class="brand">R&C Controle</div><div class="muted"><span class="dot"></span>Carregando ambiente seguro...</div></div></div>
+  <script>
+  (async()=>{
+    if(!('DecompressionStream' in window)) throw new Error('Este navegador precisa ser atualizado para abrir o R&C Controle.');
+    const files=['site-v16-1.txt','site-v16-2.txt','rcp3.txt','rcp4.txt','site-v16-5.txt'];
+    const parts=await Promise.all(files.map(async f=>{const r=await fetch(f,{cache:'no-store'});if(!r.ok)throw new Error('Falha ao carregar '+f);return (await r.text()).trim();}));
+    const b64=parts.join('').replace(/\s+/g,'');
+    const raw=atob(b64),bytes=new Uint8Array(raw.length);
+    for(let i=0;i<raw.length;i++)bytes[i]=raw.charCodeAt(i);
+    const stream=new Blob([bytes]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const html=await new Response(stream).text();
+    document.open();document.write(html);document.close();
+  })().catch(err=>{
+    document.body.innerHTML='<div class="boot"><div class="card"><div class="brand">R&C Controle</div><p class="muted">Não foi possível iniciar o site.</p><p class="muted">'+String(err.message||err)+'</p></div></div>';
+  });
+  </script>
+</body>
+</html>

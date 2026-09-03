@@ -149,3 +149,4 @@ jobs:
           name: RC-Abastecimento-v59
           path: RC-Abastecimento-v59.apk
           retention-days: 30
+# trigger v59

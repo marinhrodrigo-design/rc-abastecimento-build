@@ -217,3 +217,4 @@
          return Card(child:ListTile(contentPadding:const EdgeInsets.all(14),leading:const CircleAvatar(child:Icon(Icons.local_gas_station_rounded)),title:Text('Abastecimento • $assetText',style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${_fmtDate(x['occurred_at']??x['created_at'])}\n${x['work']??'Sem obra'} • ${_fmtLiters(x['liters'])}\n${x['fuel_type']??'Combustível'} • Origem: $sourceText'),isThreeLine:true,trailing:const Icon(Icons.chevron_right_rounded),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>MovementDetailScreen(item:x)))));
        }),
        const SizedBox(height:24),
+

@@ -1,0 +1,219 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -196,6 +196,7 @@
+ class OfflineStore {
+   final ValueNotifier<bool> online = ValueNotifier(true);
+   final ValueNotifier<int> pendingCount = ValueNotifier(0);
++  final ValueNotifier<int> syncRevision = ValueNotifier(0);
+   final Connectivity _connectivity = Connectivity();
+   File? _stateFile;
+   Directory? _evidenceDir;
+@@ -208,6 +209,79 @@
+   Map<String, dynamic>? get cachedReferenceData => _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
+   int? get lastTankId => _intOrNull(_state['last_tank_id']);
+ 
++  bool _fuelingRpc(String rpc) => rpc.startsWith('rca_record_fueling');
++
++  List<Map<String,dynamic>> pendingFuelingsForCurrentUser({bool includeLegacy=true}) {
++    final uid=Supabase.instance.client.auth.currentUser?.id;
++    final ref=cachedReferenceData;
++    final machines=_rows(ref?['machines']);
++    final works=_rows(ref?['works']);
++    final tanks=_rows(ref?['tanks']);
++    final out=<Map<String,dynamic>>[];
++    for(final q in _queue){
++      final rpc='${q['rpc']??''}';
++      if(!_fuelingRpc(rpc))continue;
++      final owner='${q['user_id']??''}'.trim();
++      final legacy=owner.isEmpty;
++      if(!legacy&&uid!=null&&owner!=uid)continue;
++      if(legacy&&!includeLegacy)continue;
++      final params=_map(q['params']);
++      final machineId=_intOrNull(params['p_machine_id']);
++      final workId=_intOrNull(params['p_work_id']);
++      final tankId=_intOrNull(params['p_source_tank_id']);
++      Map<String,dynamic>? machine,work,tank;
++      for(final x in machines){if(_intOrNull(x['id'])==machineId){machine=x;break;}}
++      for(final x in works){if(_intOrNull(x['id'])==workId){work=x;break;}}
++      for(final x in tanks){if(_intOrNull(x['id'])==tankId){tank=x;break;}}
++      final third='${params['p_third_party_plate']??''}'.trim();
++      out.add(<String,dynamic>{
++        'offline_pending':true,
++        'offline_legacy_owner':legacy,
++        'queue_id':'${q['id']}',
++        'asset_number':machine?['numeroAtivo']??(third.isNotEmpty?third:'-'),
++        'third_party_plate':third.isEmpty?null:third,
++        'work':work?['name']??'Sem obra',
++        'liters':params['p_liters'],
++        'fuel_type':params['p_fuel_type']??'Combustível',
++        'source_tank':tank?['code']??tank?['name']??'-',
++        'occurred_at':params['p_occurred_at']??q['created_at'],
++        'created_at':q['created_at'],
++        'km_value':params['p_km_value'],
++        'hourmeter_value':params['p_hourmeter_value'],
++        'location_address':params['p_location_address'],
++        'sync_error':q['sync_error'],
++      });
++    }
++    out.sort((a,b)=>'${b['occurred_at']??''}'.compareTo('${a['occurred_at']??''}'));
++    return out;
++  }
++
++  Future<void> claimLegacyPending(String queueId) async {
++    final uid=Supabase.instance.client.auth.currentUser?.id;
++    if(uid==null)throw Exception('Entre com o mesmo usuário que realizou o abastecimento.');
++    final queue=_queue;
++    for(final q in queue){
++      if('${q['id']}'==queueId){
++        if('${q['user_id']??''}'.trim().isNotEmpty&&'${q['user_id']}'!=uid)throw Exception('Este registro pertence a outro usuário.');
++        q['user_id']=uid;
++        q.remove('sync_error');
++        q.remove('sync_blocked');
++      }
++    }
++    _state['queue']=queue;
++    await _persist();
++    syncRevision.value++;
++  }
++
++  Future<void> retryPending() async {
++    final queue=_queue;
++    for(final q in queue){q.remove('sync_blocked');q.remove('sync_error');}
++    _state['queue']=queue;
++    await _persist();
++    syncRevision.value++;
++    await syncPending(force:true);
++  }
++
+   Future<void> setLastTankId(int? value) async {
+     if (value == null) {
+       _state.remove('last_tank_id');
+@@ -356,6 +430,7 @@
+       'rpc': rpc,
+       'params': params,
+       'created_at': DateTime.now().toUtc().toIso8601String(),
++      'user_id': Supabase.instance.client.auth.currentUser?.id,
+     });
+     _state['queue'] = queue;
+     _applyLocalBalance(rpc, params);
+@@ -421,23 +496,43 @@
+     }
+   }
+ 
+-  Future<void> syncPending() async {
++  Future<void> syncPending({bool force=false}) async {
+     if (_syncing || !online.value || pendingCount.value == 0) return;
++    final uid=Supabase.instance.client.auth.currentUser?.id;
++    if(uid==null)return;
+     _syncing = true;
+     try {
+       final snapshot = List<Map<String, dynamic>>.from(_queue);
+       for (final queued in snapshot) {
++        final owner='${queued['user_id']??''}'.trim();
++        if(owner.isEmpty)continue; // registro legado: precisa ser confirmado pelo usuário na tela.
++        if(owner!=uid)continue;
++        if(queued['sync_blocked']==true&&!force)continue;
+         try {
+           final original = _map(queued['params']);
++          final rpc='${queued['rpc']}';
++          if(_fuelingRpc(rpc)){
++            final tankId=_intOrNull(original['p_source_tank_id']);
++            if(tankId!=null){
++              await Supabase.instance.client.rpc('rca_claim_unit_v31',params:{'p_tank_id':tankId});
++              await setLastTankId(tankId);
++            }
++          }
+           final params = _map(await _resolveLocal(original, '${queued['id']}'));
+-          await Supabase.instance.client.rpc('${queued['rpc']}', params: params);
++          await Supabase.instance.client.rpc(rpc, params: params);
+           _deleteLocalRefs(original);
+           final remaining = _queue.where((x) => '${x['id']}' != '${queued['id']}').toList();
+           _state['queue'] = remaining;
+           pendingCount.value = remaining.length;
++          syncRevision.value++;
+           await _persist();
+         } catch (e) {
+-          if (_isNetworkError(e)) markOffline();
++          if (_isNetworkError(e)) {markOffline();break;}
++          final queue=_queue;
++          for(final q in queue){if('${q['id']}'=='${queued['id']}'){q['sync_error']=_friendlyError(e);q['sync_blocked']=true;q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();}}
++          _state['queue']=queue;
++          await _persist();
++          syncRevision.value++;
+           break;
+         }
+       }
+--- a/lib/v29_features.dart
++++ b/lib/v29_features.dart
+@@ -97,11 +97,13 @@
+   final asset=TextEditingController(),work=TextEditingController(),fuel=TextEditingController(),source=TextEditingController();
+   DateTime? start,end;
+   List<Map<String,dynamic>>? items;
++  List<Map<String,dynamic>> localPending=<Map<String,dynamic>>[];
+   bool busy=false;
+   String? error;
+ 
+-  @override void initState(){super.initState();load();}
+-  @override void dispose(){asset.dispose();work.dispose();fuel.dispose();source.dispose();super.dispose();}
++  @override void initState(){super.initState();offlineStore.pendingCount.addListener(_queueChanged);offlineStore.syncRevision.addListener(_queueChanged);load();}
++  void _queueChanged(){if(mounted)unawaited(load());}
++  @override void dispose(){offlineStore.pendingCount.removeListener(_queueChanged);offlineStore.syncRevision.removeListener(_queueChanged);asset.dispose();work.dispose();fuel.dispose();source.dispose();super.dispose();}
+   String? clean(TextEditingController c)=>c.text.trim().isEmpty?null:c.text.trim();
+   DateTime? dayStart(DateTime? d)=>d==null?null:DateTime(d.year,d.month,d.day);
+   DateTime? dayEnd(DateTime? d)=>d==null?null:DateTime(d.year,d.month,d.day).add(const Duration(days:1));
+@@ -113,12 +115,19 @@
+   }
+ 
+   Future<void> load() async {
+-    if(busy)return;setState((){busy=true;error=null;});
++    if(busy)return;
++    final local=offlineStore.pendingFuelingsForCurrentUser();
++    if(mounted)setState((){busy=true;error=null;localPending=local;});
+     try{
+-      final x=await api.myFuelingsV29(start:dayStart(start),end:dayEnd(end),asset:clean(asset),work:clean(work),fuelType:clean(fuel),source:clean(source));
+-      if(mounted)setState(()=>items=x);
+-    }catch(e){if(mounted)setState(()=>error=_friendlyError(e));}
+-    finally{if(mounted)setState(()=>busy=false);}
++      if(offlineStore.online.value){
++        final x=await api.myFuelingsV29(start:dayStart(start),end:dayEnd(end),asset:clean(asset),work:clean(work),fuelType:clean(fuel),source:clean(source));
++        if(mounted)setState(()=>items=[...local,...x]);
++      }else{
++        if(mounted)setState(()=>items=local);
++      }
++    }catch(e){
++      if(mounted)setState((){items=local;error=local.isEmpty?_friendlyError(e):null;});
++    }finally{if(mounted)setState(()=>busy=false);}
+   }
+ 
+   Future<void> clearFilters() async {asset.clear();work.clear();fuel.clear();source.clear();setState((){start=null;end=null;});await load();}
+@@ -141,6 +150,30 @@
+       ...list.map((x){
+         final assetText=x['asset_number']??x['third_party_plate']??'-';
+         final sourceText=x['source_tank']??x['source_tank_name']??'-';
++        final pending=x['offline_pending']==true;
++        final legacy=x['offline_legacy_owner']==true;
++        final syncError='${x['sync_error']??''}'.trim();
++        if(pending){
++          final status=legacy?'PENDENTE (OFFLINE) • confirme o usuário':syncError.isNotEmpty?'PENDENTE • falha ao sincronizar':'PENDENTE (OFFLINE)';
++          return Card(child:Padding(padding:const EdgeInsets.all(14),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
++            Row(children:[const CircleAvatar(child:Icon(Icons.cloud_off_rounded)),const SizedBox(width:12),Expanded(child:Text('Abastecimento • $assetText',style:const TextStyle(fontWeight:FontWeight.w900))),Text(status,style:const TextStyle(fontSize:11,fontWeight:FontWeight.w900,color:Colors.orange))]),
++            const SizedBox(height:10),Text('${_fmtDate(x['occurred_at']??x['created_at'])}\n${x['work']??'Sem obra'} • ${_fmtLiters(x['liters'])}\n${x['fuel_type']??'Combustível'} • Origem: $sourceText'),
++            if(_hasValue(x['location_address']))... [const SizedBox(height:6),Text('Localização: ${x['location_address']}')],
++            if(syncError.isNotEmpty)...[const SizedBox(height:8),Text(syncError,style:const TextStyle(color:Colors.redAccent,fontWeight:FontWeight.w700))],
++            const SizedBox(height:10),
++            OutlinedButton.icon(onPressed:busy?null:()async{
++              try{
++                if(legacy){
++                  final ok=await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Confirmar usuário'),content:const Text('Este registro foi criado em uma versão anterior. Confirme somente se este é o mesmo usuário que realizou o abastecimento.'),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Confirmar e sincronizar'))]))??false;
++                  if(!ok)return;
++                  await offlineStore.claimLegacyPending('${x['queue_id']}');
++                }
++                await offlineStore.retryPending();
++                await load();
++              }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(_friendlyError(e))));}
++            },icon:const Icon(Icons.sync_rounded),label:Text(legacy?'Confirmar e sincronizar':'Tentar sincronizar')),
++          ])));
++        }
+         return Card(child:ListTile(contentPadding:const EdgeInsets.all(14),leading:const CircleAvatar(child:Icon(Icons.local_gas_station_rounded)),title:Text('Abastecimento • $assetText',style:const TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('${_fmtDate(x['occurred_at']??x['created_at'])}\n${x['work']??'Sem obra'} • ${_fmtLiters(x['liters'])}\n${x['fuel_type']??'Combustível'} • Origem: $sourceText'),isThreeLine:true,trailing:const Icon(Icons.chevron_right_rounded),onTap:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>MovementDetailScreen(item:x)))));
+       }),
+       const SizedBox(height:24),

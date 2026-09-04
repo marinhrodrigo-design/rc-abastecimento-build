@@ -1,0 +1,47 @@
+           pendingCount.value = _pendingQueueCountV68();
+           syncRevision.value++;
+           await _persist();
++          await _refreshReferenceAfterSyncV69();
+         } catch (e) {
+           if (_isNetworkError(e)) {markOffline();break;}
+           final queue=_queue;
+-          for(final q in queue){if('${q['id']}'=='${queued['id']}'){q['sync_error']=_friendlyError(e);q['sync_blocked']=q['sync_conflict']==true;q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();}}
++          Map<String,dynamic>? uploaded;
++          for(final q in queue){if('${q['id']}'=='${queued['id']}'){uploaded=q['resolved_params'] is Map?_map(q['resolved_params']):null;q['sync_error']=_friendlyError(e);q['sync_blocked']=true;q['sync_conflict']=false;q['sync_status']='error';q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();q.remove('resolved_params');}}
++          if(uploaded!=null)await _cleanupUnlinkedRemoteEvidenceV69(uploaded,'${queued['id']}');
+           _state['queue']=queue;
+           pendingCount.value=_pendingQueueCountV68();
+           await _persist();
+           syncRevision.value++;
+-          break;
++          continue;
+         }
+       }
+       if (online.value && pendingCount.value == 0 && Supabase.instance.client.auth.currentUser != null) {
+@@ -1154,9 +1227,9 @@
+     if(_closingV38||profile==null)return;_closingV38=true;_sessionGuardV30?.cancel();
+     final id=offlineStore.appSessionIdV30;final tankId=offlineStore.lastTankId;final occurred=DateTime.now().toUtc();
+     try{
+-      if(offlineStore.online.value){if(id!=null)await api.logoutV30(id).timeout(const Duration(seconds:2));}
++      if(offlineStore.online.value){await Supabase.instance.client.rpc('rca_offline_logout_v62',params:{'p_session_id':id,'p_tank_id':tankId,'p_occurred_at':occurred.toIso8601String()}).timeout(const Duration(seconds:2));}
+       else{await offlineStore.queueOfflineLogoutV62(sessionId:id,tankId:tankId,occurredAt:occurred);}
+-    }catch(_){}
++    }catch(e){if(_isNetworkError(e)){try{offlineStore.markOffline();await offlineStore.queueOfflineLogoutV62(sessionId:id,tankId:tankId,occurredAt:occurred);}catch(_){}}}
+     try{await offlineStore.clearSessionMarkerV68();await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();}catch(_){}
+     try{await Supabase.instance.client.auth.signOut(scope:SignOutScope.local).timeout(const Duration(seconds:1));}catch(_){}
+   }
+@@ -1169,13 +1242,12 @@
+     if(offlineStore.appLoggedOutV62){if(mounted)setState(()=>loading=false);return;}
+     if(Supabase.instance.client.auth.currentSession==null){if(!offlineStore.online.value&&cached!=null){await offlineStore.cacheFuelingPermissionV68(cached['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=cached;loading=false;});}else if(mounted)setState(()=>loading=false);return;}
+     try{if(offlineStore.online.value){await offlineStore.reconcileAbandonedSessionV68();final claim=await _claimSessionV42(explicitLogin:false);if(claim['ok']!=true){await _forcedLocalLogoutV30('${claim['message']??'Sua sessão não está mais ativa. Entre novamente para continuar.'}');return;}}final p=await api.profile();offlineStore.markOnline();await offlineStore.cacheProfile(p);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);try{await api.referenceData();}catch(_){}await offlineStore.markAppLoggedInV62(Supabase.instance.client.auth.currentUser?.id);await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=p;loading=false;});_startSessionGuardV30();unawaited(offlineStore.syncPending(force:true));}
+-    catch(e){if(_isNetworkError(e)&&cached!=null){offlineStore.markOffline();if(mounted)setState((){profile=cached;loading=false;});}else{await _forcedLocalLogoutV30(_friendlyError(e));}}
++    catch(e){if(_isNetworkError(e)&&cached!=null){offlineStore.markOffline();await offlineStore.cacheFuelingPermissionV68(cached['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=cached;loading=false;});}else{await _forcedLocalLogoutV30(_friendlyError(e));}}
+   }
+   Future<void> _login(String username,String password) async {
+     setState((){loading=true;error=null;});
+     final client=Supabase.instance.client;
+     final normalized=username.trim().toLowerCase();
+-    final testUsername=normalized=='motorista'?'motorista1':normalized;
+     if(!offlineStore.online.value){
+       try{final p=await offlineStore.offlineLoginV62(normalized,password);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=p;loading=false;error=null;});return;}
+       catch(e){if(mounted)setState((){loading=false;error=_friendlyError(e);});return;}

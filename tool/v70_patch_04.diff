@@ -1,0 +1,77 @@
+       OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>identity=x);},child:Text(identity==null?'Foto da placa ou identificação *':'Foto da placa ou identificação ✓')),
+       OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>extra=x);},child:Text(extra==null?'4ª foto (opcional)':'4ª foto registrada ✓')),
+       OutlinedButton(onPressed:saving?null:()async{final x=await sign('Assinatura do responsável pelo recebimento');if(x!=null)setState(()=>rs=x);},child:Text(rs==null?'Assinatura do responsável pelo recebimento *':'Assinatura do responsável pelo recebimento ✓')),
+@@ -3038,7 +3065,6 @@
+   @override
+   void initState() {
+     super.initState();
+-    WidgetsBinding.instance.addPostFrameCallback((_) => loadLocation());
+   }
+ 
+   @override
+@@ -3058,6 +3084,14 @@
+ 
+   Future<XFile?> camera() => ImagePicker().pickImage(source: ImageSource.camera, imageQuality: 75, maxWidth: 1600);
+ 
++  Future<void> captureTotalizerBeforeLegacyV70() async {
++    if (busy || totalizerBeforePhoto != null) return;
++    final x = await camera();
++    if (x == null || !mounted) return;
++    setState(() => totalizerBeforePhoto = x);
++    await loadLocation();
++  }
++
+   Future<void> pickAsset() async {
+     final machines = _rows(widget.referenceData['machines']);
+     final search = TextEditingController();
+@@ -3381,6 +3415,33 @@
+     final works = _rows(widget.referenceData['works']);
+     final workRequired = widget.sourceTank['tank_type'] == 'comboio';
+     final who = '${Supabase.instance.client.auth.currentUser?.userMetadata?['display_name'] ?? 'Motorista'}';
++    if (totalizerBeforePhoto == null) {
++      return Scaffold(
++        appBar: AppBar(title: const Text('Novo abastecimento')),
++        body: SafeArea(
++          child: ListView(
++            padding: const EdgeInsets.fromLTRB(20, 28, 20, 28),
++            children: [
++              const Icon(Icons.photo_camera_back_rounded, size: 64, color: _blue),
++              const SizedBox(height: 18),
++              const Text('Foto obrigatória antes de iniciar', textAlign: TextAlign.center, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
++              const SizedBox(height: 10),
++              const Text('Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de origem. A foto ficará vinculada ao registro e ao PDF.', textAlign: TextAlign.center, style: TextStyle(height: 1.35, color: Colors.black54)),
++              const SizedBox(height: 20),
++              Card(child: ListTile(
++                leading: const Icon(Icons.local_gas_station_rounded),
++                title: Text('${widget.sourceTank['code']} • ${widget.sourceTank['name']}', style: const TextStyle(fontWeight: FontWeight.w900)),
++                subtitle: Text('Saldo: ${_fmtLiters(widget.sourceTank['current_balance_liters'])}'),
++              )),
++              const SizedBox(height: 22),
++              SizedBox(height: 54, child: FilledButton.icon(onPressed: busy ? null : captureTotalizerBeforeLegacyV70, icon: const Icon(Icons.camera_alt_rounded), label: const Text('Tirar foto do totalizador antes do abastecimento'))),
++              const SizedBox(height: 10),
++              TextButton(onPressed: busy ? null : () => Navigator.maybePop(context), child: const Text('Cancelar')),
++            ],
++          ),
++        ),
++      );
++    }
+     return Scaffold(
+       appBar: AppBar(title: const Text('Novo abastecimento')),
+       body: Form(
+@@ -3392,6 +3453,12 @@
+               title: Text('${widget.sourceTank['code']} • ${widget.sourceTank['name']}', style: const TextStyle(fontWeight: FontWeight.w900)),
+               subtitle: Text('Saldo: ${_fmtLiters(widget.sourceTank['current_balance_liters'])}'),
+             )),
++            const SizedBox(height: 10),
++            const Card(child: ListTile(
++              leading: Icon(Icons.verified_rounded, color: Colors.green),
++              title: Text('Totalizador antes do abastecimento registrado ✓', style: TextStyle(fontWeight: FontWeight.w900)),
++              subtitle: Text('Foto capturada antes do início. Ela será preservada no registro e no PDF.'),
++            )),
+             const SizedBox(height: 12),
+             DropdownButtonFormField<int>(
+               value: workId,
+@@ -3522,7 +3589,7 @@
+               const SizedBox(height: 10),
+               photoButton('KM / horímetro antes', kmBeforePhoto, (x) => kmBeforePhoto = x, required: true),
+               const SizedBox(height: 8),

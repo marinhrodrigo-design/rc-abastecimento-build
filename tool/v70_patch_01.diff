@@ -1,0 +1,51 @@
+-  }) async => _map(await client.rpc('rca_general_records_v28',params:{
++  }) async => _map(await client.rpc('rca_general_records_v70',params:{
+     'p_start':start?.toUtc().toIso8601String(),'p_end':end?.toUtc().toIso8601String(),'p_work_id':workId,
+     'p_asset_query':asset,'p_plate':plate,'p_operator':operatorName,'p_type':type,'p_query':query,
+     'p_source_code':sourceCode,'p_invoice':invoice,'p_responsible':responsible,'p_company_id':companyId,
+@@ -1200,8 +1203,12 @@
+ 
+   Future<Uint8List?> downloadMedia(String? path) async {
+     if (path == null || path.trim().isEmpty) return null;
++    final value=path.trim();
++    if(value.startsWith('offline://')){
++      try{final file=File(value.substring('offline://'.length));return await file.exists()?await file.readAsBytes():null;}catch(_){return null;}
++    }
+     try {
+-      return await client.storage.from('fuel-evidence').download(path);
++      return await client.storage.from('fuel-evidence').download(value);
+     } catch (_) {
+       return null;
+     }
+@@ -1590,7 +1597,7 @@
+                 const SizedBox(height: 10),
+                 const Align(
+                   alignment: Alignment.centerRight,
+-                  child: Text('v69', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
++                  child: Text('v70', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
+                 ),
+               ],
+             ),
+@@ -2272,9 +2279,14 @@
+   @override
+   void initState(){
+     super.initState();
+-    WidgetsBinding.instance.addPostFrameCallback((_){
+-      if(mounted)unawaited(attemptLocationV52(automatic:true));
+-    });
++  }
++
++  Future<void> captureTotalizerBeforeV70() async {
++    if(saving)return;
++    final x=await cam();
++    if(x==null||!mounted)return;
++    setState(()=>totalizer=x);
++    WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(attemptLocationV52(automatic:true));});
+   }
+ 
+   bool get financial=>true;
+@@ -2454,7 +2466,7 @@
+     if(st!=null)targets.add(_plateDescriptionLabel(st['plate'],st['description']));
+     if(st==null&&thirdPlate.text.trim().isNotEmpty)targets.add('${thirdPlate.text.trim()} • ${thirdDescription.text.trim()}');
+     return await showDialog<bool>(context:context,builder:(ctx)=>AlertDialog(title:const Text('Confirmar abastecimento?'),content:SingleChildScrollView(child:Column(mainAxisSize:MainAxisSize.min,crossAxisAlignment:CrossAxisAlignment.start,children:[
+-      Text('Origem: ${widget.source['code']} • ${widget.source['name']}',style:const TextStyle(fontWeight:FontWeight.w700)),const SizedBox(height:8),Text('Ativo/equipamento: ${targets.join(' + ')}'),const SizedBox(height:8),Text('Combustível: $fuel'),Text('Volume: ${_fmtLiters(v)}'),Text('Preço por litro: ${_fmtMoney(_num(sale.text.replaceAll(',', '.')))}'),Text('Valor total: ${_fmtMoney(v*_num(sale.text.replaceAll(',', '.')))}',style:const TextStyle(fontWeight:FontWeight.w700)),if(k!=null)Text('KM: ${k.toStringAsFixed(k.truncateToDouble()==k?0:1)}'),if(h!=null)Text('Horímetro: ${h.toStringAsFixed(h.truncateToDouble()==h?0:1)}'),Text('Responsável pelo recebimento do abastecimento: ${receiver.text.trim()}'),if(observation.text.trim().isNotEmpty)Text('Observação: ${observation.text.trim()}'),const SizedBox(height:8),Text('Endereço do abastecimento: ${location.text.trim()}',style:const TextStyle(fontWeight:FontWeight.w700)),Text(manualLocationV44?'Localização informada manualmente':'Localização obtida automaticamente',style:const TextStyle(fontSize:12,color:Colors.black54)),if(capturedPosition!=null)Text('Coordenadas: ${capturedPosition!.latitude.toStringAsFixed(6)}, ${capturedPosition!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12,color:Colors.black54)),if(capturedPosition!=null)Text(locationMeta(),style:const TextStyle(fontSize:12,color:Colors.black54)),const SizedBox(height:10),const Text('Confira os dados antes de confirmar. Depois da confirmação o registro será processado.')

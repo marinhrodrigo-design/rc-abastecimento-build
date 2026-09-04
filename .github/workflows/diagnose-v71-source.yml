@@ -30,13 +30,14 @@ jobs:
           gh run download 33916946810 -n RC-Abastecimento-v70-approved-source -D /tmp/v70src
           cp -r /tmp/v70src/app/lib app/lib
           cp /tmp/v70src/app/pubspec.yaml app/pubspec.yaml
-      - name: Apply exact v71 patches
+      - name: Apply exact v71 patches sequentially
         run: |
-          cat tool/v71_patch_[0-9][0-9].diff > /tmp/v71.patch
           cd app
-          patch -p0 --dry-run --forward --batch < /tmp/v71.patch
-          patch -p0 --forward --batch < /tmp/v71.patch
-          echo '--- Placa imediatamente após patch ---'
+          for patch_file in ../tool/v71_patch_[0-9][0-9].diff; do
+            echo "Applying $patch_file"
+            patch -p0 --forward --batch < "$patch_file"
+          done
+          echo '--- Placa imediatamente após patches ---'
           grep -n "Placa:" lib/main_online.dart || true
       - name: Dependencies and Dart fixes
         working-directory: app
@@ -64,9 +65,20 @@ jobs:
               raise SystemExit('FALHA: ainda existe renderização Placa: - para ativo sem placa')
           print('plate_fix_ok=True')
           PY
-      - name: Analyze source without building APK
+      - name: Mirror release analyzer prerequisites
         working-directory: app
-        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+        run: |
+          mkdir -p assets
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+      - name: Analyze source with release quality gate
+        working-directory: app
+        run: |
+          set -o pipefail
+          flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings 2>&1 | tee /tmp/flutter-analyze-v71.txt
+          if grep -q "use_build_context_synchronously" /tmp/flutter-analyze-v71.txt; then
+            echo 'ERRO: uso de BuildContext após async ainda precisa ser corrigido.'
+            exit 1
+          fi
       - name: Upload diagnostic source
         uses: actions/upload-artifact@v4
         with:

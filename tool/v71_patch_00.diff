@@ -1,0 +1,148 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -385,7 +385,7 @@
+         'receiver':params['p_receiver_name'],'operator':profile['display_name']??profile['name']??profile['username']??'Usuário offline','notes':params['p_notes'],
+         'location_address':params['p_location_address'],'latitude':params['p_latitude'],'longitude':params['p_longitude'],'location_captured_at':params['p_location_captured_at'],'location_accuracy_m':params['p_location_accuracy_m'],
+         'sale_price_per_liter':price>0?price:null,'total_value':price>0?price*litersValue:null,
+-        'meter_photo_path':params['p_meter_photo_path'],'totalizer_evidence_photo_path':totalizerBefore,'totalizer_photo_before_path':totalizerBefore,
++        'meter_photo_path':params['p_meter_photo_path'],'totalizer_evidence_photo_path':totalizerBefore,'totalizer_photo_before_path':totalizerBefore,'totalizer_photo_before_captured_at':params['p_totalizer_before_captured_at'],
+         'identity_evidence_photo_path':params['p_identity_photo_path'],'identity_evidence_kind':params['p_identity_evidence_kind'],'extra_evidence_photo_path':params['p_extra_photo_path'],
+         'receiver_signature_path':params['p_receiver_signature_path'],'operator_signature_path':params['p_operator_signature_path'],
+         'photo_paths':[params['p_meter_photo_path'],totalizerBefore,params['p_identity_photo_path'],params['p_extra_photo_path']].where((v)=>_hasValue(v)).toList(),
+@@ -678,7 +678,7 @@
+         try {
+           final original = _map(queued['params']);
+           final rpc='${queued['rpc']}';
+-          final isOfflineV68=_fuelingRpc(rpc)&&original['p_is_offline']==true&&rpc=='rca_record_fueling_v68';
++          final isOfflineV68=_fuelingRpc(rpc)&&original['p_is_offline']==true&&(rpc=='rca_record_fueling_v68'||rpc=='rca_record_fueling_v71');
+           if(_fuelingRpc(rpc)&&!isOfflineV68){
+             final tankId=_intOrNull(original['p_source_tank_id']);
+             if(tankId!=null){
+@@ -922,7 +922,7 @@
+   }));
+   Future<Map<String,dynamic>> refineryToTeV22({required int truckTankId,required int teTankId,int? lotId,required double liters,String? notes}) async => _map(await client.rpc('rca_record_refinery_to_te_v22',params:{'p_truck_tank_id':truckTankId,'p_te_tank_id':teTankId,'p_lot_id':lotId,'p_liters':liters,'p_notes':notes}));
+   Future<Map<String,dynamic>> transferV22({required int sourceTankId,required int destinationTankId,required double liters,required String donor,required String receiver,required String donorSignature,required String receiverSignature,int? lotId,String? notes}) async => _map(await client.rpc('rca_record_transfer_v22',params:{'p_source_tank_id':sourceTankId,'p_destination_tank_id':destinationTankId,'p_liters':liters,'p_donor_responsible':donor,'p_receiver_responsible':receiver,'p_donor_signature_path':donorSignature,'p_receiver_signature_path':receiverSignature,'p_lot_id':lotId,'p_notes':notes}));
+-  Future<Map<String,dynamic>> fuelingV22({required int sourceTankId,int? workId,int? machineId,int? thirdId,String? thirdPartyPlate,String? thirdPartyDescription,required double liters,double? km,double? hourmeter,String? responsible,required String receiver,required String receiverSignature,required String operatorSignature,String? meterPhoto,required String totalizerPhoto,required String identityPhoto,required String identityKind,String? extraPhoto,required double salePrice,String? notes,required String fuelType,required String location,double? latitude,double? longitude,DateTime? locationCapturedAt,double? locationAccuracyM,required DateTime occurredAt}) async => offlineStore.executeOrQueue('rca_record_fueling_v68',{'p_source_tank_id':sourceTankId,'p_work_id':workId,'p_machine_id':machineId,'p_third_party_vehicle_id':thirdId,'p_third_party_plate':thirdPartyPlate,'p_third_party_company':null,'p_third_party_description':thirdPartyDescription,'p_liters':liters,'p_km_value':km,'p_hourmeter_value':hourmeter,'p_responsible_name':responsible,'p_receiver_name':receiver,'p_receiver_company':null,'p_receiver_signature_path':receiverSignature,'p_operator_signature_path':operatorSignature,'p_meter_photo_path':meterPhoto,'p_totalizer_photo_path':totalizerPhoto,'p_identity_photo_path':identityPhoto,'p_identity_evidence_kind':identityKind,'p_extra_photo_path':extraPhoto,'p_sale_price_per_liter':salePrice,'p_notes':notes,'p_lubricated':false,'p_latitude':latitude,'p_longitude':longitude,'p_fuel_type':fuelType,'p_location_address':location,'p_location_captured_at':locationCapturedAt?.toUtc().toIso8601String(),'p_location_accuracy_m':locationAccuracyM,'p_occurred_at':occurredAt.toUtc().toIso8601String(),'p_offline_event_id':null,'p_is_offline':false});
++  Future<Map<String,dynamic>> fuelingV71({required int sourceTankId,int? workId,int? machineId,int? thirdId,String? thirdPartyPlate,String? thirdPartyDescription,required double liters,double? km,double? hourmeter,String? responsible,required String receiver,required String receiverSignature,required String operatorSignature,String? meterPhoto,required String totalizerPhoto,required DateTime totalizerBeforeCapturedAt,required String identityPhoto,required String identityKind,String? extraPhoto,required double salePrice,String? notes,required String fuelType,required String location,double? latitude,double? longitude,DateTime? locationCapturedAt,double? locationAccuracyM,required DateTime occurredAt}) async => offlineStore.executeOrQueue('rca_record_fueling_v71',{'p_source_tank_id':sourceTankId,'p_work_id':workId,'p_machine_id':machineId,'p_third_party_vehicle_id':thirdId,'p_third_party_plate':thirdPartyPlate,'p_third_party_company':null,'p_third_party_description':thirdPartyDescription,'p_liters':liters,'p_km_value':km,'p_hourmeter_value':hourmeter,'p_responsible_name':responsible,'p_receiver_name':receiver,'p_receiver_company':null,'p_receiver_signature_path':receiverSignature,'p_operator_signature_path':operatorSignature,'p_meter_photo_path':meterPhoto,'p_totalizer_photo_path':totalizerPhoto,'p_identity_photo_path':identityPhoto,'p_identity_evidence_kind':identityKind,'p_extra_photo_path':extraPhoto,'p_sale_price_per_liter':salePrice,'p_notes':notes,'p_lubricated':false,'p_latitude':latitude,'p_longitude':longitude,'p_fuel_type':fuelType,'p_location_address':location,'p_location_captured_at':locationCapturedAt?.toUtc().toIso8601String(),'p_location_accuracy_m':locationAccuracyM,'p_totalizer_before_captured_at':totalizerBeforeCapturedAt.toUtc().toIso8601String(),'p_occurred_at':occurredAt.toUtc().toIso8601String(),'p_offline_event_id':null,'p_is_offline':false});
+   Future<Map<String,dynamic>> pdfSaleV41(int movementId) async => _map(await client.rpc('rca_pdf_sale_v41',params:{'p_movement_id':movementId}));
+   Future<Map<String,dynamic>> dashboardV22() async => _map(await client.rpc('rca_fuel_dashboard_v22',params:{'p_days':7}));
+   Future<Map<String,dynamic>> dailyFuelV22(DateTime d) async {final day='${d.year.toString().padLeft(4,'0')}-${d.month.toString().padLeft(2,'0')}-${d.day.toString().padLeft(2,'0')}';return _map(await client.rpc('rca_daily_fuel_report_v22',params:{'p_date':day}));}
+@@ -944,7 +944,7 @@
+   Future<Map<String,dynamic>> generalRecordsV28({
+     DateTime? start,DateTime? end,int? workId,String? asset,String? plate,String? operatorName,String? type,
+     String? query,String? sourceCode,String? invoice,String? responsible,int? companyId,String? fuelType,int limit=500,
+-  }) async => _map(await client.rpc('rca_general_records_v70',params:{
++  }) async => _map(await client.rpc('rca_general_records_v71',params:{
+     'p_start':start?.toUtc().toIso8601String(),'p_end':end?.toUtc().toIso8601String(),'p_work_id':workId,
+     'p_asset_query':asset,'p_plate':plate,'p_operator':operatorName,'p_type':type,'p_query':query,
+     'p_source_code':sourceCode,'p_invoice':invoice,'p_responsible':responsible,'p_company_id':companyId,
+@@ -1597,7 +1597,7 @@
+                 const SizedBox(height: 10),
+                 const Align(
+                   alignment: Alignment.centerRight,
+-                  child: Text('v70', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
++                  child: Text('v71', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
+                 ),
+               ],
+             ),
+@@ -2268,6 +2268,7 @@
+   Uint8List? rs,os;
+   Position? capturedPosition;
+   DateTime? locationCapturedAt;
++  DateTime? totalizerBeforeCapturedAtV71;
+   double? locationAccuracyM;
+   bool manualLocationV44=false;
+   bool autoLocationAttemptedV44=false;
+@@ -2285,7 +2286,7 @@
+     if(saving)return;
+     final x=await cam();
+     if(x==null||!mounted)return;
+-    setState(()=>totalizer=x);
++    setState((){totalizer=x;totalizerBeforeCapturedAtV71=DateTime.now().toUtc();});
+     WidgetsBinding.instance.addPostFrameCallback((_){if(mounted)unawaited(attemptLocationV52(automatic:true));});
+   }
+ 
+@@ -2486,7 +2487,7 @@
+     if(manualThird){k=double.tryParse(km.text.trim().replaceAll(',','.'));h=double.tryParse(hour.text.trim().replaceAll(',','.'));if(k!=null&&k<0){requiredMessage('KM');return;}if(h!=null&&h<0){requiredMessage('Horímetro');return;}if(k==null&&h==null){requiredMessage('KM ou Horímetro');return;}}else{if(kinds.contains('km')){k=double.tryParse(km.text.trim().replaceAll(',','.'));if(k==null||k<0){requiredMessage('KM');return;}}if(kinds.contains('hour')){h=double.tryParse(hour.text.trim().replaceAll(',','.'));if(h==null||h<0){requiredMessage('Horímetro');return;}}}
+     if(receiver.text.trim().isEmpty){requiredMessage('Responsável pelo recebimento do abastecimento');return;}
+     if((kinds.isNotEmpty||manualThird)&&meter==null){requiredMessage(kinds.length>1?'Foto de KM/Horímetro':kinds.contains('km')?'Foto do KM':kinds.contains('hour')?'Foto do Horímetro':'Foto de KM/Horímetro');return;}
+-    if(totalizer==null){requiredMessage('Foto do totalizador antes do abastecimento');return;}
++    if(totalizer==null||totalizerBeforeCapturedAtV71==null){requiredMessage('Foto do totalizador antes do abastecimento');return;}
+     if(identity==null){requiredMessage('Foto da placa ou identificação');return;}
+     if(rs==null){requiredMessage('Assinatura de quem recebeu');return;}
+     if(os==null){requiredMessage('Assinatura de quem abasteceu');return;}
+@@ -2521,7 +2522,7 @@
+       final u=await Future.wait<String?>([meter==null?Future<String?>.value(null):up(meter!,'km_horimetro'),up(totalizer!,'totalizador_antes'),up(identity!,'placa_identificacao'),extra==null?Future<String?>.value(null):up(extra!,'abastecimento_extra'),api.uploadBytes(rs!,'assinatura_recebedor'),api.uploadBytes(os!,'assinatura_abastecedor')]);
+       if(!mounted)return;setState(()=>savingStep='Finalizando abastecimento...');
+       final manualThird=machine==null&&third==-1;
+-      final r=await api.fuelingV22(sourceTankId:_intOrNull(widget.source['id'])!,workId:work,machineId:machine,thirdId:manualThird?null:third,thirdPartyPlate:manualThird?thirdPlate.text.trim():null,thirdPartyDescription:manualThird&&thirdDescription.text.trim().isNotEmpty?thirdDescription.text.trim():null,liters:v,km:k,hourmeter:h,responsible:null,receiver:receiver.text.trim(),receiverSignature:u[4]!,operatorSignature:u[5]!,meterPhoto:u[0],totalizerPhoto:u[1]!,identityPhoto:u[2]!,identityKind:(hasPlate||manualThird)?'plate':'side',extraPhoto:u[3],salePrice:saleValue,notes:observation.text.trim().isEmpty?null:observation.text.trim(),fuelType:fuel,location:location.text.trim(),latitude:capturedPosition?.latitude,longitude:capturedPosition?.longitude,locationCapturedAt:locationCapturedAt,locationAccuracyM:locationAccuracyM,occurredAt:occurredAt);
++      final r=await api.fuelingV71(sourceTankId:_intOrNull(widget.source['id'])!,workId:work,machineId:machine,thirdId:manualThird?null:third,thirdPartyPlate:manualThird?thirdPlate.text.trim():null,thirdPartyDescription:manualThird&&thirdDescription.text.trim().isNotEmpty?thirdDescription.text.trim():null,liters:v,km:k,hourmeter:h,responsible:null,receiver:receiver.text.trim(),receiverSignature:u[4]!,operatorSignature:u[5]!,meterPhoto:u[0],totalizerPhoto:u[1]!,totalizerBeforeCapturedAt:totalizerBeforeCapturedAtV71!,identityPhoto:u[2]!,identityKind:(hasPlate||manualThird)?'plate':'side',extraPhoto:u[3],salePrice:saleValue,notes:observation.text.trim().isEmpty?null:observation.text.trim(),fuelType:fuel,location:location.text.trim(),latitude:capturedPosition?.latitude,longitude:capturedPosition?.longitude,locationCapturedAt:locationCapturedAt,locationAccuracyM:locationAccuracyM,occurredAt:occurredAt);
+       if(!mounted)return;ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text(r['queued']==true?'Abastecimento salvo no aparelho ✓. Aguardando sincronização.':'Abastecimento registrado com sucesso ✓')));Navigator.pop(context,true);
+     }catch(e){if(mounted)ScaffoldMessenger.of(context).showSnackBar(SnackBar(content:Text('Erro ao registrar abastecimento: ${_friendlyError(e)}')));}
+     finally{if(mounted)setState((){saving=false;savingStep='Concluir abastecimento';});}
+@@ -4242,6 +4243,7 @@
+   Future<void> _transfer() async {if(!_requireOnlineV69()||ref==null)return;final t=await _operationUnit(const {'comboio','truck'},'Transferir','Selecione a unidade doadora.');if(!mounted||t==null||ref==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>TransferV23Screen(source:t,ref:ref!,profile:widget.profile)));if(mounted)refresh();}
+   Future<void> _receipt() async {if(!_requireOnlineV69()||ref==null)return;final t=await _operationUnit(const {'truck'},'Recebimento de combustível / NF','Selecione o caminhão-tanque que receberá a carga.');if(!mounted||t==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>RefineryLoadV23Screen(truck:t)));if(mounted)refresh();}
+   void open(Widget page){if(!_requireOnlineV69())return;Navigator.push(context,MaterialPageRoute(builder:(_)=>page));}
++  void openRecordsV71(Widget page){Navigator.push(context,MaterialPageRoute(builder:(_)=>page));}
+   Widget quick(IconData icon,String title,String subtitle,VoidCallback onTap)=>Card(margin:EdgeInsets.zero,child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(12),child:Padding(padding:const EdgeInsets.symmetric(horizontal:7,vertical:11),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,color:_blue,size:29),const SizedBox(height:7),Text(title,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:12.2))]))));
+   @override Widget build(BuildContext context){
+     final tanks=_sortedFuelUnits(ref?['tanks']);final isAdmin=widget.profile['is_admin']==true;final isManager=widget.profile['is_manager']==true;final isSupervisor=widget.profile['is_supervisor']==true;
+@@ -4250,8 +4252,8 @@
+       quick(Icons.local_gas_station_rounded,'Novo abastecimento','Registrar abastecimento',_fueling),
+       quick(Icons.swap_horiz_rounded,'Transferir','Registrar transferência',_transfer),
+       quick(Icons.receipt_long_rounded,'Recebimento (NF)','Registrar entrada',_receipt),
+-      quick(Icons.today_rounded,'Registro Diário','Movimentações do dia',()=>open(const DailyRecordsV28Screen())),
+-      quick(Icons.manage_search_rounded,'Registro Geral','Histórico e pesquisa',()=>open(const GeneralRecordsV28Screen())),
++      quick(Icons.today_rounded,'Registro Diário','Movimentações do dia',()=>openRecordsV71(const DailyRecordsV28Screen())),
++      quick(Icons.manage_search_rounded,'Registro Geral','Histórico e pesquisa',()=>openRecordsV71(const GeneralRecordsV28Screen())),
+       if(isAdmin||isManager)quick(Icons.folder_copy_outlined,'Relatórios','PDFs e obras',()=>open(const GeneratedReportsV23Screen())),
+       quick(Icons.location_city_outlined,'Obras','Gestão completa',()=>open(WorksAdminScreen(profile:widget.profile))),
+       if(isAdmin)quick(Icons.business_outlined,'Empresas','Clientes, locadoras e fornecedores',()=>open(const CompaniesAdminScreen())),
+@@ -4501,6 +4503,7 @@
+       if (fueling) _RecordDetailData(Icons.location_on_outlined, 'Localização', location),
+       if (fueling) _RecordDetailData(Icons.water_drop_outlined, 'Combustível', fuel),
+       if (item['liters'] != null) _RecordDetailData(Icons.water_drop_outlined, 'Abastecimento/Lubrificação', _fmtLiters(item['liters'])),
+       if (fueling) _RecordDetailData(Icons.speed_outlined, 'KM / horímetro', item['km_unavailable'] == true ? 'Indisponível' : '${item['km_hourmeter'] ?? '-'}'),
++      if (fueling && _hasValue(item['totalizer_photo_before_captured_at'])) _RecordDetailData(Icons.photo_camera_outlined, 'Foto do totalizador antes', _fmtDate(item['totalizer_photo_before_captured_at'])),
+       if (_hasValue(item['receiver'])) _RecordDetailData(Icons.person_outline_rounded, 'Recebedor', '${item['receiver']}'),
+       if (_hasValue(item['operator'])) _RecordDetailData(Icons.person_outline_rounded, 'Quem abasteceu', '${item['operator']}'),
+       if (_hasValue(source) && item['source_balance_before'] != null) _RecordDetailData(Icons.storage_outlined, 'Estoque do $source antes', _fmtLiters(item['source_balance_before'])),
+@@ -4971,7 +4974,7 @@
+       }
+       if (fueling) {
+         addEvidence('Foto do KM ou Horímetro', x['meter_photo_path']);
+-        addEvidence('Totalizador antes do abastecimento', x['totalizer_photo_before_path'] ?? x['totalizer_evidence_photo_path']);
++        addEvidence(_hasValue(x['totalizer_photo_before_captured_at'])?'Totalizador antes do abastecimento • ${_fmtDate(x['totalizer_photo_before_captured_at'])}':'Totalizador antes do abastecimento', x['totalizer_photo_before_path'] ?? x['totalizer_evidence_photo_path']);
+         addEvidence('Totalizador depois', x['totalizer_photo_after_path']);
+         addEvidence('Foto da placa ou identificação', x['identity_evidence_photo_path']);
+         addEvidence('4ª foto (opcional)', x['extra_evidence_photo_path']);
+@@ -5843,7 +5846,7 @@
+           ]))),
+           if(_rows(data?['own_assets']).isNotEmpty)Card(child:ExpansionTile(
+             title:const Text('Equipamentos próprios',style:TextStyle(fontWeight:FontWeight.w900)),
+-            children:_rows(data?['own_assets']).map((x)=>ListTile(title:Text('${x['asset_number']} • ${x['model']??''}'),subtitle:Text('Placa: ${x['plate']??'-'}'),trailing:Text(_fmtLiters(x['liters'])))).toList(),
++            children:_rows(data?['own_assets']).map((x)=>ListTile(title:Text('${x['asset_number']} • ${x['model']??''}'),subtitle:_hasValue(x['plate'])?Text('Placa: ${x['plate']}'):null,trailing:Text(_fmtLiters(x['liters'])))).toList(),
+           )),
+           if(_rows(data?['third_assets']).isNotEmpty)Card(child:ExpansionTile(
+             title:const Text('Equipamentos de terceiros',style:TextStyle(fontWeight:FontWeight.w900)),
+@@ -5984,7 +5987,7 @@
+   Widget build(BuildContext context) {
+     final q = filter.text.trim().toLowerCase();
+     final shown = (items ?? []).where((x) => q.isEmpty || '${x['numeroAtivo']} ${x['modelo']} ${x['placa']}'.toLowerCase().contains(q)).toList();
+-    return Scaffold(appBar: AppBar(title: const Text('Ativos próprios')), floatingActionButton: FloatingActionButton(onPressed: () => edit(), child: const Icon(Icons.add)), body: items == null ? const Center(child: CircularProgressIndicator()) : Column(children: [Padding(padding: const EdgeInsets.all(12), child: TextField(controller: filter, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Pesquisar ativo ou placa', prefixIcon: Icon(Icons.search)))), Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 0, 12, 80), itemCount: shown.length, itemBuilder: (_, i) { final x = shown[i]; return Card(child: ListTile(title: Text('${x['numeroAtivo']} • ${x['modelo'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Placa: ${x['placa'] ?? '-'} • Medição: ${_measurementTypeLabel(x['measurement_type'])} • Tanque: ${x['fuel_tank_capacity_liters']==null?'-':_fmtLiters(x['fuel_tank_capacity_liters'])} • ${x['localizacao'] ?? ''}'), onTap: () => edit(x), trailing: PopupMenuButton<String>(onSelected:(v){if(v=='edit')edit(x);if(v=='delete')removeMachine(x);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Editar')),PopupMenuItem(value:'delete',child:Text('Excluir',style:TextStyle(color:Colors.red))) ]))); }))]));
++    return Scaffold(appBar: AppBar(title: const Text('Ativos próprios')), floatingActionButton: FloatingActionButton(onPressed: () => edit(), child: const Icon(Icons.add)), body: items == null ? const Center(child: CircularProgressIndicator()) : Column(children: [Padding(padding: const EdgeInsets.all(12), child: TextField(controller: filter, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Pesquisar ativo ou placa', prefixIcon: Icon(Icons.search)))), Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 0, 12, 80), itemCount: shown.length, itemBuilder: (_, i) { final x = shown[i]; return Card(child: ListTile(title: Text('${x['numeroAtivo']} • ${x['modelo'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text([if(_hasValue(x['placa']))'Placa: ${x['placa']}','Medição: ${_measurementTypeLabel(x['measurement_type'])}','Tanque: ${x['fuel_tank_capacity_liters']==null?'-':_fmtLiters(x['fuel_tank_capacity_liters'])}',if(_hasValue(x['localizacao']))'${x['localizacao']}'].join(' • ')), onTap: () => edit(x), trailing: PopupMenuButton<String>(onSelected:(v){if(v=='edit')edit(x);if(v=='delete')removeMachine(x);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Editar')),PopupMenuItem(value:'delete',child:Text('Excluir',style:TextStyle(color:Colors.red))) ]))); }))]));
+   }
+ }
+ 
+--- lib/v29_features.dart
++++ lib/v29_features.dart
+@@ -1,7 +1,7 @@
+ part of 'main_online.dart';
+ 
+ extension FuelApiV29 on FuelApi {
+-  Future<List<Map<String, dynamic>>> myFuelingsV29({DateTime? start,DateTime? end,String? asset,String? work,String? fuelType,String? source}) async => _rows(await client.rpc('rca_my_fuelings_v70', params: {'p_start': start?.toUtc().toIso8601String(),'p_end': end?.toUtc().toIso8601String(),'p_asset_query': asset,'p_work_query': work,'p_fuel_type': fuelType,'p_source_code': source}));
++  Future<List<Map<String, dynamic>>> myFuelingsV29({DateTime? start,DateTime? end,String? asset,String? work,String? fuelType,String? source}) async => _rows(await client.rpc('rca_my_fuelings_v71', params: {'p_start': start?.toUtc().toIso8601String(),'p_end': end?.toUtc().toIso8601String(),'p_asset_query': asset,'p_work_query': work,'p_fuel_type': fuelType,'p_source_code': source}));
+   Future<bool> hasPermissionV29(String key) async => (await client.rpc('rca_has_permission', params: {'p_key': key})) == true;
+   Future<List<Map<String, dynamic>>> adminUsersV29() async => _rows(await client.rpc('rca_admin_list_users_v29'));
+   Future<Map<String, dynamic>> adminPermissionCatalogV29() async => _map(await client.rpc('rca_admin_permission_catalog_v29'));

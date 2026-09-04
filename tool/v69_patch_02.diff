@@ -1,0 +1,89 @@
+-    void change(int? id, double delta) {
+-      for (final t in tanks) {
+-        if (_intOrNull(t['id']) == id) {
+-          final next = _num(t['current_balance_liters']) + delta;
+-          t['current_balance_liters'] = next < 0 ? 0.0 : next;
+-          return;
+-        }
+-      }
+-    }
+-    final liters = _num(params['p_liters']);
+-    if ((rpc == 'rca_record_fueling' || rpc == 'rca_record_fueling_v14' || rpc == 'rca_record_fueling_v22' || rpc == 'rca_record_fueling_v30' || rpc == 'rca_record_fueling_v32' || rpc == 'rca_record_fueling_v33' || rpc == 'rca_record_fueling_v56' || rpc == 'rca_record_fueling_v58' || rpc == 'rca_record_fueling_v68')) {
+-      final tankId = _intOrNull(params['p_source_tank_id']);
+-      change(tankId, -liters);
+-      for (final t in tanks) {
+-        if (_intOrNull(t['id']) == tankId) {
+-          t['accounting_meter'] = _num(t['accounting_meter']) + liters;
+-          break;
+-        }
+-      }
+-    }
+-    if (rpc == 'rca_record_refinery_entry') change(_intOrNull(params['p_tank_id']), liters);
+-    if (rpc == 'rca_record_transfer') {
+-      change(_intOrNull(params['p_source_tank_id']), -liters);
+-      change(_intOrNull(params['p_destination_tank_id']), liters);
+-    }
+-    ref['tanks'] = tanks;
+-    _state['reference_data'] = ref;
+-  }
+ 
+   Future<Map<String, dynamic>> executeOrQueue(String rpc, Map<String, dynamic> params) async {
+     if (!online.value || _containsLocal(params)) return _queueAndResult(rpc, params);
+@@ -512,7 +563,14 @@
+ 
+   Future<Map<String, dynamic>> _queueAndResult(String rpc, Map<String, dynamic> params) async {
+     if(_fuelingRpc(rpc)){
++      if(!hasCachedCanFuelV68||!cachedCanFuelV68)throw Exception('Seu acesso para registrar abastecimentos offline não está autorizado. Conecte-se à internet para atualizar as permissões.');
+       params=Map<String,dynamic>.from(params);
++      final liters=_num(params['p_liters']);final price=_num(params['p_sale_price_per_liter']);final tankId=_intOrNull(params['p_source_tank_id']);
++      if(liters<=0)throw Exception('Preenchimento obrigatório: Quantidade (L)');
++      if(price<=0)throw Exception('Preenchimento obrigatório: Preço por litro');
++      if(tankId==null)throw Exception('Unidade de abastecimento inválida.');
++      for(final q in _queue){if(q['sync_conflict']==true&&q['sync_rejected']!=true&&_intOrNull(_map(q['params'])['p_source_tank_id'])==tankId)throw Exception('Existe um abastecimento desta unidade em CONFLITO • AGUARDANDO ANÁLISE. Resolva o conflito antes de registrar outro abastecimento offline.');}
++      final available=_balance(tankId);if(liters>available+0.000001)throw Exception('Saldo insuficiente para abastecimento offline. Disponível: ${_fmtLiters(available)}.');
+       params['p_is_offline']=true;
+       params['p_offline_event_id']??=_newOfflineEventIdV58();
+     }
+@@ -525,7 +583,6 @@
+       'user_id': activeUserIdV62,
+     });
+     _state['queue'] = queue;
+-    _applyLocalBalance(rpc, params);
+     pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+ 
+@@ -588,6 +645,17 @@
+     }
+   }
+ 
++  Future<void> _cleanupUnlinkedRemoteEvidenceV69(dynamic value,String queueId) async {
++    final uid=Supabase.instance.client.auth.currentUser?.id;if(uid==null)return;final paths=<String>[];
++    void collect(dynamic v){if(v is String&&v.startsWith('$uid/offline_${queueId}_'))paths.add(v);else if(v is List){for(final x in v)collect(x);}else if(v is Map){for(final x in v.values)collect(x);}}
++    collect(value);if(paths.isEmpty)return;try{await Supabase.instance.client.storage.from('fuel-evidence').remove(paths.toSet().toList());}catch(_){}
++  }
++
++  Future<void> _refreshReferenceAfterSyncV69() async {
++    if(!online.value||Supabase.instance.client.auth.currentUser==null)return;
++    try{final fresh=_map(await Supabase.instance.client.rpc('rca_reference_data_v33'));await cacheReferenceData(fresh);}catch(_){}
++  }
++
+   Future<void> syncPending({bool force=false}) async {
+     if (_syncing || !online.value || pendingCount.value == 0) return;
+     final uid=Supabase.instance.client.auth.currentUser?.id;
+@@ -603,6 +671,7 @@
+         if(owner.isEmpty)continue; // registro legado: precisa ser confirmado pelo usuário na tela.
+         if(owner!=uid)continue;
+         if(queued['sync_rejected']==true)continue; // estado final: nunca tenta novamente.
++        if(queued['sync_blocked']==true&&queued['sync_conflict']!=true)continue; // erro determinístico não trava os demais registros.
+         try {
+           final original = _map(queued['params']);
+           final rpc='${queued['rpc']}';
+@@ -638,6 +707,7 @@
+               }
+             }
+             _state['queue']=queue;
++            _deleteLocalRefs(original); // evidências já estão no Storage e ficam vinculadas ao conflito para auditoria.
+             pendingCount.value=_pendingQueueCountV68();
+             await _persist();
+             syncRevision.value++;
+@@ -649,15 +719,18 @@

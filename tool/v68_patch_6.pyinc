@@ -1,0 +1,75 @@
+# 18) Operational V31 uses v33 and automatically caches reference data + permission snapshot
+replace(v31,
+"""  Future<Map<String,dynamic>> referenceDataV31() async => _map(await client.rpc('rca_reference_data_v31'));
+""",
+"""  Future<Map<String,dynamic>> referenceDataV31() async {final v=_map(await client.rpc('rca_reference_data_v33'));await offlineStore.cacheReferenceData(v);return v;}
+""",
+'v31_reference_cache')
+replace(v31,
+"""        if(mounted)setState((){ref=cached;currentUnit=mine;statuses=[];loading=false;error=cached==null?'Conecte-se à internet uma vez para baixar os dados necessários ao modo offline.':null;});
+""",
+"""        final allowed=offlineStore.hasCachedCanFuelV68?offlineStore.cachedCanFuelV68:widget.profile['can_fueling_create']==true;
+        if(mounted)setState((){ref=cached;canFuel=allowed;currentUnit=mine;statuses=[];loading=false;error=cached==null?'Conecte-se à internet uma vez para baixar os dados necessários ao modo offline.':null;});
+""",
+'v31_offline_permission')
+replace(v31,
+"""      final tid=_intOrNull(mine['tank_id']);
+      await offlineStore.setLastTankId(tid);
+      if(mounted)setState((){
+        ref=r[0] as Map<String,dynamic>;
+        canFuel=r[1]==true;
+""",
+"""      final tid=_intOrNull(mine['tank_id']);
+      await offlineStore.setLastTankId(tid);
+      await offlineStore.cacheReferenceData(r[0] as Map<String,dynamic>);
+      await offlineStore.cacheFuelingPermissionV68(r[1]==true);
+      if(mounted)setState((){
+        ref=r[0] as Map<String,dynamic>;
+        canFuel=r[1]==true;
+""",
+'v31_online_cache_permission')
+
+# 19) My fuelings status exact and rejected final
+replace(v29,
+"""        final syncError='${x['sync_error']??''}'.trim();final syncConflict=x['sync_conflict']==true;
+        if(pending){
+          final status=legacy?'PENDENTE (OFFLINE) • confirme o usuário':syncConflict?'CONFLITO • revisão necessária':syncError.isNotEmpty?'PENDENTE • falha ao sincronizar':'PENDENTE (OFFLINE)';
+""",
+"""        final syncError='${x['sync_error']??''}'.trim();final syncConflict=x['sync_conflict']==true;final syncRejected=x['sync_rejected']==true||'${x['sync_status']??''}'.toLowerCase()=='rejected';
+        if(pending){
+          final status=syncRejected?'REJEITADO':legacy?'PENDENTE (OFFLINE) • confirme o usuário':syncConflict?'CONFLITO • AGUARDANDO ANÁLISE':syncError.isNotEmpty?'PENDENTE • falha ao sincronizar':'PENDENTE (OFFLINE)';
+""",
+'v29_status_exact')
+replace(v29,
+"""            OutlinedButton.icon(onPressed:(busy||syncConflict)?null:()async{
+""",
+"""            OutlinedButton.icon(onPressed:(busy||syncConflict||syncRejected)?null:()async{
+""",
+'v29_disable_rejected')
+replace(v29,
+"""            },icon:Icon(syncConflict?Icons.lock_clock_rounded:Icons.sync_rounded),label:Text(syncConflict?'Aguardando revisão':legacy?'Confirmar e sincronizar':'Tentar sincronizar')),
+""",
+"""            },icon:Icon(syncRejected?Icons.block_rounded:syncConflict?Icons.lock_clock_rounded:Icons.sync_rounded),label:Text(syncRejected?'Rejeitado':syncConflict?'Aguardando análise':legacy?'Confirmar e sincronizar':'Tentar sincronizar')),
+""",
+'v29_rejected_button')
+
+# final hard checks
+for path in [main,v29,v31]:
+    text=path.read_text(encoding='utf-8')
+    if 'Sem placa' in text:
+        raise SystemExit(f'PATCH_V68_FAIL[sem_placa_remaining]: {path}')
+
+m=main.read_text(encoding='utf-8')
+checks=[
+    'rca_record_fueling_v68',
+    'rca_archive_machine_v68',
+    'can_fueling_create_v68',
+    'beginSessionMarkerV68',
+    'GPS indisponível no momento da conclusão',
+    "meterPhoto:u[0]",
+    "child: Text('v68'",
+]
+for c in checks:
+    if c not in m: raise SystemExit(f'PATCH_V68_FAIL[check]: {c}')
+if 'meterPhoto:u[0]!' in m: raise SystemExit('PATCH_V68_FAIL[nullable_meter]')
+print('PATCH_V68_PLAIN_OK')

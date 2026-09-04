@@ -1,0 +1,31 @@
+       final r=await api.fuelingV22(sourceTankId:_intOrNull(widget.source['id'])!,workId:work,machineId:machine,thirdId:manualThird?null:third,thirdPartyPlate:manualThird?thirdPlate.text.trim():null,thirdPartyDescription:manualThird&&thirdDescription.text.trim().isNotEmpty?thirdDescription.text.trim():null,liters:v,km:k,hourmeter:h,responsible:null,receiver:receiver.text.trim(),receiverSignature:u[4]!,operatorSignature:u[5]!,meterPhoto:u[0],totalizerPhoto:u[1]!,identityPhoto:u[2]!,identityKind:(hasPlate||manualThird)?'plate':'side',extraPhoto:u[3],salePrice:saleValue,notes:observation.text.trim().isEmpty?null:observation.text.trim(),fuelType:fuel,location:location.text.trim(),latitude:capturedPosition?.latitude,longitude:capturedPosition?.longitude,locationCapturedAt:locationCapturedAt,locationAccuracyM:locationAccuracyM,occurredAt:occurredAt);
+@@ -2528,7 +2540,22 @@
+     }
+     final smMeasurement='${rawSmMeasurement??''}'.trim().toLowerCase();
+     final measurementNotApplicable=sm!=null&&st==null&&smMeasurement=='none';
+-    return Scaffold(appBar:AppBar(title:Text(widget.source['tank_type']=='truck'?'Abastecer como comboio':'Novo abastecimento')),body:SafeArea(child:ListView(padding:const EdgeInsets.fromLTRB(18,18,18,36),children:[
++    final title=widget.source['tank_type']=='truck'?'Abastecer como comboio':'Novo abastecimento';
++    if(totalizer==null){
++      return Scaffold(appBar:AppBar(title:Text(title)),body:SafeArea(child:ListView(padding:const EdgeInsets.all(20),children:[
++        Card(child:Padding(padding:const EdgeInsets.all(18),child:Column(crossAxisAlignment:CrossAxisAlignment.stretch,children:[
++          const Icon(Icons.camera_alt_rounded,size:52,color:_blue),const SizedBox(height:12),
++          const Text('Foto obrigatória antes de iniciar',textAlign:TextAlign.center,style:TextStyle(fontSize:20,fontWeight:FontWeight.w900)),const SizedBox(height:8),
++          const Text('Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de abastecimento. Esta foto ficará vinculada permanentemente ao registro e ao PDF.',textAlign:TextAlign.center),const SizedBox(height:16),
++          InputDecorator(decoration:const InputDecoration(labelText:'Origem do combustível'),child:Text('${widget.source['code']} • ${widget.source['name']} • ${sourceTypeLabel()}',style:const TextStyle(fontWeight:FontWeight.w800))),const SizedBox(height:16),
++          FilledButton.icon(onPressed:captureTotalizerBeforeV70,icon:const Icon(Icons.photo_camera_rounded),label:const Text('Tirar foto do totalizador antes do abastecimento')),
++          const SizedBox(height:8),TextButton(onPressed:()=>Navigator.pop(context),child:const Text('Cancelar abastecimento')),
++        ]))),
++      ])));
++    }
++    return Scaffold(appBar:AppBar(title:Text(title)),body:SafeArea(child:ListView(padding:const EdgeInsets.fromLTRB(18,18,18,36),children:[
++      const Card(child:ListTile(leading:Icon(Icons.verified_rounded,color:Colors.green),title:Text('Totalizador antes do abastecimento registrado ✓',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:Text('A foto foi capturada antes do início deste registro e será preservada no histórico e no PDF.'))),
++      const SizedBox(height:12),
+       const Card(child:ListTile(leading:Icon(Icons.location_on_outlined,color:Colors.orange),title:Text('Localização deve estar ativada',style:TextStyle(fontWeight:FontWeight.w900)))),
+       const SizedBox(height:12),
+       InputDecorator(decoration:const InputDecoration(labelText:'Origem do combustível',prefixIcon:Icon(Icons.local_gas_station_outlined)),child:Text('${widget.source['code']} • ${widget.source['name']} • ${sourceTypeLabel()}',style:const TextStyle(fontWeight:FontWeight.w800))),const SizedBox(height:10),
+@@ -2570,7 +2597,7 @@
+       ),
+       const SizedBox(height:12),
+       if(kinds.isNotEmpty||manualThird)OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>meter=x);},child:Text(meter==null?metricPhotoLabel(kinds):'Medição registrada ✓')),
+-      OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>totalizer=x);},child:Text(totalizer==null?'Foto Totalizador *':'Totalizador registrado ✓')),
++      const ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.photo_camera_back_outlined,color:_blue),title:Text('Totalizador antes do abastecimento'),subtitle:Text('Foto obrigatória já registrada antes do início ✓')),

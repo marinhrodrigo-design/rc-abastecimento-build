@@ -1,0 +1,134 @@
+# 9) sync engine: no pre-claim for an offline v68 fueling; cache remote evidence; terminal rejected; conflict polling
+old_sync="""      final snapshot = List<Map<String, dynamic>>.from(_queue);
+      for (final queued in snapshot) {
+        final owner='${queued['user_id']??''}'.trim();
+        if(owner.isEmpty)continue; // registro legado: precisa ser confirmado pelo usuário na tela.
+        if(owner!=uid)continue;
+        if(queued['sync_blocked']==true&&queued['sync_conflict']==true&&!force)continue;
+        try {
+          final original = _map(queued['params']);
+          final rpc='${queued['rpc']}';
+          if(_fuelingRpc(rpc)){
+            final tankId=_intOrNull(original['p_source_tank_id']);
+            if(tankId!=null){
+              await Supabase.instance.client.rpc('rca_claim_unit_v31',params:{'p_tank_id':tankId});
+              await setLastTankId(tankId);
+            }
+          }
+          final params = _map(await _resolveLocal(original, '${queued['id']}'));
+          final response=_map(await Supabase.instance.client.rpc(rpc, params: params));
+          if(response['conflict']==true || response['ok']==false){
+            final queue=_queue;
+            for(final q in queue){
+              if('${q['id']}'=='${queued['id']}'){
+                q['sync_error']='${response['message']??'Sincronização aguardando revisão.'}';
+                q['sync_blocked']=true;
+                q['sync_conflict']=response['conflict']==true;
+                q['sync_status']=response['status'];
+                q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();
+              }
+            }
+            _state['queue']=queue;
+            await _persist();
+            syncRevision.value++;
+            break;
+          }
+          _deleteLocalRefs(original);
+          final remaining = _queue.where((x) => '${x['id']}' != '${queued['id']}').toList();
+          _state['queue'] = remaining;
+          pendingCount.value = remaining.length;
+          syncRevision.value++;
+          await _persist();
+        } catch (e) {
+          if (_isNetworkError(e)) {markOffline();break;}
+          final queue=_queue;
+          for(final q in queue){if('${q['id']}'=='${queued['id']}'){q['sync_error']=_friendlyError(e);q['sync_blocked']=q['sync_conflict']==true;q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();}}
+          _state['queue']=queue;
+          await _persist();
+          syncRevision.value++;
+          break;
+        }
+      }
+"""
+new_sync="""      final snapshot = List<Map<String, dynamic>>.from(_queue);
+      for (final queued in snapshot) {
+        final owner='${queued['user_id']??''}'.trim();
+        if(owner.isEmpty)continue; // registro legado: precisa ser confirmado pelo usuário na tela.
+        if(owner!=uid)continue;
+        if(queued['sync_rejected']==true)continue; // estado final: nunca tenta novamente.
+        try {
+          final original = _map(queued['params']);
+          final rpc='${queued['rpc']}';
+          final isOfflineV68=_fuelingRpc(rpc)&&original['p_is_offline']==true&&rpc=='rca_record_fueling_v68';
+          if(_fuelingRpc(rpc)&&!isOfflineV68){
+            final tankId=_intOrNull(original['p_source_tank_id']);
+            if(tankId!=null){
+              await Supabase.instance.client.rpc('rca_claim_unit_v31',params:{'p_tank_id':tankId});
+              await setLastTankId(tankId);
+            }
+          }
+          final base=queued['resolved_params'] is Map?_map(queued['resolved_params']):original;
+          final params = _map(await _resolveLocal(base, '${queued['id']}'));
+          if(queued['resolved_params'] is! Map && _containsLocal(original)){
+            final queue=_queue;for(final q in queue){if('${q['id']}'=='${queued['id']}')q['resolved_params']=params;}_state['queue']=queue;await _persist();
+          }
+          final response=_map(await Supabase.instance.client.rpc(rpc, params: params));
+          final status='${response['status']??''}'.trim().toLowerCase();
+          if(status=='rejected'){
+            final queue=_queue;
+            for(final q in queue){if('${q['id']}'=='${queued['id']}'){q['sync_error']='${response['message']??'Abastecimento rejeitado.'}';q['sync_blocked']=true;q['sync_conflict']=false;q['sync_status']='rejected';q['sync_rejected']=true;q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();}}
+            _state['queue']=queue;_deleteLocalRefs(original);pendingCount.value=_pendingQueueCountV68();await _persist();syncRevision.value++;continue;
+          }
+          if(response['conflict']==true || response['ok']==false){
+            final queue=_queue;
+            for(final q in queue){
+              if('${q['id']}'=='${queued['id']}'){
+                q['sync_error']='${response['message']??'CONFLITO • AGUARDANDO ANÁLISE'}';
+                q['sync_blocked']=true;
+                q['sync_conflict']=response['conflict']==true;
+                q['sync_status']=response['status'];
+                q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();
+              }
+            }
+            _state['queue']=queue;
+            pendingCount.value=_pendingQueueCountV68();
+            await _persist();
+            syncRevision.value++;
+            continue;
+          }
+          _deleteLocalRefs(original);
+          final remaining = _queue.where((x) => '${x['id']}' != '${queued['id']}').toList();
+          _state['queue'] = remaining;
+          pendingCount.value = _pendingQueueCountV68();
+          syncRevision.value++;
+          await _persist();
+        } catch (e) {
+          if (_isNetworkError(e)) {markOffline();break;}
+          final queue=_queue;
+          for(final q in queue){if('${q['id']}'=='${queued['id']}'){q['sync_error']=_friendlyError(e);q['sync_blocked']=q['sync_conflict']==true;q['last_sync_attempt']=DateTime.now().toUtc().toIso8601String();}}
+          _state['queue']=queue;
+          pendingCount.value=_pendingQueueCountV68();
+          await _persist();
+          syncRevision.value++;
+          break;
+        }
+      }
+"""
+replace(main,old_sync,new_sync,'sync_engine_v68')
+
+# 10) API archive = safe backend archive preserving history
+old_archive="""  Future<void> archiveMachine(Map<String,dynamic> x) async {
+    await saveMachine(
+      id:_intOrNull(x['id']),assetNumber:'${x['numeroAtivo']??x['asset_number']??''}',model:'${x['modelo']??x['model']??''}',plate:'${x['placa']??x['plate']??''}',
+      type:'${x['tipo']??x['type']??''}',location:'${x['localizacao']??x['location']??''}',active:false,
+      comboioCapacityLiters:x['comboio_capacity_liters']==null?null:_num(x['comboio_capacity_liters']),fuelTankCapacityLiters:x['fuel_tank_capacity_liters']==null?null:_num(x['fuel_tank_capacity_liters']),
+      measurementType:'${x['measurement_type']??'none'}'.trim().isEmpty?'none':'${x['measurement_type']}',
+    );
+  }
+"""
+new_archive="""  Future<void> archiveMachine(Map<String,dynamic> x) async {
+    final id=_intOrNull(x['id']);if(id==null)throw Exception('Ativo inválido');
+    await client.rpc('rca_archive_machine_v68',params:{'p_id':id});
+  }
+"""
+replace(main,old_archive,new_archive,'archive_machine_v68')

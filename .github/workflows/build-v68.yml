@@ -4,7 +4,8 @@ on:
   push:
     branches: ['release/rc-abastecimento']
     paths:
-      - 'tool/apply_v68_offline_integrity.py'
+      - 'tool/apply_v68_plain.py'
+      - 'tool/v68_patch_*.pyinc'
       - '.github/workflows/build-v68.yml'
   workflow_dispatch:
 
@@ -49,9 +50,9 @@ jobs:
           rm -rf app/lib
           cp -r /tmp/v67src/app/lib app/lib
           cp /tmp/v67src/app/pubspec.yaml app/pubspec.yaml
-      - name: Apply v68 offline integrity patch
+      - name: Apply v68 plain-text integrity patch
         working-directory: app
-        run: python3 ../tool/apply_v68_offline_integrity.py
+        run: python3 ../tool/apply_v68_plain.py
       - name: Configure Android and stable signing
         working-directory: app
         run: |
@@ -91,15 +92,19 @@ jobs:
         run: |
           grep -q "rca_record_fueling_v68" lib/main_online.dart
           grep -q "rca_archive_machine_v68" lib/main_online.dart
-          grep -q "can_fueling_create" lib/main_online.dart lib/v31_features.dart
-          grep -q "CONFLITO • AGUARDANDO ANÁLISE" lib/main_online.dart lib/v29_features.dart
+          grep -q "can_fueling_create_v68" lib/main_online.dart
+          grep -q "can_fueling_create" lib/v31_features.dart
+          grep -q "CONFLITO • AGUARDANDO ANÁLISE" lib/v29_features.dart
           grep -q "REJEITADO" lib/v29_features.dart
           grep -q "Preço por litro \\*" lib/main_online.dart
+          grep -q "saleValue==null||saleValue<=0" lib/main_online.dart
           grep -q "meterPhoto:u\[0\]" lib/main_online.dart
           ! grep -q "meterPhoto:u\[0\]!" lib/main_online.dart
           ! grep -q "Sem placa" lib/main_online.dart
           grep -q "beginSessionMarkerV68" lib/main_online.dart
+          grep -q "reconcileAbandonedSessionV68" lib/main_online.dart
           grep -q "GPS indisponível no momento da conclusão" lib/main_online.dart
+          grep -q "rca_reference_data_v33" lib/v31_features.dart
           grep -q "child: Text('v68'" lib/main_online.dart
       - name: Dependencies
         working-directory: app
@@ -128,7 +133,8 @@ jobs:
             app/lib/v30_features.dart
             app/lib/v31_features.dart
             app/pubspec.yaml
-            tool/apply_v68_offline_integrity.py
+            tool/apply_v68_plain.py
+            tool/v68_patch_*.pyinc
             .github/workflows/build-v68.yml
           retention-days: 30
       - name: Upload APK

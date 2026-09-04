@@ -1,0 +1,10 @@
++  Future<void> _transfer() async {if(!_requireOnlineV69()||ref==null)return;final t=await _operationUnit(const {'comboio','truck'},'Transferir','Selecione a unidade doadora.');if(!mounted||t==null||ref==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>TransferV23Screen(source:t,ref:ref!,profile:widget.profile)));if(mounted)refresh();}
++  Future<void> _receipt() async {if(!_requireOnlineV69()||ref==null)return;final t=await _operationUnit(const {'truck'},'Recebimento de combustível / NF','Selecione o caminhão-tanque que receberá a carga.');if(!mounted||t==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>RefineryLoadV23Screen(truck:t)));if(mounted)refresh();}
++  void open(Widget page){if(!_requireOnlineV69())return;Navigator.push(context,MaterialPageRoute(builder:(_)=>page));}
+   Widget quick(IconData icon,String title,String subtitle,VoidCallback onTap)=>Card(margin:EdgeInsets.zero,child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(12),child:Padding(padding:const EdgeInsets.symmetric(horizontal:7,vertical:11),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,color:_blue,size:29),const SizedBox(height:7),Text(title,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:12.2))]))));
+   @override Widget build(BuildContext context){
+     final tanks=_sortedFuelUnits(ref?['tanks']);final isAdmin=widget.profile['is_admin']==true;final isManager=widget.profile['is_manager']==true;final isSupervisor=widget.profile['is_supervisor']==true;
+@@ -4314,7 +4383,7 @@
+ }
+ 
+ class GlobalSearchV28Screen extends StatefulWidget {final Map<String,dynamic> profile;final String? initialQuery;const GlobalSearchV28Screen({super.key,required this.profile,this.initialQuery});@override State<GlobalSearchV28Screen> createState()=>_GlobalSearchV28ScreenState();}

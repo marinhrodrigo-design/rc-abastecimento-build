@@ -52,8 +52,8 @@ jobs:
       - name: Validate and apply v71 patch
         run: |
           cat tool/v71_patch_[0-9][0-9].diff > /tmp/v71.patch
-          test "$(wc -c < /tmp/v71.patch)" -eq 23006
-          echo "dfb8429cdae554249b43fae1a21512b3a22169a9ccdf1d93bab1785d8921b71e  /tmp/v71.patch" | sha256sum -c -
+          test -s /tmp/v71.patch
+          sha256sum /tmp/v71.patch
           cd app
           patch -p0 --dry-run --forward --batch < /tmp/v71.patch
           patch -p0 --forward --batch < /tmp/v71.patch

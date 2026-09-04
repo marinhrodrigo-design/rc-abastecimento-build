@@ -1,0 +1,59 @@
+# 13) restore/login: reconcile abandoned session, auto cache refs and permission, start marker
+replace(main,
+"""    if(Supabase.instance.client.auth.currentSession==null){if(!offlineStore.online.value&&cached!=null){if(mounted)setState((){profile=cached;loading=false;});}else if(mounted)setState(()=>loading=false);return;}
+""",
+"""    if(Supabase.instance.client.auth.currentSession==null){if(!offlineStore.online.value&&cached!=null){await offlineStore.cacheFuelingPermissionV68(cached['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=cached;loading=false;});}else if(mounted)setState(()=>loading=false);return;}
+""",
+'restore_no_session_offline_marker')
+old_restore_line="""    try{if(offlineStore.online.value){final claim=await _claimSessionV42(explicitLogin:false);if(claim['ok']!=true){await _forcedLocalLogoutV30('${claim['message']??'Sua sessão não está mais ativa. Entre novamente para continuar.'}');return;}}final p=await api.profile();offlineStore.markOnline();await offlineStore.cacheProfile(p);await offlineStore.markAppLoggedInV62(Supabase.instance.client.auth.currentUser?.id);if(mounted)setState((){profile=p;loading=false;});_startSessionGuardV30();unawaited(offlineStore.syncPending(force:true));}
+"""
+new_restore_line="""    try{if(offlineStore.online.value){await offlineStore.reconcileAbandonedSessionV68();final claim=await _claimSessionV42(explicitLogin:false);if(claim['ok']!=true){await _forcedLocalLogoutV30('${claim['message']??'Sua sessão não está mais ativa. Entre novamente para continuar.'}');return;}}final p=await api.profile();offlineStore.markOnline();await offlineStore.cacheProfile(p);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);try{await api.referenceData();}catch(_){}await offlineStore.markAppLoggedInV62(Supabase.instance.client.auth.currentUser?.id);await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=p;loading=false;});_startSessionGuardV30();unawaited(offlineStore.syncPending(force:true));}
+"""
+replace(main,old_restore_line,new_restore_line,'restore_cache_reconcile')
+
+replace(main,
+"""      try{final p=await offlineStore.offlineLoginV62(normalized,password);if(mounted)setState((){profile=p;loading=false;error=null;});return;}
+""",
+"""      try{final p=await offlineStore.offlineLoginV62(normalized,password);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=p;loading=false;error=null;});return;}
+""",
+'offline_login_marker_permission')
+
+replace(main,
+"""      final claim=await _claimSessionV42(explicitLogin:true);if(claim['ok']!=true)throw Exception('${claim['message']??'Não foi possível registrar esta sessão.'}');
+      final p=await api.profile();offlineStore.markOnline();await offlineStore.cacheProfile(p);await offlineStore.cacheOfflineLoginV62(normalized,password,p);
+      if(mounted)setState((){profile=p;loading=false;});_startSessionGuardV30();unawaited(offlineStore.syncPending(force:true));
+""",
+"""      await offlineStore.reconcileAbandonedSessionV68();
+      final claim=await _claimSessionV42(explicitLogin:true);if(claim['ok']!=true)throw Exception('${claim['message']??'Não foi possível registrar esta sessão.'}');
+      final p=await api.profile();offlineStore.markOnline();await offlineStore.cacheProfile(p);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);await offlineStore.cacheOfflineLoginV62(normalized,password,p);await api.referenceData();await offlineStore.beginSessionMarkerV68();
+      if(mounted)setState((){profile=p;loading=false;});_startSessionGuardV30();unawaited(offlineStore.syncPending(force:true));
+""",
+'online_login_cache_marker')
+
+replace(main,
+"""        try{final p=await offlineStore.offlineLoginV62(normalized,password);if(mounted)setState((){profile=p;loading=false;error=null;});return;}catch(_){}
+""",
+"""        try{final p=await offlineStore.offlineLoginV62(normalized,password);await offlineStore.cacheFuelingPermissionV68(p['can_fueling_create']==true);await offlineStore.reconcileAbandonedSessionV68();await offlineStore.beginSessionMarkerV68();if(mounted)setState((){profile=p;loading=false;error=null;});return;}catch(_){}
+""",
+'network_fallback_offline_login')
+
+# explicit/forced logout clear marker
+replace(main,
+"""  Future<void> _forcedLocalLogoutV30(String message) async {_sessionGuardV30?.cancel();await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();try{await Supabase.instance.client.auth.signOut(scope:SignOutScope.local);}catch(_){}if(mounted)setState((){profile=null;loading=false;error=message;});}
+""",
+"""  Future<void> _forcedLocalLogoutV30(String message) async {_sessionGuardV30?.cancel();await offlineStore.clearSessionMarkerV68();await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();try{await Supabase.instance.client.auth.signOut(scope:SignOutScope.local);}catch(_){}if(mounted)setState((){profile=null;loading=false;error=message;});}
+""",
+'forced_logout_clear_marker')
+
+replace(main,
+"""      await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();
+""",
+"""      await offlineStore.clearSessionMarkerV68();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();
+""",
+'offline_logout_clear_marker')
+replace(main,
+"""    if(id!=null)await api.logoutV30(id);if(mounted)setState(()=>profile=null);await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();await Supabase.instance.client.auth.signOut(scope:SignOutScope.local).timeout(const Duration(seconds:2));
+""",
+"""    if(id!=null)await api.logoutV30(id);if(mounted)setState(()=>profile=null);await offlineStore.clearSessionMarkerV68();await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();await offlineStore.markAppLoggedOutV62();await Supabase.instance.client.auth.signOut(scope:SignOutScope.local).timeout(const Duration(seconds:2));
+""",
+'online_logout_clear_marker')

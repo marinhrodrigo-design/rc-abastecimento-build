@@ -34,6 +34,8 @@ jobs:
           cd app
           patch -p0 --dry-run --forward --batch < /tmp/v71.patch
           patch -p0 --forward --batch < /tmp/v71.patch
+          echo '--- Placa imediatamente após patch ---'
+          grep -n "Placa:" lib/main_online.dart || true
       - name: Dependencies and Dart fixes
         working-directory: app
         run: |
@@ -43,25 +45,24 @@ jobs:
       - name: Inspect plate rendering after fixes
         working-directory: app
         run: |
-          echo '--- Todas as ocorrências de Placa: ---'
+          echo '--- Placa depois do dart fix/format ---'
           grep -n "Placa:" lib/main_online.dart || true
-          echo '--- Padrão placa com hífen / placa ---'
-          grep -nF "Placa: \${x['placa'] ?? '-'}" lib/main_online.dart || true
-          echo '--- Padrão placa com hífen / plate ---'
-          grep -nF "Placa: \${x['plate']??'-'}" lib/main_online.dart || true
           python3 - <<'PY'
           from pathlib import Path
           p=Path('lib/main_online.dart').read_text()
-          a="Placa: ${x['placa'] ?? '-'}"
-          b="Placa: ${x['plate']??'-'}"
-          print('count_placa_hifen=',p.count(a))
-          print('count_plate_hifen=',p.count(b))
-          print('plate_fix_ok=',p.count(a)==0 and p.count(b)==0)
+          patterns=[
+            "Placa: ${x['placa'] ?? '-'}",
+            "Placa: ${x['plate']??'-'}",
+            "Placa: ${x['plate'] ?? '-'}",
+          ]
+          for pat in patterns:
+              print(repr(pat), 'count=', p.count(pat))
+          print('plate_fix_ok=', all(p.count(pat)==0 for pat in patterns))
           PY
       - name: Upload diagnostic source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v71-diagnostic-source
+          name: RC-Abastecimento-v71-diagnostic-source-2
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart

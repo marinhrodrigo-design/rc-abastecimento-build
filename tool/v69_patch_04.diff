@@ -1,0 +1,39 @@
+@@ -1188,11 +1260,7 @@
+         for(final email in const ['marinhrodrigo@gmail.com','adminfuel@rccombustivel.app']){try{await client.auth.signInWithPassword(email:email,password:loginPassword);signedIn=true;break;}catch(_){} }
+         if(!signedIn)throw Exception('Usuário ou senha inválidos.');
+       }else{
+-        try{await client.auth.signInWithPassword(email:'$testUsername@rccombustivel.app',password:loginPassword);signedIn=true;}catch(_){}
+-        if(!signedIn&&const {'operador','motorista','motorista1','motorista2'}.contains(normalized)){
+-          final res=await client.functions.invoke('fuel-test-login',body:{'username':testUsername,'password':password});final data=_map(res.data);
+-          if(res.status>=200&&res.status<300&&data['refresh_token']!=null){await client.auth.setSession('${data['refresh_token']}');signedIn=true;}else{throw Exception('Usuário ou senha inválidos.');}
+-        }
++        try{await client.auth.signInWithPassword(email:'$normalized@rccombustivel.app',password:loginPassword);signedIn=true;}catch(_){}
+         if(!signedIn){await client.auth.signInWithPassword(email:'$normalized@rcmanutencao.app',password:loginPassword);signedIn=true;}
+       }
+       await offlineStore.reconcileAbandonedSessionV68();
+@@ -1522,7 +1590,7 @@
+                 const SizedBox(height: 10),
+                 const Align(
+                   alignment: Alignment.centerRight,
+-                  child: Text('v68', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
++                  child: Text('v69', style: TextStyle(fontSize: 11, color: Color(0xFF8A98A8), fontWeight: FontWeight.w500)),
+                 ),
+               ],
+             ),
+@@ -2476,7 +2544,7 @@
+       ],
+       const SizedBox(height:18),
+       DropdownButtonFormField<String>(value:fuel,decoration:const InputDecoration(labelText:'Combustível'),items:_fuelTypes.map((x)=>DropdownMenuItem(value:x,child:Text(x))).toList(),onChanged:saving?null:(v)=>setState(()=>fuel=v??'Diesel')),const SizedBox(height:8),
+-      TextField(controller:liters,enabled:!saving,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Quantidade (L) *')),
++      TextField(controller:liters,enabled:!saving,keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_){if(mounted)setState((){});},decoration:const InputDecoration(labelText:'Quantidade (L) *')),
+       if(financial)...[const SizedBox(height:8),TextField(controller:sale,enabled:!saving,keyboardType:const TextInputType.numberWithOptions(decimal:true),onChanged:(_)=>setState((){}),decoration:const InputDecoration(labelText:'Preço por litro *')),const SizedBox(height:6),InputDecorator(decoration:const InputDecoration(labelText:'Preço total • automático e somente leitura'),child:Text(_fmtMoney(_num(liters.text.replaceAll(',','.'))*_num(sale.text.replaceAll(',','.'))),style:const TextStyle(fontWeight:FontWeight.w900)))],
+       const SizedBox(height:10),
+       if(manualThird)Row(children:[Expanded(child:TextField(controller:km,enabled:!saving,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'KM'))),const SizedBox(width:8),Expanded(child:TextField(controller:hour,enabled:!saving,keyboardType:const TextInputType.numberWithOptions(decimal:true),decoration:const InputDecoration(labelText:'Horímetro')))])
+@@ -4103,9 +4171,10 @@
+     return _choose(title,subtitle,types,excludeCurrent:currentId!=null);
+   }
+   Future<void> _fueling() async {if(ref==null)return;final t=await _operationUnit(const {'stationary','comboio','truck'},'Novo abastecimento','Selecione a unidade de origem.');if(!mounted||t==null||ref==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>FuelingV23Screen(source:t,ref:ref!,profile:widget.profile)));if(mounted)refresh();}
+-  Future<void> _transfer() async {if(ref==null)return;final t=await _operationUnit(const {'comboio','truck'},'Transferir','Selecione a unidade doadora.');if(!mounted||t==null||ref==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>TransferV23Screen(source:t,ref:ref!,profile:widget.profile)));if(mounted)refresh();}
+-  Future<void> _receipt() async {if(ref==null)return;final t=await _operationUnit(const {'truck'},'Recebimento de combustível / NF','Selecione o caminhão-tanque que receberá a carga.');if(!mounted||t==null)return;await Navigator.push(context,MaterialPageRoute(builder:(_)=>RefineryLoadV23Screen(truck:t)));if(mounted)refresh();}
+-  void open(Widget page)=>Navigator.push(context,MaterialPageRoute(builder:(_)=>page));
++  bool _requireOnlineV69(){if(offlineStore.online.value)return true;ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Este recurso administrativo precisa de internet. Os abastecimentos de campo continuam disponíveis offline.')));return false;}

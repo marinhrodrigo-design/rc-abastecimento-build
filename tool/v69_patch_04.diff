@@ -1,5 +1,5 @@
 @@ -1188,11 +1260,7 @@
-         for(final email in const ['marinhrodrigo@gmail.com','adminfuel@rccombustivel.app']){try{await client.auth.signInWithPassword(email:email,password:loginPassword);signedIn=true;break;}catch(_){} }
+         for(final email in const ['marinhrodrigo@gmail.com','adminfuel@rccombustivel.app']){try{await client.auth.signInWithPassword(email:email,password:loginPassword);signedIn=true;break;}catch(_){}}
          if(!signedIn)throw Exception('Usuário ou senha inválidos.');
        }else{
 -        try{await client.auth.signInWithPassword(email:'$testUsername@rccombustivel.app',password:loginPassword);signedIn=true;}catch(_){}

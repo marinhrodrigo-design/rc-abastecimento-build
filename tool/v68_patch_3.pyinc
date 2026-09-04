@@ -1,0 +1,28 @@
+# 11) v68 fueling RPC + required price; transfer functions untouched
+old_api="""  Future<Map<String,dynamic>> fuelingV22({required int sourceTankId,int? workId,int? machineId,int? thirdId,String? thirdPartyPlate,String? thirdPartyDescription,required double liters,double? km,double? hourmeter,String? responsible,required String receiver,required String receiverSignature,required String operatorSignature,String? meterPhoto,required String totalizerPhoto,required String identityPhoto,required String identityKind,String? extraPhoto,double? salePrice,String? notes,required String fuelType,required String location,double? latitude,double? longitude,DateTime? locationCapturedAt,double? locationAccuracyM,required DateTime occurredAt}) async => offlineStore.executeOrQueue('rca_record_fueling_v58',{'p_source_tank_id':sourceTankId,'p_work_id':workId,'p_machine_id':machineId,'p_third_party_vehicle_id':thirdId,'p_third_party_plate':thirdPartyPlate,'p_third_party_company':null,'p_third_party_description':thirdPartyDescription,'p_liters':liters,'p_km_value':km,'p_hourmeter_value':hourmeter,'p_responsible_name':responsible,'p_receiver_name':receiver,'p_receiver_company':null,'p_receiver_signature_path':receiverSignature,'p_operator_signature_path':operatorSignature,'p_meter_photo_path':meterPhoto,'p_totalizer_photo_path':totalizerPhoto,'p_identity_photo_path':identityPhoto,'p_identity_evidence_kind':identityKind,'p_extra_photo_path':extraPhoto,'p_sale_price_per_liter':salePrice,'p_notes':notes,'p_lubricated':false,'p_latitude':latitude,'p_longitude':longitude,'p_fuel_type':fuelType,'p_location_address':location,'p_location_captured_at':locationCapturedAt?.toUtc().toIso8601String(),'p_location_accuracy_m':locationAccuracyM,'p_occurred_at':occurredAt.toUtc().toIso8601String(),'p_offline_event_id':null,'p_is_offline':false});
+"""
+new_api="""  Future<Map<String,dynamic>> fuelingV22({required int sourceTankId,int? workId,int? machineId,int? thirdId,String? thirdPartyPlate,String? thirdPartyDescription,required double liters,double? km,double? hourmeter,String? responsible,required String receiver,required String receiverSignature,required String operatorSignature,String? meterPhoto,required String totalizerPhoto,required String identityPhoto,required String identityKind,String? extraPhoto,required double salePrice,String? notes,required String fuelType,required String location,double? latitude,double? longitude,DateTime? locationCapturedAt,double? locationAccuracyM,required DateTime occurredAt}) async => offlineStore.executeOrQueue('rca_record_fueling_v68',{'p_source_tank_id':sourceTankId,'p_work_id':workId,'p_machine_id':machineId,'p_third_party_vehicle_id':thirdId,'p_third_party_plate':thirdPartyPlate,'p_third_party_company':null,'p_third_party_description':thirdPartyDescription,'p_liters':liters,'p_km_value':km,'p_hourmeter_value':hourmeter,'p_responsible_name':responsible,'p_receiver_name':receiver,'p_receiver_company':null,'p_receiver_signature_path':receiverSignature,'p_operator_signature_path':operatorSignature,'p_meter_photo_path':meterPhoto,'p_totalizer_photo_path':totalizerPhoto,'p_identity_photo_path':identityPhoto,'p_identity_evidence_kind':identityKind,'p_extra_photo_path':extraPhoto,'p_sale_price_per_liter':salePrice,'p_notes':notes,'p_lubricated':false,'p_latitude':latitude,'p_longitude':longitude,'p_fuel_type':fuelType,'p_location_address':location,'p_location_captured_at':locationCapturedAt?.toUtc().toIso8601String(),'p_location_accuracy_m':locationAccuracyM,'p_occurred_at':occurredAt.toUtc().toIso8601String(),'p_offline_event_id':null,'p_is_offline':false});
+"""
+replace(main,old_api,new_api,'fueling_rpc_v68')
+
+# 12) app lifecycle: explicit queue when detached offline + crash marker fallback
+old_close="""  Future<void> _closeAppV38() async {
+    if(_closingV38||profile==null)return;_closingV38=true;_sessionGuardV30?.cancel();
+    final id=offlineStore.appSessionIdV30;
+    if(id!=null&&offlineStore.online.value){try{await api.logoutV30(id).timeout(const Duration(seconds:2));}catch(_){}}
+    try{await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();}catch(_){}
+    try{await Supabase.instance.client.auth.signOut(scope:SignOutScope.local).timeout(const Duration(seconds:1));}catch(_){}
+  }
+"""
+new_close="""  Future<void> _closeAppV38() async {
+    if(_closingV38||profile==null)return;_closingV38=true;_sessionGuardV30?.cancel();
+    final id=offlineStore.appSessionIdV30;final tankId=offlineStore.lastTankId;final occurred=DateTime.now().toUtc();
+    try{
+      if(offlineStore.online.value){if(id!=null)await api.logoutV30(id).timeout(const Duration(seconds:2));}
+      else{await offlineStore.queueOfflineLogoutV62(sessionId:id,tankId:tankId,occurredAt:occurred);}
+    }catch(_){}
+    try{await offlineStore.clearSessionMarkerV68();await offlineStore.clearProfile();await offlineStore.setLastTankId(null);await offlineStore.clearAppSessionIdV30();}catch(_){}
+    try{await Supabase.instance.client.auth.signOut(scope:SignOutScope.local).timeout(const Duration(seconds:1));}catch(_){}
+  }
+"""
+replace(main,old_close,new_close,'lifecycle_offline_logout')

@@ -1,0 +1,113 @@
+# 14) GPS: always fresh attempt at final submission; stale coords never silently reused
+old_capture="""  Future<bool> captureLocationForSubmission() async {
+    if(locating)return false;
+    if(manualLocationV44){
+      if(location.text.trim().isEmpty){
+        if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Informe a localização do abastecimento.')));
+        return false;
+      }
+      // Se o GPS já foi capturado, mantenha coordenadas, horário e precisão.
+      // Só fica 100% manual quando realmente não houve posição GPS disponível.
+      if(capturedPosition==null){
+        locationCapturedAt=DateTime.now().toUtc();
+        locationAccuracyM=null;
+      }
+      return true;
+    }
+    if(capturedPosition!=null&&location.text.trim().isNotEmpty)return true;
+    if(locationAttemptsV52==0)return await attemptLocationV52(automatic:true);
+    if(locationAttemptsV52==1){
+      if(mounted)ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('Toque no campo Localização para tentar a busca automática novamente.')));
+      return false;
+    }
+    manualLocationV44=true;
+    if(mounted)setState((){});
+    return false;
+  }
+"""
+new_capture="""  Future<bool> captureLocationForSubmission() async {
+    if(locating)return false;
+    if(mounted)setState(()=>locating=true);
+    try{
+      final manualAddress=location.text.trim();
+      final pos=await currentPosition(); // nova leitura no exato fluxo de conclusão; tolerância de 20 m.
+      if(pos==null){
+        capturedPosition=null;locationAccuracyM=null;locationCapturedAt=DateTime.now().toUtc();manualLocationV44=true;
+        if(manualAddress.isEmpty){
+          location.clear();
+          if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('GPS indisponível no momento da conclusão. Informe o endereço manualmente.')));}
+          return false;
+        }
+        location.text=manualAddress;
+        if(mounted)setState((){});
+        return true;
+      }
+      capturedPosition=pos;locationCapturedAt=DateTime.now().toUtc();locationAccuracyM=pos.accuracy;
+      String resolved='';
+      try{final places=await placemarkFromCoordinates(pos.latitude,pos.longitude);if(places.isNotEmpty)resolved=formatPlacemark(places.first);}catch(_){}
+      if(resolved.trim().isNotEmpty){location.text=resolved.trim();manualLocationV44=false;}
+      else if(manualAddress.isNotEmpty){location.text=manualAddress;manualLocationV44=true;}
+      else{manualLocationV44=true;location.clear();if(mounted){setState((){});ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content:Text('GPS capturado, mas o endereço não pôde ser identificado. Informe o endereço manualmente.')));}return false;}
+      if(mounted)setState((){});return true;
+    }finally{if(mounted)setState(()=>locating=false);}
+  }
+"""
+replace(main,old_capture,new_capture,'gps_final_recapture')
+
+# 15) third party labels no "Sem placa"
+replace(main,
+"""    if(st!=null)targets.add('${_hasValue(st['plate'])?st['plate']:'Sem placa'} • ${st['description']??''}');
+""",
+"""    if(st!=null)targets.add(_plateDescriptionLabel(st['plate'],st['description']));
+""",
+'confirm_no_sem_placa')
+replace(main,
+"""...ts.map((x)=>DropdownMenuItem<int?>(value:_intOrNull(x['id']),child:Text('${_hasValue(x['plate'])?x['plate']:'Sem placa'} • ${x['description']??''}',maxLines:1,overflow:TextOverflow.ellipsis)))""",
+"""...ts.map((x)=>DropdownMenuItem<int?>(value:_intOrNull(x['id']),child:Text(_plateDescriptionLabel(x['plate'],x['description']),maxLines:1,overflow:TextOverflow.ellipsis)))""",
+'third_dropdown_no_sem_placa')
+replace(main,
+"""title:Text('${x['plate']??'Sem placa'} • ${x['description']??''}')""",
+"""title:Text(_plateDescriptionLabel(x['plate'],x['description']))""",
+'global_search_no_sem_placa')
+replace(main,
+"""child:Text('${x['plate']??'Sem placa'} • ${x['description']??''}'))""",
+"""child:Text(_plateDescriptionLabel(x['plate'],x['description'])))""",
+'admin_edit_no_sem_placa')
+replace(main,
+"""Text('${x['plate']??'Sem placa'} • ${x['description']??''}')""",
+"""Text(_plateDescriptionLabel(x['plate'],x['description']))""",
+'work_detail_no_sem_placa')
+replace(main,
+"""title:Text('${_hasValue(x['plate'])?x['plate']:'Sem placa'} • ${x['description']??''}',style:const TextStyle(fontWeight:FontWeight.w900))""",
+"""title:Text(_plateDescriptionLabel(x['plate'],x['description']),style:const TextStyle(fontWeight:FontWeight.w900))""",
+'third_admin_no_sem_placa')
+
+# 16) price required in UI + submission, all fuelings only
+replace(main,
+"""    if(v<=0){requiredMessage('Quantidade (L)');return;}
+""",
+"""    if(v<=0){requiredMessage('Quantidade (L)');return;}
+    final saleValue=double.tryParse(sale.text.trim().replaceAll(',','.'));
+    if(saleValue==null||saleValue<=0){requiredMessage('Preço por litro');return;}
+""",
+'price_required_submit')
+replace(main,
+"""meterPhoto:u[0]!,totalizerPhoto:u[1]!,identityPhoto:u[2]!,identityKind:(hasPlate||manualThird)?'plate':'side',extraPhoto:u[3],salePrice:sale.text.trim().isNotEmpty?_num(sale.text.replaceAll(',','.')):null""",
+"""meterPhoto:u[0],totalizerPhoto:u[1]!,identityPhoto:u[2]!,identityKind:(hasPlate||manualThird)?'plate':'side',extraPhoto:u[3],salePrice:saleValue""",
+'nullable_meter_and_required_price')
+replace(main,
+"""decoration:const InputDecoration(labelText:'Preço de venda/L')""",
+"""decoration:const InputDecoration(labelText:'Preço por litro *')""",
+'price_label_required')
+
+# no KM/hour text at all for measurement=none (no field, no placeholder)
+replace(main,
+"""      else if(measurementNotApplicable)const Text('Tipo de medição: Não se aplica.',style:TextStyle(fontSize:12,color:Colors.black54))
+      else const Text('O campo de KM ou Horímetro será definido depois que o destino for selecionado.',style:TextStyle(fontSize:12,color:Colors.black54)),
+""",
+"""      else if(!measurementNotApplicable)const Text('O campo de KM ou Horímetro será definido depois que o destino for selecionado.',style:TextStyle(fontSize:12,color:Colors.black54)),
+""",
+'no_measurement_fields_none')
+
+# 17) v67 -> v68 visible version
+replace(main,"child: Text('v67'","child: Text('v68'",'version_v68')

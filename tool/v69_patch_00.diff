@@ -1,0 +1,90 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -1,6 +1,8 @@
+ import 'dart:async';
+ import 'dart:convert';
+ import 'dart:io';
++import 'dart:isolate';
++import 'dart:math';
+ import 'dart:typed_data';
+ import 'dart:ui' as ui;
+ 
+@@ -27,6 +29,26 @@
+ const _blue = Color(0xFF0B4EA2);
+ const _deviceChannelV42 = MethodChannel('rc.abastecimento/device');
+ 
++String _randomSaltV69() {
++  final r=Random.secure();
++  final bytes=List<int>.generate(16,(_)=>r.nextInt(256),growable:false);
++  return base64UrlEncode(bytes);
++}
++
++String _pbkdf2Sha256V69(String secret,String saltB64,int iterations) {
++  final salt=base64Url.decode(base64Url.normalize(saltB64));
++  final hmac=crypto.Hmac(crypto.sha256,utf8.encode(secret));
++  final block=Uint8List(salt.length+4)..setRange(0,salt.length,salt);
++  block[salt.length]=0;block[salt.length+1]=0;block[salt.length+2]=0;block[salt.length+3]=1;
++  var u=Uint8List.fromList(hmac.convert(block).bytes);
++  final out=Uint8List.fromList(u);
++  for(var i=1;i<iterations;i++){
++    u=Uint8List.fromList(hmac.convert(u).bytes);
++    for(var j=0;j<out.length;j++)out[j]^=u[j];
++  }
++  return base64UrlEncode(out);
++}
++
+ Future<String> _stableDeviceIdV42() async {
+   if (Platform.isAndroid) {
+     try {
+@@ -214,8 +236,36 @@
+ 
+   List<Map<String, dynamic>> get _queue => _rows(_state['queue']);
+   Map<String, dynamic>? get cachedProfile => _state['profile'] is Map ? _map(_state['profile']) : null;
+-  Map<String, dynamic>? get cachedReferenceData => _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
++  Map<String,dynamic>? get _baseReferenceDataV69 => _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
++  Map<String,dynamic>? get cachedReferenceData => _referenceWithPendingOverlayV69();
+   int? get lastTankId => _intOrNull(_state['last_tank_id']);
++
++  Map<String,dynamic>? _referenceWithPendingOverlayV69(){
++    final raw=_baseReferenceDataV69;if(raw==null)return null;
++    final ref=_map(jsonDecode(jsonEncode(raw)));
++    final tanks=_rows(ref['tanks']);
++    final reserved=<int,double>{};
++    final incoming=<int,double>{};
++    final uid=activeUserIdV62;
++    for(final q in _queue){
++      final owner='${q['user_id']??''}'.trim();
++      if(owner.isNotEmpty&&uid!=null&&owner!=uid)continue;
++      if(q['sync_rejected']==true)continue;
++      if(q['sync_blocked']==true&&q['sync_conflict']!=true)continue;
++      final rpc='${q['rpc']??''}';final params=_map(q['params']);final liters=_num(params['p_liters']);
++      if(liters<=0)continue;
++      if(_fuelingRpc(rpc)){final id=_intOrNull(params['p_source_tank_id']);if(id!=null)reserved[id]=(reserved[id]??0)+liters;}
++      else if(rpc=='rca_record_transfer'){final sId=_intOrNull(params['p_source_tank_id']),dId=_intOrNull(params['p_destination_tank_id']);if(sId!=null)reserved[sId]=(reserved[sId]??0)+liters;if(dId!=null)incoming[dId]=(incoming[dId]??0)+liters;}
++      else if(rpc=='rca_record_refinery_entry'){final id=_intOrNull(params['p_tank_id']);if(id!=null)incoming[id]=(incoming[id]??0)+liters;}
++    }
++    for(final t in tanks){
++      final id=_intOrNull(t['id']);if(id==null)continue;
++      final confirmed=_num(t['current_balance_liters']);final out=reserved[id]??0;final inc=incoming[id]??0;
++      t['confirmed_balance_liters']=confirmed;t['pending_reserved_liters']=out;t['pending_incoming_liters']=inc;
++      final available=confirmed-out+inc;t['current_balance_liters']=available<0?0.0:available;
++    }
++    ref['tanks']=tanks;return ref;
++  }
+   bool get hasCachedCanFuelV68 => _state.containsKey('can_fueling_create_v68');
+   bool get cachedCanFuelV68 => _state['can_fueling_create_v68']==true;
+   Map<String,dynamic>? get abandonedSessionV68 => _state['abandoned_session_v68'] is Map ? _map(_state['abandoned_session_v68']) : null;
+@@ -254,17 +304,32 @@
+     final device='${_state['device_id_v39']??'rc-device'}';
+     return crypto.sha256.convert(utf8.encode('$device|${_offlineKeyV62(username)}|$password')).toString();
+   }
++  String _offlineSecretV69(String username,String password){final device='${_state['device_id_v39']??'rc-device'}';return '$device|${_offlineKeyV62(username)}|$password';}
++  Future<Map<String,dynamic>> _credentialV69(String username,String password) async {
++    const iterations=60000;final salt=_randomSaltV69();final secret=_offlineSecretV69(username,password);
++    final hash=await Isolate.run(()=>_pbkdf2Sha256V69(secret,salt,iterations));
++    return {'kdf':'pbkdf2-sha256','iterations':iterations,'salt':salt,'hash':hash};
++  }
++  Future<bool> _verifyCredentialV69(Map<String,dynamic> item,String username,String password) async {
++    if('${item['kdf']??''}'=='pbkdf2-sha256'){
++      final salt='${item['salt']??''}';final iterations=_intOrNull(item['iterations'])??60000;if(salt.isEmpty)return false;
++      final expected='${item['hash']??''}';final secret=_offlineSecretV69(username,password);

@@ -1,0 +1,155 @@
+# 1) helper to render plate/description without "Sem placa"
+replace(main,
+"""bool _hasValue(dynamic value) {
+  if (value == null) return false;
+  final s = '$value'.trim();
+  return s.isNotEmpty && s != '-' && s.toLowerCase() != 'null';
+}
+""",
+"""bool _hasValue(dynamic value) {
+  if (value == null) return false;
+  final s = '$value'.trim();
+  return s.isNotEmpty && s != '-' && s.toLowerCase() != 'null';
+}
+
+String _plateDescriptionLabel(dynamic plate, dynamic description) {
+  final parts=<String>[];
+  if(_hasValue(plate))parts.add('$plate'.trim());
+  if(_hasValue(description))parts.add('$description'.trim());
+  return parts.isEmpty?'-':parts.join(' • ');
+}
+""",
+'plate_helper')
+
+# 2) offline permission snapshot + crash/session reconciliation + pending count
+replace(main,
+"""  Map<String, dynamic>? get cachedReferenceData => _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
+  int? get lastTankId => _intOrNull(_state['last_tank_id']);
+""",
+"""  Map<String, dynamic>? get cachedReferenceData => _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
+  int? get lastTankId => _intOrNull(_state['last_tank_id']);
+  bool get hasCachedCanFuelV68 => _state.containsKey('can_fueling_create_v68');
+  bool get cachedCanFuelV68 => _state['can_fueling_create_v68']==true;
+  Map<String,dynamic>? get abandonedSessionV68 => _state['abandoned_session_v68'] is Map ? _map(_state['abandoned_session_v68']) : null;
+  int _pendingQueueCountV68()=>_queue.where((q)=>q['sync_rejected']!=true).length;
+  Future<void> cacheFuelingPermissionV68(bool allowed) async {_state['can_fueling_create_v68']=allowed;await _persist();}
+  Future<void> beginSessionMarkerV68() async {
+    final uid=activeUserIdV62??Supabase.instance.client.auth.currentUser?.id;
+    if(uid==null||uid.isEmpty)return;
+    _state['session_marker_v68']={'user_id':uid,'session_id':appSessionIdV30,'tank_id':lastTankId,'started_at':DateTime.now().toUtc().toIso8601String(),'last_seen_at':DateTime.now().toUtc().toIso8601String()};
+    await _persist();
+  }
+  Future<void> clearSessionMarkerV68() async {_state.remove('session_marker_v68');await _persist();}
+  Future<void> reconcileAbandonedSessionV68() async {
+    final old=abandonedSessionV68;if(old==null)return;
+    final uid=Supabase.instance.client.auth.currentUser?.id??activeUserIdV62;
+    final owner='${old['user_id']??''}'.trim();
+    if(uid==null||uid.isEmpty||owner.isEmpty||uid!=owner)return;
+    final sid='${old['session_id']??''}'.trim();final tank=_intOrNull(old['tank_id']);
+    final occurred=DateTime.tryParse('${old['last_seen_at']??old['started_at']??''}')??DateTime.now().toUtc();
+    try{
+      if(online.value){
+        await Supabase.instance.client.rpc('rca_offline_logout_v62',params:{'p_session_id':sid.isEmpty?null:sid,'p_tank_id':tank,'p_occurred_at':occurred.toUtc().toIso8601String()});
+      }else{
+        await queueOfflineLogoutV62(sessionId:sid.isEmpty?null:sid,tankId:tank,occurredAt:occurred);
+      }
+      _state.remove('abandoned_session_v68');await _persist();
+    }catch(e){
+      if(_isNetworkError(e)){markOffline();await queueOfflineLogoutV62(sessionId:sid.isEmpty?null:sid,tankId:tank,occurredAt:occurred);_state.remove('abandoned_session_v68');await _persist();}
+    }
+  }
+""",
+'offline_v68_state')
+
+# 3) pending entries expose conflict/rejected status
+replace(main,
+"""        'location_address':params['p_location_address'],
+        'sync_error':q['sync_error'],
+""",
+"""        'location_address':params['p_location_address'],
+        'sync_error':q['sync_error'],
+        'sync_conflict':q['sync_conflict']==true,
+        'sync_status':q['sync_status'],
+        'sync_rejected':q['sync_rejected']==true,
+        'last_sync_attempt':q['last_sync_attempt'],
+""",
+'pending_status_fields')
+
+# 4) retry does not resurrect rejected; conflicts may poll/retry to learn decision
+replace(main,
+"""  Future<void> retryPending() async {
+    final queue=_queue;
+    for(final q in queue){q.remove('sync_blocked');q.remove('sync_error');}
+    _state['queue']=queue;
+    await _persist();
+    syncRevision.value++;
+    await syncPending(force:true);
+  }
+""",
+"""  Future<void> retryPending() async {
+    final queue=_queue;
+    for(final q in queue){if(q['sync_rejected']==true)continue;q.remove('sync_blocked');q.remove('sync_error');}
+    _state['queue']=queue;
+    pendingCount.value=_pendingQueueCountV68();
+    await _persist();
+    syncRevision.value++;
+    await syncPending(force:true);
+  }
+""",
+'retry_rejected')
+
+# 5) update session marker when unit changes
+replace(main,
+"""  Future<void> setLastTankId(int? value) async {
+    if (value == null) {
+      _state.remove('last_tank_id');
+    } else {
+      _state['last_tank_id'] = value;
+    }
+    await _persist();
+  }
+""",
+"""  Future<void> setLastTankId(int? value) async {
+    if (value == null) {
+      _state.remove('last_tank_id');
+    } else {
+      _state['last_tank_id'] = value;
+    }
+    if(_state['session_marker_v68'] is Map){final m=_map(_state['session_marker_v68']);m['tank_id']=value;m['last_seen_at']=DateTime.now().toUtc().toIso8601String();_state['session_marker_v68']=m;}
+    await _persist();
+  }
+""",
+'unit_marker')
+
+# 6) cold start: detect an unclosed prior process session automatically
+replace(main,
+"""    _state['queue'] ??= <dynamic>[];
+    pendingCount.value = _queue.length;
+    await _refreshOnlineState();
+""",
+"""    _state['queue'] ??= <dynamic>[];
+    if(_state['session_marker_v68'] is Map && _state['app_logged_out_v62']!=true){
+      _state['abandoned_session_v68']=_map(_state['session_marker_v68']);
+      _state.remove('session_marker_v68');
+      await _persist();
+    }
+    pendingCount.value = _pendingQueueCountV68();
+    await _refreshOnlineState();
+""",
+'cold_start_reconcile_marker')
+
+# 7) v68 counts as fueling in local balance
+replace(main,
+"""rpc == 'rca_record_fueling_v56' || rpc == 'rca_record_fueling_v58'""",
+"""rpc == 'rca_record_fueling_v56' || rpc == 'rca_record_fueling_v58' || rpc == 'rca_record_fueling_v68'""",
+'local_balance_v68')
+
+# 8) queued count excludes rejected
+replace(main,
+"""    pendingCount.value = queue.length;
+    await _persist();
+""",
+"""    pendingCount.value = _pendingQueueCountV68();
+    await _persist();
+""",
+'queue_count_v68')

@@ -1,0 +1,57 @@
++        addEvidence('Totalizador depois', x['totalizer_photo_after_path']);
+         addEvidence('Foto da placa ou identificação', x['identity_evidence_photo_path']);
+         addEvidence('4ª foto (opcional)', x['extra_evidence_photo_path']);
+       }
+--- lib/v29_features.dart
++++ lib/v29_features.dart
+@@ -1,7 +1,7 @@
+ part of 'main_online.dart';
+ 
+ extension FuelApiV29 on FuelApi {
+-  Future<List<Map<String, dynamic>>> myFuelingsV29({DateTime? start,DateTime? end,String? asset,String? work,String? fuelType,String? source}) async => _rows(await client.rpc('rca_my_fuelings_v29', params: {'p_start': start?.toUtc().toIso8601String(),'p_end': end?.toUtc().toIso8601String(),'p_asset_query': asset,'p_work_query': work,'p_fuel_type': fuelType,'p_source_code': source}));
++  Future<List<Map<String, dynamic>>> myFuelingsV29({DateTime? start,DateTime? end,String? asset,String? work,String? fuelType,String? source}) async => _rows(await client.rpc('rca_my_fuelings_v70', params: {'p_start': start?.toUtc().toIso8601String(),'p_end': end?.toUtc().toIso8601String(),'p_asset_query': asset,'p_work_query': work,'p_fuel_type': fuelType,'p_source_code': source}));
+   Future<bool> hasPermissionV29(String key) async => (await client.rpc('rca_has_permission', params: {'p_key': key})) == true;
+   Future<List<Map<String, dynamic>>> adminUsersV29() async => _rows(await client.rpc('rca_admin_list_users_v29'));
+   Future<Map<String, dynamic>> adminPermissionCatalogV29() async => _map(await client.rpc('rca_admin_permission_catalog_v29'));
+@@ -114,19 +114,29 @@
+     if(v!=null&&mounted)setState((){if(first)start=v;else end=v;});
+   }
+ 
++  bool _localMatchesV70(Map<String,dynamic> x){
++    if(!_recordInRangeV70(x,dayStart(start),dayEnd(end)))return false;
++    bool has(String value,String? needle){final n=(needle??'').trim();return n.isEmpty||value.toLowerCase().contains(n.toLowerCase());}
++    if(!has('${x['asset_number']??''} ${x['asset_plate']??''} ${x['asset_model']??''} ${x['third_party_plate']??''} ${x['third_party_description']??''}',clean(asset)))return false;
++    if(!has('${x['work']??''}',clean(work)))return false;
++    if(!has('${x['fuel_type']??''}',clean(fuel)))return false;
++    if(!has('${x['source_tank']??''} ${x['source_tank_name']??''}',clean(source)))return false;
++    return true;
++  }
++
+   Future<void> load() async {
+     if(busy)return;
+-    final local=offlineStore.pendingFuelingsForCurrentUser();
++    final local=offlineStore.pendingFuelingsForCurrentUser().where(_localMatchesV70).toList();
+     if(mounted)setState((){busy=true;error=null;localPending=local;});
+     try{
+       if(offlineStore.online.value){
+         final x=await api.myFuelingsV29(start:dayStart(start),end:dayEnd(end),asset:clean(asset),work:clean(work),fuelType:clean(fuel),source:clean(source));
+-        if(mounted)setState(()=>items=[...local,...x]);
++        if(mounted)setState(()=>items=_sortRecordsV70([...local,...x]));
+       }else{
+-        if(mounted)setState(()=>items=local);
++        if(mounted)setState(()=>items=_sortRecordsV70(local));
+       }
+     }catch(e){
+-      if(mounted)setState((){items=local;error=local.isEmpty?_friendlyError(e):null;});
++      if(mounted)setState((){items=_sortRecordsV70(local);error=local.isEmpty?_friendlyError(e):null;});
+     }finally{if(mounted)setState(()=>busy=false);}
+   }
+ 
+@@ -161,6 +171,7 @@
+             if(_hasValue(x['location_address']))... [const SizedBox(height:6),Text('Localização: ${x['location_address']}')],
+             if(syncError.isNotEmpty)...[const SizedBox(height:8),Text(syncError,style:const TextStyle(color:Colors.redAccent,fontWeight:FontWeight.w700))],
+             const SizedBox(height:10),
++            Row(children:[Expanded(child:OutlinedButton.icon(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>MovementDetailScreen(item:x))),icon:const Icon(Icons.visibility_outlined),label:const Text('Ver registro'))),const SizedBox(width:8),IconButton(onPressed:()=>Navigator.push(context,MaterialPageRoute(builder:(_)=>OfficialPdfPreviewV28Screen(items:[x],title:'Prévia • Pendente offline'))),tooltip:'Prévia / PDF',icon:const Icon(Icons.picture_as_pdf_outlined,color:_blue))]),
+             OutlinedButton.icon(onPressed:(busy||syncConflict||syncRejected)?null:()async{
+               try{
+                 if(legacy){

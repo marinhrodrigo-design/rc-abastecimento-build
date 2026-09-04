@@ -1,0 +1,40 @@
++  Future<void> search({bool collapse=true}) async {if(busy)return;setState((){busy=true;error=null;});final local=offlineStore.pendingFuelingsForCurrentUser().where(_localMatchV70).toList();try{if(offlineStore.online.value){final r=await api.generalRecordsV28(start:start,end:end,workId:workId,asset:asset.text.trim(),plate:plate.text.trim(),operatorName:operatorName.text.trim(),type:type,query:query.text.trim(),sourceCode:source.text.trim(),invoice:invoice.text.trim(),responsible:responsible.text.trim(),companyId:companyId,fuelType:fuelType,limit:1000).timeout(const Duration(seconds:20));if(mounted)setState((){items=_sortRecordsV70([...local,..._rows(r['items'])]);summary=_summaryWithLocalV70(_map(r['summary']),local);selected.clear();if(collapse)filters=false;});}else if(mounted){setState((){items=_sortRecordsV70(local);summary=_summaryWithLocalV70({},local);selected.clear();if(collapse)filters=false;});}}catch(e){if(mounted)setState((){items=_sortRecordsV70(local);summary=_summaryWithLocalV70({},local);error=local.isEmpty?_friendlyError(e):null;selected.clear();});}finally{if(mounted)setState(()=>busy=false);}}
+   void clearFilters(){setState((){start=null;end=null;workId=null;companyId=null;type=null;fuelType=null;for(final c in [query,asset,plate,operatorName,responsible,source,invoice]){c.clear();}filters=true;});}
+   void preview(List<Map<String,dynamic>> x){if(x.isEmpty)return;Navigator.push(context,MaterialPageRoute(builder:(_)=>OfficialPdfPreviewV28Screen(items:x,title:x.length==1?'Prévia • ${x.first['code']??'Registro'}':'Prévia • ${x.length} registros')));}
+   String workLabel(){if(workId==null)return'Todas as obras';for(final w in works){if(_intOrNull(w['id'])==workId)return'${w['name']}';}return'Obra selecionada';}
+@@ -4421,12 +4507,16 @@
+     ];
+ 
+     final media = <MapEntry<String, String>>[];
+-    void mediaOne(String label, dynamic value) { if (_hasValue(value)) media.add(MapEntry(label, '$value')); }
+-    for (final p in _rowsFromPaths(item['photo_paths'])) { media.add(MapEntry('Foto do abastecimento', p)); }
+-    for (final p in _rowsFromPaths(item['damage_photo_paths'])) { media.add(MapEntry('Medidor danificado', p)); }
+-    mediaOne('KM/Horímetro antes', item['km_photo_before_path']);
+-    mediaOne('Totalizador antes', item['totalizer_photo_before_path']);
++    final knownMedia=<String>{};
++    void mediaOne(String label, dynamic value) { if (_hasValue(value)) {final p='$value';if(knownMedia.add(p))media.add(MapEntry(label,p));} }
++    mediaOne('Foto do KM/Horímetro', item['meter_photo_path']);
++    mediaOne('Totalizador antes do abastecimento', item['totalizer_photo_before_path']??item['totalizer_evidence_photo_path']);
+     mediaOne('Totalizador depois', item['totalizer_photo_after_path']);
++    mediaOne('Foto da placa ou identificação', item['identity_evidence_photo_path']);
++    mediaOne('Foto adicional', item['extra_evidence_photo_path']);
++    for (final p in _rowsFromPaths(item['photo_paths'])) { if(knownMedia.add(p))media.add(MapEntry('Foto do abastecimento', p)); }
++    for (final p in _rowsFromPaths(item['damage_photo_paths'])) { if(knownMedia.add(p))media.add(MapEntry('Medidor danificado', p)); }
++    mediaOne('KM/Horímetro antes', item['km_photo_before_path']);
+     mediaOne('Placa ou ativo antes', item['plate_photo_before_path']);
+     mediaOne('Assinatura de quem recebe', item['receiver_signature_path']);
+     mediaOne('Assinatura de quem abastece', item['operator_signature_path']);
+@@ -4448,6 +4538,7 @@
+       body: ListView(
+         padding: const EdgeInsets.fromLTRB(16, 16, 16, 60),
+         children: [
++          if(item['offline_pending']==true)Card(color:const Color(0xFFFFF4E5),child:ListTile(leading:const Icon(Icons.cloud_off_rounded,color:Colors.orange),title:const Text('Registro salvo offline neste aparelho',style:TextStyle(fontWeight:FontWeight.w900)),subtitle:Text(item['sync_conflict']==true?'CONFLITO • AGUARDANDO ANÁLISE':item['sync_rejected']==true?'REJEITADO':'Será sincronizado automaticamente quando a conexão estiver disponível.'))),
+           Card(color: comboioToComboio ? _comboioToComboioPale : null, child: Padding(
+             padding: const EdgeInsets.all(18),
+             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+@@ -4880,7 +4971,8 @@
+       }
+       if (fueling) {
+         addEvidence('Foto do KM ou Horímetro', x['meter_photo_path']);
+-        addEvidence('Foto do Totalizador', x['totalizer_evidence_photo_path']);
++        addEvidence('Totalizador antes do abastecimento', x['totalizer_photo_before_path'] ?? x['totalizer_evidence_photo_path']);

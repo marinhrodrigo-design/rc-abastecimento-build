@@ -1,0 +1,83 @@
++      final actual=await Isolate.run(()=>_pbkdf2Sha256V69(secret,salt,iterations));return actual==expected;
++    }
++    return '${item['hash']??''}'==_offlineHashV62(username,password);
++  }
+   Future<void> cacheOfflineLoginV62(String username,String password,Map<String,dynamic> profile) async {
+-    final key=_offlineKeyV62(username);
+-    final users=_offlineUsersV62;
++    final key=_offlineKeyV62(username);final users=_offlineUsersV62;
+     final uid='${profile['user_id']??profile['id']??Supabase.instance.client.auth.currentUser?.id??''}'.trim();
+-    users[key]=<String,dynamic>{'hash':_offlineHashV62(username,password),'profile':profile,'user_id':uid,'updated_at':DateTime.now().toUtc().toIso8601String()};
++    final credential=await _credentialV69(username,password);
++    users[key]=<String,dynamic>{...credential,'profile':profile,'user_id':uid,'updated_at':DateTime.now().toUtc().toIso8601String()};
+     _state['offline_users_v62']=users;_state['profile']=profile;_state['active_user_id_v62']=uid;_state['app_logged_out_v62']=false;await _persist();
+   }
+   Future<Map<String,dynamic>> offlineLoginV62(String username,String password) async {
+     final key=_offlineKeyV62(username),users=_offlineUsersV62;final raw=users[key];
+     if(raw is! Map)throw Exception('Este usuário ainda não foi habilitado para acesso offline neste aparelho. Conecte-se à internet e entre uma vez.');
+-    final item=_map(raw);if('${item['hash']??''}'!=_offlineHashV62(username,password))throw Exception('Usuário ou senha/PIN inválidos.');
++    final item=_map(raw);if(!await _verifyCredentialV69(item,username,password))throw Exception('Usuário ou senha/PIN inválidos.');
++    if('${item['kdf']??''}'!='pbkdf2-sha256'){final upgraded=await _credentialV69(username,password);item.addAll(upgraded);users[key]=item;_state['offline_users_v62']=users;}
+     final p=_map(item['profile']);if(p.isEmpty)throw Exception('Dados offline deste usuário não estão disponíveis.');
+     _state['profile']=p;_state['active_user_id_v62']='${item['user_id']??p['user_id']??p['id']??''}';_state['app_logged_out_v62']=false;await _persist();return p;
+   }
+@@ -348,7 +413,7 @@
+ 
+   Future<void> retryPending() async {
+     final queue=_queue;
+-    for(final q in queue){if(q['sync_rejected']==true)continue;q.remove('sync_blocked');q.remove('sync_error');}
++    for(final q in queue){if(q['sync_rejected']==true||q['sync_conflict']==true)continue;q.remove('sync_blocked');q.remove('sync_error');q.remove('sync_status');}
+     _state['queue']=queue;
+     pendingCount.value=_pendingQueueCountV68();
+     await _persist();
+@@ -380,6 +445,21 @@
+       _state = <String, dynamic>{'queue': <dynamic>[]};
+     }
+     _state['queue'] ??= <dynamic>[];
++    if(_state['balance_model_v69']!=true){
++      final ref=_baseReferenceDataV69;
++      if(ref!=null){
++        final tanks=_rows(ref['tanks']);
++        void change(int? id,double delta){if(id==null)return;for(final t in tanks){if(_intOrNull(t['id'])==id){t['current_balance_liters']=_num(t['current_balance_liters'])+delta;return;}}}
++        for(final q in _queue){
++          final rpc='${q['rpc']??''}';final params=_map(q['params']);final liters=_num(params['p_liters']);if(liters<=0)continue;
++          if(_fuelingRpc(rpc)){final id=_intOrNull(params['p_source_tank_id']);change(id,liters);for(final t in tanks){if(_intOrNull(t['id'])==id){t['accounting_meter']=max(0,_num(t['accounting_meter'])-liters);break;}}}
++          else if(rpc=='rca_record_transfer'){change(_intOrNull(params['p_source_tank_id']),liters);change(_intOrNull(params['p_destination_tank_id']),-liters);}
++          else if(rpc=='rca_record_refinery_entry'){change(_intOrNull(params['p_tank_id']),-liters);}
++        }
++        ref['tanks']=tanks;_state['reference_data']=ref;
++      }
++      _state['balance_model_v69']=true;await _persist();
++    }
+     if(_state['session_marker_v68'] is Map && _state['app_logged_out_v62']!=true){
+       _state['abandoned_session_v68']=_map(_state['session_marker_v68']);
+       _state.remove('session_marker_v68');
+@@ -409,7 +489,10 @@
+     } catch (_) {}
+     final changed = online.value != reachable;
+     online.value = reachable;
+-    if (reachable && (changed || pendingCount.value > 0)) unawaited(syncPending(force:changed));
++    if(reachable){
++      try{await reconcileAbandonedSessionV68();}catch(_){}
++      if(changed||pendingCount.value>0)unawaited(syncPending(force:changed));
++    }
+   }
+ 
+   void markOffline() => online.value = false;
+@@ -430,7 +513,7 @@
+   }
+ 
+   Future<void> cacheReferenceData(Map<String, dynamic> value) async {
+-    _state['reference_data'] = value;
++    _state['reference_data'] = value;_state['balance_model_v69']=true;
+     await _persist();
+   }
+ 
+@@ -455,38 +538,6 @@
+     return 0;
+   }
+ 
+-  void _applyLocalBalance(String rpc, Map<String, dynamic> params) {
+-    final ref = cachedReferenceData;
+-    if (ref == null) return;
+-    final tanks = _rows(ref['tanks']);

@@ -1,0 +1,21 @@
++      Text('Origem: ${widget.source['code']} • ${widget.source['name']}',style:const TextStyle(fontWeight:FontWeight.w700)),const SizedBox(height:8),Text('Ativo/equipamento: ${targets.join(' + ')}'),const SizedBox(height:8),Text('Combustível: $fuel'),Text('Volume: ${_fmtLiters(v)}'),const Text('Totalizador antes do abastecimento: foto registrada ✓',style:TextStyle(fontWeight:FontWeight.w700)),Text('Preço por litro: ${_fmtMoney(_num(sale.text.replaceAll(',', '.')))}'),Text('Valor total: ${_fmtMoney(v*_num(sale.text.replaceAll(',', '.')))}',style:const TextStyle(fontWeight:FontWeight.w700)),if(k!=null)Text('KM: ${k.toStringAsFixed(k.truncateToDouble()==k?0:1)}'),if(h!=null)Text('Horímetro: ${h.toStringAsFixed(h.truncateToDouble()==h?0:1)}'),Text('Responsável pelo recebimento do abastecimento: ${receiver.text.trim()}'),if(observation.text.trim().isNotEmpty)Text('Observação: ${observation.text.trim()}'),const SizedBox(height:8),Text('Endereço do abastecimento: ${location.text.trim()}',style:const TextStyle(fontWeight:FontWeight.w700)),Text(manualLocationV44?'Localização informada manualmente':'Localização obtida automaticamente',style:const TextStyle(fontSize:12,color:Colors.black54)),if(capturedPosition!=null)Text('Coordenadas: ${capturedPosition!.latitude.toStringAsFixed(6)}, ${capturedPosition!.longitude.toStringAsFixed(6)}',style:const TextStyle(fontSize:12,color:Colors.black54)),if(capturedPosition!=null)Text(locationMeta(),style:const TextStyle(fontSize:12,color:Colors.black54)),const SizedBox(height:10),const Text('Confira os dados antes de confirmar. Depois da confirmação o registro será processado.')
+     ])),actions:[TextButton(onPressed:()=>Navigator.pop(ctx,false),child:const Text('Cancelar')),FilledButton(onPressed:()=>Navigator.pop(ctx,true),child:const Text('Confirmar abastecimento'))]))??false;
+   }
+ 
+@@ -2474,7 +2486,7 @@
+     if(manualThird){k=double.tryParse(km.text.trim().replaceAll(',','.'));h=double.tryParse(hour.text.trim().replaceAll(',','.'));if(k!=null&&k<0){requiredMessage('KM');return;}if(h!=null&&h<0){requiredMessage('Horímetro');return;}if(k==null&&h==null){requiredMessage('KM ou Horímetro');return;}}else{if(kinds.contains('km')){k=double.tryParse(km.text.trim().replaceAll(',','.'));if(k==null||k<0){requiredMessage('KM');return;}}if(kinds.contains('hour')){h=double.tryParse(hour.text.trim().replaceAll(',','.'));if(h==null||h<0){requiredMessage('Horímetro');return;}}}
+     if(receiver.text.trim().isEmpty){requiredMessage('Responsável pelo recebimento do abastecimento');return;}
+     if((kinds.isNotEmpty||manualThird)&&meter==null){requiredMessage(kinds.length>1?'Foto de KM/Horímetro':kinds.contains('km')?'Foto do KM':kinds.contains('hour')?'Foto do Horímetro':'Foto de KM/Horímetro');return;}
+-    if(totalizer==null){requiredMessage('Foto do Totalizador');return;}
++    if(totalizer==null){requiredMessage('Foto do totalizador antes do abastecimento');return;}
+     if(identity==null){requiredMessage('Foto da placa ou identificação');return;}
+     if(rs==null){requiredMessage('Assinatura de quem recebeu');return;}
+     if(os==null){requiredMessage('Assinatura de quem abasteceu');return;}
+@@ -2506,7 +2518,7 @@
+     setState((){saving=true;savingStep='Enviando evidências...';});
+     try{
+       Future<String> up(XFile x,String kind)async=>api.uploadBytes(await x.readAsBytes(),kind,mime:x.mimeType??'image/jpeg');
+-      final u=await Future.wait<String?>([meter==null?Future<String?>.value(null):up(meter!,'km_horimetro'),up(totalizer!,'totalizador'),up(identity!,'placa_identificacao'),extra==null?Future<String?>.value(null):up(extra!,'abastecimento_extra'),api.uploadBytes(rs!,'assinatura_recebedor'),api.uploadBytes(os!,'assinatura_abastecedor')]);
++      final u=await Future.wait<String?>([meter==null?Future<String?>.value(null):up(meter!,'km_horimetro'),up(totalizer!,'totalizador_antes'),up(identity!,'placa_identificacao'),extra==null?Future<String?>.value(null):up(extra!,'abastecimento_extra'),api.uploadBytes(rs!,'assinatura_recebedor'),api.uploadBytes(os!,'assinatura_abastecedor')]);
+       if(!mounted)return;setState(()=>savingStep='Finalizando abastecimento...');
+       final manualThird=machine==null&&third==-1;

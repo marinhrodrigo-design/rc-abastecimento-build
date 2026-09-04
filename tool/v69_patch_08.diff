@@ -1,0 +1,9 @@
+@@ -97,7 +97,7 @@
+                 contentPadding:const EdgeInsets.symmetric(horizontal:14,vertical:9),
+                 leading:Icon('${t['tank_type']}'=='stationary'?Icons.oil_barrel_outlined:Icons.local_shipping_outlined,color:_blue),
+                 title:Text('${t['code']} • ${t['name']}',style:const TextStyle(fontWeight:FontWeight.w900)),
+-                subtitle:Text(inUse&&!mine?'Em uso por $owner':'Saldo: ${_fmtLiters(t['current_balance_liters'])}'),
++                subtitle:Text(inUse&&!mine?'Em uso por $owner':'Disponível: ${_fmtLiters(t['current_balance_liters'])}${_num(t['pending_reserved_liters'])>0?' • Pendente: ${_fmtLiters(t['pending_reserved_liters'])}':''}'),
+                 trailing:mine?const Icon(Icons.check_circle_rounded,color:Colors.green):inUse?const Icon(Icons.lock_outline_rounded):const Icon(Icons.chevron_right_rounded),
+                 onTap:(){
+                   if(inUse&&!mine){

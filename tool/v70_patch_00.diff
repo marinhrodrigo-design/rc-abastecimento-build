@@ -1,0 +1,62 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -368,26 +368,28 @@
+       for(final x in works){if(_intOrNull(x['id'])==workId){work=x;break;}}
+       for(final x in tanks){if(_intOrNull(x['id'])==tankId){tank=x;break;}}
+       final third='${params['p_third_party_plate']??''}'.trim();
++      final profile=_map(_state['profile']);
++      final price=_num(params['p_sale_price_per_liter']);
++      final litersValue=_num(params['p_liters']);
++      final totalizerBefore=params['p_totalizer_photo_path'];
+       out.add(<String,dynamic>{
+-        'offline_pending':true,
+-        'offline_legacy_owner':legacy,
+-        'queue_id':'${q['id']}',
+-        'asset_number':machine?['numeroAtivo']??(third.isNotEmpty?third:'-'),
+-        'third_party_plate':third.isEmpty?null:third,
+-        'work':work?['name']??'Sem obra',
+-        'liters':params['p_liters'],
+-        'fuel_type':params['p_fuel_type']??'Combustível',
+-        'source_tank':tank?['code']??tank?['name']??'-',
+-        'occurred_at':params['p_occurred_at']??q['created_at'],
+-        'created_at':q['created_at'],
+-        'km_value':params['p_km_value'],
+-        'hourmeter_value':params['p_hourmeter_value'],
+-        'location_address':params['p_location_address'],
+-        'sync_error':q['sync_error'],
+-        'sync_conflict':q['sync_conflict']==true,
+-        'sync_status':q['sync_status'],
+-        'sync_rejected':q['sync_rejected']==true,
+-        'last_sync_attempt':q['last_sync_attempt'],
++        'offline_pending':true,'offline_legacy_owner':legacy,'queue_id':'${q['id']}','id':null,'code':'PENDENTE (OFFLINE)','type':'fueling',
++        'status':q['sync_rejected']==true?'rejected':q['sync_conflict']==true?'pending_review':'pending_offline',
++        'asset_id':machineId,'asset_number':machine?['numeroAtivo']??(third.isNotEmpty?third:'-'),'asset_plate':machine?['placa'],
++        'asset_model':[machine?['marca'],machine?['modelo']].where((v)=>_hasValue(v)).join(' '),
++        'third_party_vehicle_id':_intOrNull(params['p_third_party_vehicle_id']),'third_party_plate':third.isEmpty?null:third,'third_party_description':params['p_third_party_description'],
++        'work_id':workId,'work':work?['name']??'Sem obra','liters':params['p_liters'],'fuel_type':params['p_fuel_type']??'Combustível',
++        'source_tank_id':tankId,'source_tank':tank?['code']??tank?['name']??'-','source_tank_name':tank?['name'],'source_tank_type':tank?['tank_type'],
++        'occurred_at':params['p_occurred_at']??q['created_at'],'created_at':params['p_occurred_at']??q['created_at'],
++        'km_value':params['p_km_value'],'hourmeter_value':params['p_hourmeter_value'],'km_hourmeter':params['p_hourmeter_value']??params['p_km_value'],
++        'receiver':params['p_receiver_name'],'operator':profile['display_name']??profile['name']??profile['username']??'Usuário offline','notes':params['p_notes'],
++        'location_address':params['p_location_address'],'latitude':params['p_latitude'],'longitude':params['p_longitude'],'location_captured_at':params['p_location_captured_at'],'location_accuracy_m':params['p_location_accuracy_m'],
++        'sale_price_per_liter':price>0?price:null,'total_value':price>0?price*litersValue:null,
++        'meter_photo_path':params['p_meter_photo_path'],'totalizer_evidence_photo_path':totalizerBefore,'totalizer_photo_before_path':totalizerBefore,
++        'identity_evidence_photo_path':params['p_identity_photo_path'],'identity_evidence_kind':params['p_identity_evidence_kind'],'extra_evidence_photo_path':params['p_extra_photo_path'],
++        'receiver_signature_path':params['p_receiver_signature_path'],'operator_signature_path':params['p_operator_signature_path'],
++        'photo_paths':[params['p_meter_photo_path'],totalizerBefore,params['p_identity_photo_path'],params['p_extra_photo_path']].where((v)=>_hasValue(v)).toList(),
++        'sync_error':q['sync_error'],'sync_conflict':q['sync_conflict']==true,'sync_status':q['sync_status'],'sync_rejected':q['sync_rejected']==true,'last_sync_attempt':q['last_sync_attempt'],
+       });
+     }
+     out.sort((a,b)=>'${b['occurred_at']??''}'.compareTo('${a['occurred_at']??''}'));
+@@ -585,6 +587,7 @@
+     _state['queue'] = queue;
+     pendingCount.value = _pendingQueueCountV68();
+     await _persist();
++    syncRevision.value++;
+ 
+     if (rpc == 'rca_record_transfer') {
+       return <String, dynamic>{
+@@ -941,7 +944,7 @@
+   Future<Map<String,dynamic>> generalRecordsV28({
+     DateTime? start,DateTime? end,int? workId,String? asset,String? plate,String? operatorName,String? type,
+     String? query,String? sourceCode,String? invoice,String? responsible,int? companyId,String? fuelType,int limit=500,

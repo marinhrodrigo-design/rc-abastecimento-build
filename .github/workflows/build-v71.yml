@@ -49,14 +49,13 @@ jobs:
           rm -rf app/lib
           cp -r /tmp/v70src/app/lib app/lib
           cp /tmp/v70src/app/pubspec.yaml app/pubspec.yaml
-      - name: Validate and apply v71 patch
+      - name: Apply v71 patches sequentially
         run: |
-          cat tool/v71_patch_[0-9][0-9].diff > /tmp/v71.patch
-          test -s /tmp/v71.patch
-          sha256sum /tmp/v71.patch
           cd app
-          patch -p0 --dry-run --forward --batch < /tmp/v71.patch
-          patch -p0 --forward --batch < /tmp/v71.patch
+          for patch_file in ../tool/v71_patch_[0-9][0-9].diff; do
+            echo "Applying $patch_file"
+            patch -p0 --forward --batch < "$patch_file"
+          done
       - name: Configure Android and stable signing
         working-directory: app
         run: |
@@ -121,8 +120,20 @@ jobs:
           grep -Fq "Saldo insuficiente para abastecimento offline" lib/main_online.dart
           grep -Fq "GPS indisponível no momento da conclusão" lib/main_online.dart
           if grep -Fq "fuel-test-login" lib/main_online.dart; then echo 'ERRO: login de teste encontrado'; exit 1; fi
-          if grep -Fq "Placa: \${x['placa'] ?? '-'}" lib/main_online.dart; then echo 'ERRO: placa ausente ainda exibida com hífen'; exit 1; fi
-          if grep -Fq "Placa: \${x['plate']??'-'}" lib/main_online.dart; then echo 'ERRO: placa ausente ainda exibida com hífen'; exit 1; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart').read_text()
+          forbidden=[
+            "Placa: ${x['placa'] ?? '-'}",
+            "Placa: ${x['plate']??'-'}",
+            "Placa: ${x['plate'] ?? '-'}",
+          ]
+          found={pat:p.count(pat) for pat in forbidden}
+          if any(found.values()):
+            print(found)
+            raise SystemExit('ERRO: placa ausente ainda exibida com hífen')
+          print('plate_fix_ok=True')
+          PY
       - name: Upload lint source snapshot
         uses: actions/upload-artifact@v4
         with:

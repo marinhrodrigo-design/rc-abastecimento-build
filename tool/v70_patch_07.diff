@@ -1,0 +1,23 @@
+   List<Map<String,dynamic>> works=[];List<Map<String,dynamic>> items=[];Map<String,dynamic> summary={};bool busy=false;bool filters=true;bool isAdmin=false;String? error;final Set<String> selected=<String>{};
+-  @override void initState(){super.initState();workId=widget.initialWorkId;query.text=widget.initialQuery??'';invoice.text=widget.initialInvoice??'';bootstrap();}
+-  @override void dispose(){for(final c in [query,asset,plate,operatorName,responsible,source,invoice]){c.dispose();}super.dispose();}
++  @override void initState(){super.initState();workId=widget.initialWorkId;query.text=widget.initialQuery??'';invoice.text=widget.initialInvoice??'';offlineStore.syncRevision.addListener(_offlineChangedV70);offlineStore.pendingCount.addListener(_offlineChangedV70);bootstrap();}
++  void _offlineChangedV70(){if(mounted)unawaited(search(collapse:false));}
++  @override void dispose(){offlineStore.syncRevision.removeListener(_offlineChangedV70);offlineStore.pendingCount.removeListener(_offlineChangedV70);for(final c in [query,asset,plate,operatorName,responsible,source,invoice]){c.dispose();}super.dispose();}
+   Future<void> bootstrap() async {try{final values=await Future.wait<dynamic>([api.worksCatalogV28(),api.profile()]);works=(values[0] as List).cast<Map<String,dynamic>>();isAdmin=_map(values[1])['is_admin']==true;}catch(_){try{works=await api.worksCatalogV28();}catch(_){}}if(mounted)setState((){});await search(collapse:false);}
+   String key(Map<String,dynamic>x)=>'${x['code']??x['id']}';
+   Future<void> pick(bool first) async {final base=first?(start??DateTime.now().subtract(const Duration(days:30))):((end??DateTime.now().add(const Duration(days:1))).subtract(const Duration(days:1)));final d=await showDatePicker(context:context,firstDate:DateTime(2024),lastDate:DateTime.now().add(const Duration(days:730)),initialDate:base);if(d==null)return;setState((){if(first)start=DateTime(d.year,d.month,d.day);else end=DateTime(d.year,d.month,d.day).add(const Duration(days:1));});}
+   Future<void> chooseWork() async {final result=await showModalBottomSheet<int>(context:context,isScrollControlled:true,showDragHandle:true,builder:(ctx)=>_WorkPickerV28(works:works,current:workId));if(!mounted||result==null)return;setState(()=>workId=result==0?null:result);}
+-  Future<void> search({bool collapse=true}) async {if(busy)return;setState((){busy=true;error=null;});try{final r=await api.generalRecordsV28(start:start,end:end,workId:workId,asset:asset.text.trim(),plate:plate.text.trim(),operatorName:operatorName.text.trim(),type:type,query:query.text.trim(),sourceCode:source.text.trim(),invoice:invoice.text.trim(),responsible:responsible.text.trim(),companyId:companyId,fuelType:fuelType,limit:1000).timeout(const Duration(seconds:20));if(mounted)setState((){items=_rows(r['items']);summary=_map(r['summary']);selected.clear();if(collapse)filters=false;});}catch(e){if(mounted)setState(()=>error=_friendlyError(e));}finally{if(mounted)setState(()=>busy=false);}}
++  bool _localMatchV70(Map<String,dynamic> x){
++    if(!_recordInRangeV70(x,start,end))return false;if(type!=null&&type!='fueling')return false;if(workId!=null&&_intOrNull(x['work_id'])!=workId)return false;
++    bool has(String value,String needle)=>needle.trim().isEmpty||value.toLowerCase().contains(needle.trim().toLowerCase());
++    if(!has('${x['asset_number']??''} ${x['asset_model']??''} ${x['third_party_description']??''}',asset.text))return false;
++    if(!has('${x['asset_plate']??''} ${x['third_party_plate']??''}',plate.text))return false;
++    if(!has('${x['operator']??''} ${x['receiver']??''}',operatorName.text))return false;
++    if(!has('${x['source_tank']??''} ${x['source_tank_name']??''}',source.text))return false;
++    if(fuelType!=null&&!has('${x['fuel_type']??''}',fuelType!))return false;
++    final q=query.text.trim();if(q.isNotEmpty&&!has('${x['code']??''} ${x['work']??''} ${x['asset_number']??''} ${x['asset_plate']??''} ${x['third_party_plate']??''} ${x['third_party_description']??''} ${x['source_tank']??''}',q))return false;
++    if(invoice.text.trim().isNotEmpty||responsible.text.trim().isNotEmpty||companyId!=null)return false;
++    return true;
++  }

@@ -3,7 +3,9 @@ name: Diagnose R&C Abastecimento v71 source
 on:
   push:
     branches: ['diagnostic/rc-abastecimento-v71-plate']
-    paths: ['.github/workflows/diagnose-v71-source.yml']
+    paths:
+      - '.github/workflows/diagnose-v71-source.yml'
+      - 'tool/v71_patch_*.diff'
   workflow_dispatch:
 
 permissions:
@@ -28,7 +30,7 @@ jobs:
           gh run download 33916946810 -n RC-Abastecimento-v70-approved-source -D /tmp/v70src
           cp -r /tmp/v70src/app/lib app/lib
           cp /tmp/v70src/app/pubspec.yaml app/pubspec.yaml
-      - name: Apply exact v71 patch
+      - name: Apply exact v71 patches
         run: |
           cat tool/v71_patch_[0-9][0-9].diff > /tmp/v71.patch
           cd app
@@ -42,7 +44,7 @@ jobs:
           flutter pub get
           dart fix --apply
           dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
-      - name: Inspect plate rendering after fixes
+      - name: Gate empty-plate rendering
         working-directory: app
         run: |
           echo '--- Placa depois do dart fix/format ---'
@@ -50,19 +52,25 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           p=Path('lib/main_online.dart').read_text()
-          patterns=[
+          forbidden=[
             "Placa: ${x['placa'] ?? '-'}",
             "Placa: ${x['plate']??'-'}",
             "Placa: ${x['plate'] ?? '-'}",
           ]
-          for pat in patterns:
-              print(repr(pat), 'count=', p.count(pat))
-          print('plate_fix_ok=', all(p.count(pat)==0 for pat in patterns))
+          found={pat:p.count(pat) for pat in forbidden}
+          for pat,count in found.items():
+              print(repr(pat), 'count=', count)
+          if any(found.values()):
+              raise SystemExit('FALHA: ainda existe renderização Placa: - para ativo sem placa')
+          print('plate_fix_ok=True')
           PY
+      - name: Analyze source without building APK
+        working-directory: app
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
       - name: Upload diagnostic source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v71-diagnostic-source-2
+          name: RC-Abastecimento-v71-diagnostic-source-final
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart

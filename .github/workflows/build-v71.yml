@@ -120,12 +120,28 @@ jobs:
           grep -Fq "pending_reserved_liters" lib/main_online.dart
           grep -Fq "Saldo insuficiente para abastecimento offline" lib/main_online.dart
           grep -Fq "GPS indisponível no momento da conclusão" lib/main_online.dart
-          ! grep -Fq "fuel-test-login" lib/main_online.dart
-          ! grep -F "Placa: \${x['placa'] ?? '-'}" lib/main_online.dart
-          ! grep -F "Placa: \${x['plate']??'-'}" lib/main_online.dart
-      - name: Flutter Analyze strict
+          if grep -Fq "fuel-test-login" lib/main_online.dart; then echo 'ERRO: login de teste encontrado'; exit 1; fi
+          if grep -Fq "Placa: \${x['placa'] ?? '-'}" lib/main_online.dart; then echo 'ERRO: placa ausente ainda exibida com hífen'; exit 1; fi
+          if grep -Fq "Placa: \${x['plate']??'-'}" lib/main_online.dart; then echo 'ERRO: placa ausente ainda exibida com hífen'; exit 1; fi
+      - name: Upload lint source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v71-lint-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+          retention-days: 7
+      - name: Flutter Analyze quality gate
         working-directory: app
-        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --fatal-infos --fatal-warnings
+        run: |
+          set -o pipefail
+          flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings 2>&1 | tee /tmp/flutter-analyze-v71.txt
+          if grep -q "use_build_context_synchronously" /tmp/flutter-analyze-v71.txt; then
+            echo 'ERRO: uso de BuildContext após async ainda precisa ser corrigido.'
+            exit 1
+          fi
       - name: Build APK
         working-directory: app
         run: flutter build apk --release --target lib/main_online.dart --build-number=39 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"

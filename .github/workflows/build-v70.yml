@@ -4,7 +4,7 @@ on:
   push:
     branches: ['release/rc-abastecimento']
     paths:
-      - 'tool/v70_patch_*.diff'
+      - 'tool/v70_patch_[0-9][0-9].diff'
       - '.github/workflows/build-v70.yml'
   workflow_dispatch:
 
@@ -49,18 +49,14 @@ jobs:
           rm -rf app/lib
           cp -r /tmp/v69src/app/lib app/lib
           cp /tmp/v69src/app/pubspec.yaml app/pubspec.yaml
-      - name: Validate and apply v70 plain-text patches
+      - name: Validate and apply v70 patch
         run: |
-          echo "a6436988e94a3ef08ecddbb060764b0dd5bc47be7b81705f793cb7e28e91a028  tool/v70_patch_A.diff" | sha256sum -c -
-          echo "cf1881fcf37352cfa5a59f034603d256b01d7db9f8c9204b51671cf21e515fa1  tool/v70_patch_B.diff" | sha256sum -c -
-          echo "5fbd91728222885c03f0447080976715537df444ec493744a53191c6263ec884  tool/v70_patch_C.diff" | sha256sum -c -
+          cat tool/v70_patch_[0-9][0-9].diff > /tmp/v70.patch
+          test "$(wc -c < /tmp/v70.patch)" -eq 44426
+          echo "0e0f3952204a73a4471d59c3c0879e8531f66aa4f00d857d1fbc5df8a9cc20cc  /tmp/v70.patch" | sha256sum -c -
           cd app
-          for f in ../tool/v70_patch_*.diff; do
-            echo "Applying $f"
-            patch -p0 --dry-run --forward --batch < "$f"
-            patch -p0 --forward --batch < "$f"
-          done
-
+          patch -p0 --dry-run --forward --batch < /tmp/v70.patch
+          patch -p0 --forward --batch < /tmp/v70.patch
       - name: Configure Android and stable signing
         working-directory: app
         run: |
@@ -98,22 +94,36 @@ jobs:
       - name: Regression checks v70
         working-directory: app
         run: |
-          grep -q "child: Text('v70'" lib/main_online.dart
-          grep -q "Totalizador antes do abastecimento" lib/main_online.dart
-          grep -q "Registre a foto acima para liberar os demais campos do abastecimento" lib/main_online.dart
-          grep -q "if(totalizer!=null)...\[" lib/main_online.dart
-          grep -q "Foto do Totalizador antes do abastecimento" lib/main_online.dart
-          grep -q "totalizador_antes_abastecimento" lib/main_online.dart
-          grep -q "totalizer_evidence_photo_path.*totalizer_photo_before_path" lib/main_online.dart
-          ! grep -Fq "Foto Totalizador *" lib/main_online.dart
-          grep -q "rca_record_fueling_v68" lib/main_online.dart
-          grep -q "Preço por litro \*" lib/main_online.dart
-          grep -q "pbkdf2-sha256" lib/main_online.dart
-          ! grep -q "fuel-test-login" lib/main_online.dart
-          ! grep -q "Sem placa" lib/main_online.dart
-          grep -q "GPS indisponível no momento da conclusão" lib/main_online.dart
-          grep -q "rca_reference_data_v33" lib/v31_features.dart
-
+          grep -Fq "child: Text('v70'" lib/main_online.dart
+          grep -Fq "captureTotalizerBeforeV70" lib/main_online.dart
+          grep -Fq "captureTotalizerBeforeLegacyV70" lib/main_online.dart
+          grep -Fq "Foto obrigatória antes de iniciar" lib/main_online.dart
+          grep -Fq "Tirar foto do totalizador antes do abastecimento" lib/main_online.dart
+          grep -Fq "Totalizador antes do abastecimento registrado" lib/main_online.dart
+          grep -Fq "totalizador_antes" lib/main_online.dart
+          grep -Fq "Totalizador antes do abastecimento" lib/main_online.dart
+          grep -Fq "rca_general_records_v70" lib/main_online.dart
+          grep -Fq "rca_my_fuelings_v70" lib/v29_features.dart
+          grep -Fq "value.startsWith('offline://')" lib/main_online.dart
+          grep -Fq "PENDENTE (OFFLINE) • salvo neste aparelho" lib/main_online.dart
+          grep -Fq "_sortRecordsV70" lib/main_online.dart
+          grep -Fq "pendingFuelingsForCurrentUser" lib/main_online.dart
+          grep -Fq "pendingFuelingsForCurrentUser" lib/v29_features.dart
+          grep -Fq "Ver registro" lib/v29_features.dart
+          ! grep -Fq "fuel-test-login" lib/main_online.dart
+          grep -Fq "pbkdf2-sha256" lib/main_online.dart
+          grep -Fq "balance_model_v69" lib/main_online.dart
+          grep -Fq "pending_reserved_liters" lib/main_online.dart
+          grep -Fq "sync_blocked" lib/main_online.dart
+          grep -Fq "Saldo insuficiente para abastecimento offline" lib/main_online.dart
+          grep -Fq "rca_offline_logout_v62" lib/main_online.dart
+          grep -Fq "_requireOnlineV69" lib/main_online.dart
+          ! grep -Fq "Sem placa" lib/main_online.dart
+          grep -Fq "rca_record_fueling_v68" lib/main_online.dart
+          grep -Fq "Preço por litro *" lib/main_online.dart
+          grep -Fq "saleValue==null||saleValue<=0" lib/main_online.dart
+          grep -Fq "GPS indisponível no momento da conclusão" lib/main_online.dart
+          grep -Fq "rca_reference_data_v33" lib/v31_features.dart
       - name: Dependencies
         working-directory: app
         run: flutter pub get
@@ -141,7 +151,7 @@ jobs:
             app/lib/v30_features.dart
             app/lib/v31_features.dart
             app/pubspec.yaml
-            tool/v70_patch_*.diff
+            tool/v70_patch_[0-9][0-9].diff
             .github/workflows/build-v70.yml
           retention-days: 30
       - name: Upload APK

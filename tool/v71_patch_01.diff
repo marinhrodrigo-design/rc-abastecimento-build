@@ -1,0 +1,19 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -5843,7 +5843,7 @@
+           ]))),
+           if(_rows(data?['own_assets']).isNotEmpty)Card(child:ExpansionTile(
+             title:const Text('Equipamentos próprios',style:TextStyle(fontWeight:FontWeight.w900)),
+-            children:_rows(data?['own_assets']).map((x)=>ListTile(title:Text('${x['asset_number']} • ${x['model']??''}'),subtitle:Text('Placa: ${x['plate']??'-'}'),trailing:Text(_fmtLiters(x['liters'])))).toList(),
++            children:_rows(data?['own_assets']).map((x)=>ListTile(title:Text('${x['asset_number']} • ${x['model']??''}'),subtitle:_hasValue(x['plate'])?Text('Placa: ${x['plate']}'):null,trailing:Text(_fmtLiters(x['liters'])))).toList(),
+           )),
+           if(_rows(data?['third_assets']).isNotEmpty)Card(child:ExpansionTile(
+             title:const Text('Equipamentos de terceiros',style:TextStyle(fontWeight:FontWeight.w900)),
+@@ -5984,7 +5984,7 @@
+   Widget build(BuildContext context) {
+     final q = filter.text.trim().toLowerCase();
+     final shown = (items ?? []).where((x) => q.isEmpty || '${x['numeroAtivo']} ${x['modelo']} ${x['placa']}'.toLowerCase().contains(q)).toList();
+-    return Scaffold(appBar: AppBar(title: const Text('Ativos próprios')), floatingActionButton: FloatingActionButton(onPressed: () => edit(), child: const Icon(Icons.add)), body: items == null ? const Center(child: CircularProgressIndicator()) : Column(children: [Padding(padding: const EdgeInsets.all(12), child: TextField(controller: filter, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Pesquisar ativo ou placa', prefixIcon: Icon(Icons.search)))), Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 0, 12, 80), itemCount: shown.length, itemBuilder: (_, i) { final x = shown[i]; return Card(child: ListTile(title: Text('${x['numeroAtivo']} • ${x['modelo'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text('Placa: ${x['placa'] ?? '-'} • Medição: ${_measurementTypeLabel(x['measurement_type'])} • Tanque: ${x['fuel_tank_capacity_liters']==null?'-':_fmtLiters(x['fuel_tank_capacity_liters'])} • ${x['localizacao'] ?? ''}'), onTap: () => edit(x), trailing: PopupMenuButton<String>(onSelected:(v){if(v=='edit')edit(x);if(v=='delete')removeMachine(x);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Editar')),PopupMenuItem(value:'delete',child:Text('Excluir',style:TextStyle(color:Colors.red))) ]))); }))]));
++    return Scaffold(appBar: AppBar(title: const Text('Ativos próprios')), floatingActionButton: FloatingActionButton(onPressed: () => edit(), child: const Icon(Icons.add)), body: items == null ? const Center(child: CircularProgressIndicator()) : Column(children: [Padding(padding: const EdgeInsets.all(12), child: TextField(controller: filter, onChanged: (_) => setState(() {}), decoration: const InputDecoration(labelText: 'Pesquisar ativo ou placa', prefixIcon: Icon(Icons.search)))), Expanded(child: ListView.builder(padding: const EdgeInsets.fromLTRB(12, 0, 12, 80), itemCount: shown.length, itemBuilder: (_, i) { final x = shown[i]; return Card(child: ListTile(title: Text('${x['numeroAtivo']} • ${x['modelo'] ?? ''}', style: const TextStyle(fontWeight: FontWeight.w900)), subtitle: Text([if(_hasValue(x['placa']))'Placa: ${x['placa']}','Medição: ${_measurementTypeLabel(x['measurement_type'])}','Tanque: ${x['fuel_tank_capacity_liters']==null?'-':_fmtLiters(x['fuel_tank_capacity_liters'])}',if(_hasValue(x['localizacao']))'${x['localizacao']}'].join(' • ')), onTap: () => edit(x), trailing: PopupMenuButton<String>(onSelected:(v){if(v=='edit')edit(x);if(v=='delete')removeMachine(x);},itemBuilder:(_)=>const [PopupMenuItem(value:'edit',child:Text('Editar')),PopupMenuItem(value:'delete',child:Text('Excluir',style:TextStyle(color:Colors.red))) ]))); }))]));
+   }
+ }

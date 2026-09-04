@@ -1,24 +1,26 @@
 --- lib/main_online.dart
 +++ lib/main_online.dart
 @@ -2531,7 +2531,7 @@
+ 
    @override Widget build(BuildContext c){
      final ms=_rows(widget.ref['machines']),ts=_rows(widget.ref['third_party_vehicles']),ws=_rows(widget.ref['works']);
 -    final sm=selected(ms,machine),st=selected(ts,third),sw=selected(ws,work),manualThird=machine==null&&third==-1,hasPlate=_hasValue(sm?['placa'])||_hasValue(st?['plate'])||(manualThird&&_hasValue(thirdPlate.text));
 +    final sm=selected(ms,machine),st=selected(ts,third),manualThird=machine==null&&third==-1,hasPlate=_hasValue(sm?['placa'])||_hasValue(st?['plate'])||(manualThird&&_hasValue(thirdPlate.text));
-     final needsWork=const ['comboio','truck'].contains('${widget.source['tank_type']}');
-     final kinds=metricKinds(),needsKm=kinds.contains('km'),needsHour=kinds.contains('hour');
+     final needsWork=const ['comboio','truck'].contains('${widget.source['tank_type']}');final kinds=metricKinds(),needsKm=kinds.contains('km'),needsHour=kinds.contains('hour');
      dynamic rawSmMeasurement;
+     if(sm!=null){
 @@ -3691,7 +3691,6 @@
-   @override bool shouldRepaint(covariant SignaturePainter oldDelegate)=>true;
+   bool shouldRepaint(covariant SignaturePainter oldDelegate) => true;
  }
  
 -const Color _comboioToComboioAccent = Color(0xFFE67E22);
  const Color _comboioToComboioPale = Color(0xFFFFF3E5);
  
- bool _isComboioToComboio(Map<String,dynamic> item){
+ bool _isComboioToComboio(Map<String, dynamic> item) {
 @@ -4244,7 +4243,7 @@
-   @override
-   Widget build(BuildContext context){
+   void open(Widget page){if(!_requireOnlineV69())return;Navigator.push(context,MaterialPageRoute(builder:(_)=>page));}
+   Widget quick(IconData icon,String title,String subtitle,VoidCallback onTap)=>Card(margin:EdgeInsets.zero,child:InkWell(onTap:onTap,borderRadius:BorderRadius.circular(12),child:Padding(padding:const EdgeInsets.symmetric(horizontal:7,vertical:11),child:Column(mainAxisAlignment:MainAxisAlignment.center,children:[Icon(icon,color:_blue,size:29),const SizedBox(height:7),Text(title,textAlign:TextAlign.center,maxLines:2,overflow:TextOverflow.ellipsis,style:const TextStyle(fontWeight:FontWeight.w900,fontSize:12.2))]))));
+   @override Widget build(BuildContext context){
 -    final tanks=_sortedFuelUnits(ref?['tanks']);final isAdmin=widget.profile['is_admin']==true;final isManager=widget.profile['is_manager']==true;final isSupervisor=widget.profile['is_supervisor']==true;
 +    final tanks=_sortedFuelUnits(ref?['tanks']);final isAdmin=widget.profile['is_admin']==true;final isManager=widget.profile['is_manager']==true;
      final currentCode='${currentUnit['unit_code']??''}'.trim(),currentName='${currentUnit['unit_name']??''}'.trim();

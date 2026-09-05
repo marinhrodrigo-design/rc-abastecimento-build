@@ -1,0 +1,171 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -838,7 +838,9 @@
+         'offline_legacy_owner': legacy,
+         'queue_id': '${q['id']}',
+         'id': null,
+-        'code': q['offline_code_v74'] ?? 'PENDENTE (OFFLINE)',
++        'code': q['sync_rejected'] == true
++            ? 'REJEITADO • LOCAL ${(_intOrNull(q['offline_sequence_v74']) ?? 0).toString().padLeft(4, '0')}'
++            : q['offline_code_v74'] ?? 'PENDENTE (OFFLINE)',
+         'offline_sequence_v74': q['offline_sequence_v74'],
+         'offline_sequence_provisional_v74': q['offline_sequence_v74'] != null,
+         'type': 'fueling',
+@@ -962,6 +964,104 @@
+     syncRevision.value++;
+   }
+ 
++  Future<void> reconcileReviewedConflictsV77() async {
++    if (!online.value || Supabase.instance.client.auth.currentUser == null) {
++      return;
++    }
++    final eventIds = <String>[];
++    for (final q in _queue) {
++      if (q['sync_conflict'] != true) continue;
++      final eventId = '${_map(q['params'])['p_offline_event_id'] ?? ''}'.trim();
++      if (eventId.isNotEmpty && !eventIds.contains(eventId)) {
++        eventIds.add(eventId);
++      }
++    }
++    if (eventIds.isEmpty) return;
++
++    final rows = await api.offlineConflictStatusesV77(eventIds);
++    if (rows.isEmpty) return;
++    final byEvent = <String, Map<String, dynamic>>{
++      for (final row in rows)
++        if ('${row['offline_event_id'] ?? ''}'.trim().isNotEmpty)
++          '${row['offline_event_id']}': row
++    };
++
++    final queue = _queue;
++    var changed = false;
++    for (final q in queue) {
++      if (q['sync_conflict'] != true) continue;
++      final eventId = '${_map(q['params'])['p_offline_event_id'] ?? ''}'.trim();
++      final review = byEvent[eventId];
++      if (review == null) continue;
++      final status = '${review['status'] ?? ''}'.trim().toLowerCase();
++      final notes = '${review['review_notes'] ?? ''}'.trim();
++      if (status == 'rejected') {
++        q['sync_conflict'] = false;
++        q['sync_rejected'] = true;
++        q['sync_blocked'] = true;
++        q['sync_status'] = 'rejected';
++        q['sync_error'] = notes.isEmpty
++            ? 'Rejeitado na análise administrativa.'
++            : 'Rejeitado na análise: $notes';
++        q['reviewed_at_v77'] = review['reviewed_at'];
++        q['review_status_v77'] = 'rejected';
++        changed = true;
++      } else if (status == 'approved') {
++        q['sync_conflict'] = false;
++        q.remove('sync_rejected');
++        q.remove('sync_blocked');
++        q.remove('sync_error');
++        q['sync_status'] = 'approved_retry';
++        q['reviewed_at_v77'] = review['reviewed_at'];
++        q['review_status_v77'] = 'approved';
++        changed = true;
++      }
++    }
++    if (!changed) return;
++    _state['queue'] = queue;
++    pendingCount.value = _pendingQueueCountV68();
++    await _persist();
++    syncRevision.value++;
++  }
++
++  Future<void> applyConflictReviewV77(
++      String offlineEventId, String decision, String notes) async {
++    final eventId = offlineEventId.trim();
++    if (eventId.isEmpty) return;
++    final normalized = decision.trim().toLowerCase();
++    final queue = _queue;
++    var changed = false;
++    for (final q in queue) {
++      final localEvent =
++          '${_map(q['params'])['p_offline_event_id'] ?? ''}'.trim();
++      if (localEvent != eventId) continue;
++      if (normalized == 'reject' || normalized == 'rejected') {
++        q['sync_conflict'] = false;
++        q['sync_rejected'] = true;
++        q['sync_blocked'] = true;
++        q['sync_status'] = 'rejected';
++        q['sync_error'] = notes.trim().isEmpty
++            ? 'Rejeitado na análise administrativa.'
++            : 'Rejeitado na análise: ${notes.trim()}';
++        q['review_status_v77'] = 'rejected';
++      } else if (normalized == 'approve' || normalized == 'approved') {
++        q['sync_conflict'] = false;
++        q.remove('sync_rejected');
++        q.remove('sync_blocked');
++        q.remove('sync_error');
++        q['sync_status'] = 'approved_retry';
++        q['review_status_v77'] = 'approved';
++      }
++      q['reviewed_at_v77'] = DateTime.now().toUtc().toIso8601String();
++      changed = true;
++    }
++    if (!changed) return;
++    _state['queue'] = queue;
++    pendingCount.value = _pendingQueueCountV68();
++    await _persist();
++    syncRevision.value++;
++  }
++
+   Future<void> retryPending() async {
+     final queue = _queue;
+     for (final q in queue) {
+@@ -1499,6 +1599,14 @@
+     _syncing = true;
+     syncing.value = true;
+     try {
++      try {
++        await reconcileReviewedConflictsV77();
++      } catch (e) {
++        if (_isNetworkError(e)) {
++          markOffline();
++          return;
++        }
++      }
+       if (!appLoggedOutV62 &&
+           activeUserIdV62 == uid &&
+           appSessionIdV30 == null) {
+@@ -3474,7 +3582,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v76',
++                      child: Text('v77',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -2200,6 +2308,12 @@
+   Future<List<Map<String, dynamic>>> offlineConflictsV58() async =>
+       _rows(await client.rpc('rca_offline_conflicts_v58'));
++  Future<List<Map<String, dynamic>>> offlineConflictStatusesV77(
++          List<String> offlineEventIds) async =>
++      offlineEventIds.isEmpty
++          ? <Map<String, dynamic>>[]
++          : _rows(await client.rpc('rca_offline_conflict_statuses_v77',
++              params: {'p_offline_event_ids': offlineEventIds}));
+   Future<Map<String, dynamic>> reviewOfflineConflictV58(int id, String decision,
+           {String? notes}) async =>
+       _map(await client.rpc('rca_review_offline_conflict_v58', params: {
+--- lib/v29_features.dart
++++ lib/v29_features.dart
+@@ -1336,6 +1336,14 @@
+       setState(() => busy = true);
+       await api.reviewOfflineConflictV58(_intOrNull(x['id'])!, decision,
+           notes: reviewNote.trim());
++      final offlineEventId = '${x['offline_event_id'] ?? ''}'.trim();
++      if (offlineEventId.isNotEmpty) {
++        await offlineStore.applyConflictReviewV77(
++            offlineEventId, decision, reviewNote.trim());
++        if (approve) {
++          await offlineStore.retryPending();
++        }
++      }
+       if (mounted)
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+             content: Text(approve

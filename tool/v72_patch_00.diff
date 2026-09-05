@@ -20,7 +20,15 @@
        final machineId = _intOrNull(params['p_machine_id']);
        final workId = _intOrNull(params['p_work_id']);
        final tankId = _intOrNull(params['p_source_tank_id']);
-@@ -633,21 +646,21 @@
+@@ -583,7 +596,6 @@
+       final profile = _map(_state['profile']);
+       final price = _num(params['p_sale_price_per_liter']);
+       final litersValue = _num(params['p_liters']);
+-      final totalizerBefore = params['p_totalizer_photo_path'];
+       out.add(<String, dynamic>{
+         'offline_pending': true,
+         'offline_legacy_owner': legacy,
+@@ -633,21 +645,21 @@
          'location_accuracy_m': params['p_location_accuracy_m'],
          'sale_price_per_liter': price > 0 ? price : null,
          'total_value': price > 0 ? price * litersValue : null,
@@ -53,7 +61,7 @@
          ].where((v) => _hasValue(v)).toList(),
          'sync_error': q['sync_error'],
          'sync_conflict': q['sync_conflict'] == true,
-@@ -717,6 +730,7 @@
+@@ -717,6 +729,7 @@
      _stateFile = File('${dir.path}/rc_abastecimento_offline.json');
      _evidenceDir = Directory('${dir.path}/offline_evidence');
      await _evidenceDir!.create(recursive: true);
@@ -61,7 +69,7 @@
      try {
        if (await _stateFile!.exists()) {
          final decoded = jsonDecode(await _stateFile!.readAsString());
-@@ -848,6 +862,92 @@
+@@ -848,6 +861,92 @@
      return 'offline://${file.path}';
    }
  
@@ -154,7 +162,7 @@
    bool _containsLocal(dynamic value) {
      if (value is String) return value.startsWith('offline://');
      if (value is List) return value.any(_containsLocal);
-@@ -1129,7 +1229,7 @@
+@@ -1129,7 +1228,7 @@
                }
              }
              _state['queue'] = queue;
@@ -163,7 +171,7 @@
              pendingCount.value = _pendingQueueCountV68();
              await _persist();
              syncRevision.value++;
-@@ -1149,20 +1249,20 @@
+@@ -1149,20 +1248,20 @@
                }
              }
              _state['queue'] = queue;
@@ -187,7 +195,7 @@
            await _refreshReferenceAfterSyncV69();
          } catch (e) {
            if (_isNetworkError(e)) {
-@@ -2042,8 +2142,12 @@
+@@ -2042,8 +2141,12 @@
          return null;
        }
      }
@@ -201,7 +209,7 @@
      } catch (_) {
        return null;
      }
-@@ -5078,10 +5182,6 @@
+@@ -5078,10 +5181,6 @@
                                textAlign: TextAlign.center,
                                style: TextStyle(
                                    fontSize: 20, fontWeight: FontWeight.w900)),
@@ -212,7 +220,7 @@
                            const SizedBox(height: 16),
                            InputDecorator(
                                decoration: const InputDecoration(
-@@ -5409,12 +5509,6 @@
+@@ -5409,12 +5508,6 @@
                      child: Text(meter == null
                          ? metricPhotoLabel(kinds)
                          : 'Medição registrada ✓')),
@@ -225,7 +233,7 @@
                OutlinedButton(
                    onPressed: saving
                        ? null
-@@ -7076,11 +7170,6 @@
+@@ -7076,11 +7169,6 @@
                const Text('Foto obrigatória antes de iniciar',
                    textAlign: TextAlign.center,
                    style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
@@ -237,7 +245,7 @@
                const SizedBox(height: 20),
                Card(
                    child: ListTile(
-@@ -7353,13 +7442,6 @@
+@@ -7353,13 +7441,6 @@
                    (x) => kmBeforePhoto = x,
                    required: true),
                const SizedBox(height: 8),

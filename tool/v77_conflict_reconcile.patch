@@ -116,31 +116,23 @@
    Future<void> retryPending() async {
      final queue = _queue;
      for (final q in queue) {
-@@ -1499,6 +1599,14 @@
-     _syncing = true;
-     syncing.value = true;
-     try {
+@@ -1519,6 +1619,14 @@
+             markOffline();
+             return;
+           }
++        }
++      }
 +      try {
 +        await reconcileReviewedConflictsV77();
 +      } catch (e) {
 +        if (_isNetworkError(e)) {
 +          markOffline();
 +          return;
-+        }
-+      }
-       if (!appLoggedOutV62 &&
-           activeUserIdV62 == uid &&
-           appSessionIdV30 == null) {
-@@ -3474,7 +3582,7 @@
-                     const SizedBox(height: 10),
-                     const Align(
-                       alignment: Alignment.centerRight,
--                      child: Text('v76',
-+                      child: Text('v77',
-                           style: TextStyle(
-                               fontSize: 11,
-                               color: Color(0xFF8A98A8),
-@@ -2200,6 +2308,12 @@
+         }
+       }
+       if (force) {
+@@ -2069,6 +2177,12 @@
+ 
    Future<List<Map<String, dynamic>>> offlineConflictsV58() async =>
        _rows(await client.rpc('rca_offline_conflicts_v58'));
 +  Future<List<Map<String, dynamic>>> offlineConflictStatusesV77(
@@ -152,6 +144,15 @@
    Future<Map<String, dynamic>> reviewOfflineConflictV58(int id, String decision,
            {String? notes}) async =>
        _map(await client.rpc('rca_review_offline_conflict_v58', params: {
+@@ -3510,7 +3624,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v76',
++                      child: Text('v77',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
 --- lib/v29_features.dart
 +++ lib/v29_features.dart
 @@ -1336,6 +1336,14 @@

@@ -1,0 +1,25 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -3797,7 +3797,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v78',
++                      child: Text('v79',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -6592,9 +6592,11 @@
+                 child: Column(children: [
+               ListTile(
+                   title: const Text('Fornecedor do combustível'),
+-                  trailing: Flexible(
++                  subtitle: Padding(
++                      padding: const EdgeInsets.only(top: 4),
+                       child: Text('${lot['supplier_name'] ?? '-'}',
+-                          textAlign: TextAlign.right))),
++                          style: const TextStyle(
++                              fontWeight: FontWeight.w700)))),
+               ListTile(
+                   title: const Text('Volume original'),
+                   trailing: Text(_fmtLiters(lot['total_liters']))),

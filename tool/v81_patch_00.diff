@@ -1,0 +1,252 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -542,6 +542,13 @@
+   }
+ 
+   bool get appLoggedOutV62 => _state['app_logged_out_v62'] == true;
++  bool get backendReadyV81 =>
++      online.value && Supabase.instance.client.auth.currentUser != null;
++  bool get onlineReauthRequiredV81 =>
++      online.value &&
++      !appLoggedOutV62 &&
++      activeUserIdV62 != null &&
++      Supabase.instance.client.auth.currentUser == null;
+   Map<String, dynamic> get _offlineUsersV62 =>
+       _state['offline_users_v62'] is Map
+           ? _map(_state['offline_users_v62'])
+@@ -1561,7 +1568,7 @@
+ 
+   Future<Map<String, dynamic>> executeOrQueue(
+       String rpc, Map<String, dynamic> params) async {
+-    if (!online.value || _containsLocal(params))
++    if (!backendReadyV81 || _containsLocal(params))
+       return _queueAndResult(rpc, params);
+     try {
+       final result =
+@@ -1955,10 +1962,15 @@
+     }
+   }
+ 
+-  Future<Map<String, int>> syncPendingManualV74() async {
++  Future<Map<String, dynamic>> syncPendingManualV74() async {
+     if (!online.value) {
+       throw Exception('Sem internet. Conecte o aparelho e tente novamente.');
+     }
++    final uid = Supabase.instance.client.auth.currentUser?.id;
++    if (uid == null) {
++      throw Exception(
++          'Internet disponível, mas esta sessão foi iniciada offline. Saia e entre novamente com internet para sincronizar os registros pendentes.');
++    }
+     if (_syncing) {
+       throw Exception('A sincronização já está em andamento.');
+     }
+@@ -1966,13 +1978,22 @@
+     if (before == 0) return {'before': 0, 'synced': 0, 'after': 0};
+     await retryPending();
+     final after = pendingCount.value;
+-    final uid = Supabase.instance.client.auth.currentUser?.id;
+     final conflicts = _queue.where((q) {
+       final owner = '${q['user_id'] ?? ''}'.trim();
+       return q['sync_conflict'] == true &&
+           q['sync_rejected'] != true &&
+-          (uid == null || owner.isEmpty || owner == uid);
++          (owner.isEmpty || owner == uid);
+     }).length;
++    String? firstError;
++    for (final q in _queue) {
++      final owner = '${q['user_id'] ?? ''}'.trim();
++      if (owner.isNotEmpty && owner != uid) continue;
++      final value = '${q['sync_error'] ?? ''}'.trim();
++      if (value.isNotEmpty) {
++        firstError = value;
++        break;
++      }
++    }
+     try {
+       await refreshSequenceSnapshotV74();
+     } catch (_) {}
+@@ -1981,6 +2002,7 @@
+       'synced': max(0, before - after),
+       'after': after,
+       'conflicts': conflicts,
++      if (firstError != null) 'error': firstError,
+     };
+   }
+ 
+@@ -2029,6 +2051,7 @@
+     final synced = result['synced'] ?? 0;
+     final after = result['after'] ?? 0;
+     final conflicts = result['conflicts'] ?? 0;
++    final reason = '${result['error'] ?? ''}'.trim();
+     final message = after == 0
+         ? (synced > 0
+             ? 'Sincronização concluída. $synced registro(s) enviado(s).'
+@@ -2039,7 +2062,9 @@
+                 : '$synced registro(s) sincronizado(s). $after ainda pendente(s).'
+             : conflicts > 0
+                 ? '$conflicts conflito(s) aguardam análise. Os demais pendentes continuam sendo processados.'
+-                : 'Nenhum registro foi sincronizado. Abra o registro pendente para ver o motivo.';
++                : reason.isNotEmpty
++                    ? 'Não foi possível sincronizar: $reason'
++                    : 'Nenhum registro foi sincronizado. Tente novamente.';
+     ScaffoldMessenger.of(context)
+         .showSnackBar(SnackBar(content: Text(message)));
+   } catch (e) {
+@@ -2837,7 +2862,7 @@
+ 
+   Future<String> uploadBytes(Uint8List bytes, String kind,
+       {String mime = 'image/png'}) async {
+-    if (!offlineStore.online.value)
++    if (!offlineStore.backendReadyV81)
+       return offlineStore.saveEvidence(bytes, kind, mime);
+     try {
+       final uid = client.auth.currentUser?.id;
+@@ -3218,7 +3243,18 @@
+       if (mounted) setState(() => profile = null);
+       return;
+     }
+-    if (id != null) await api.logoutV30(id);
++    if (id != null && Supabase.instance.client.auth.currentUser != null) {
++      try {
++        await api.logoutV30(id);
++      } catch (e) {
++        if (_isNetworkError(e)) {
++          try {
++            await offlineStore.queueOfflineLogoutV62(
++                sessionId: id, tankId: tankId, occurredAt: occurred);
++          } catch (_) {}
++        }
++      }
++    }
+     if (mounted) setState(() => profile = null);
+     await offlineStore.clearSessionMarkerV68();
+     await offlineStore.clearProfile();
+@@ -3259,7 +3295,7 @@
+           .firstMatch(s);
+   if (pg != null) s = (pg.group(1) ?? '').trim();
+   if (s.toLowerCase().contains('permission denied for function'))
+-    return 'Não foi possível atualizar o status da unidade agora. O abastecimento continua salvo e a sincronização será tentada novamente.';
++    return 'Não foi possível acessar esta função com a sessão atual. Entre novamente com internet e tente de novo.';
+   if (s.contains('Localização GPS obrigatória no momento do abastecimento') ||
+       s.contains('Informe a localização do abastecimento'))
+     return 'Informe a localização do abastecimento. Se o GPS não estiver disponível, preencha o endereço manualmente.';
+@@ -3337,14 +3373,24 @@
+   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+         valueListenable: offlineStore.online,
+         builder: (_, isOnline, __) {
+-          final color = isOnline ? Colors.green : Colors.red;
++          final reauth = isOnline && offlineStore.onlineReauthRequiredV81;
++          final color = !isOnline
++              ? Colors.red
++              : reauth
++                  ? Colors.orange
++                  : Colors.green;
++          final label = !isOnline
++              ? 'OFFLINE'
++              : reauth
++                  ? 'ONLINE • REENTRAR'
++                  : 'ONLINE';
+           return Container(
+             padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+             decoration: BoxDecoration(
+                 color: color.shade50,
+                 borderRadius: BorderRadius.circular(30),
+                 border: Border.all(color: color.shade200)),
+-            child: Text(isOnline ? 'ONLINE' : 'OFFLINE',
++            child: Text(label,
+                 maxLines: 1,
+                 softWrap: false,
+                 style: TextStyle(
+@@ -3797,7 +3843,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v80',
++                      child: Text('v81',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+--- a/lib/v31_features.dart
++++ b/lib/v31_features.dart
+@@ -38,6 +38,8 @@
+   bool canFuel = true, canView = true, loading = true, refreshing = false;
+   String? error;
+ 
++  bool get _backendReadyV81 => offlineStore.backendReadyV81;
++
+   @override
+   void initState() {
+     super.initState();
+@@ -48,7 +50,7 @@
+     if (refreshing) return;
+     refreshing = true;
+     try {
+-      if (!offlineStore.online.value) {
++      if (!_backendReadyV81) {
+         final cached = offlineStore.cachedReferenceData;
+         final tid = offlineStore.lastTankId;
+         Map<String, dynamic> mine = {};
+@@ -75,7 +77,9 @@
+             loading = false;
+             error = cached == null
+                 ? 'Conecte-se à internet uma vez para baixar os dados necessários ao modo offline.'
+-                : null;
++                : offlineStore.onlineReauthRequiredV81
++                    ? 'Internet disponível, mas esta sessão foi iniciada offline. Para enviar os registros ao servidor, saia e entre novamente com internet.'
++                    : null;
+           });
+         return;
+       }
+@@ -141,7 +145,7 @@
+ 
+   Future<Map<String, dynamic>?> pickUnit(
+       {required String title, bool excludeCurrent = false}) async {
+-    if (offlineStore.online.value) {
++    if (_backendReadyV81) {
+       try {
+         statuses = await api.unitStatusV30();
+       } catch (_) {}
+@@ -226,7 +230,7 @@
+   Future<bool> claim(Map<String, dynamic> tank) async {
+     final id = _intOrNull(tank['id']);
+     if (id == null) return false;
+-    if (!offlineStore.online.value) {
++    if (!_backendReadyV81) {
+       await offlineStore.setLastTankId(id);
+       if (mounted)
+         setState(() => currentUnit = {
+@@ -236,9 +240,10 @@
+               'tank_type': tank['tank_type']
+             });
+       if (mounted)
+-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+-            content: Text(
+-                'Unidade selecionada offline. A validação será feita quando a internet voltar.')));
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++            content: Text(offlineStore.onlineReauthRequiredV81
++                ? 'Unidade selecionada localmente. Entre novamente com internet para validar e sincronizar.'
++                : 'Unidade selecionada offline. A validação será feita quando a internet voltar.')));
+       return true;
+     }
+     try {
+@@ -337,15 +342,16 @@
+   Future<void> releaseUnit() async {
+     final id = _intOrNull(currentUnit['tank_id']) ?? offlineStore.lastTankId;
+     if (id == null) return;
+-    if (!offlineStore.online.value) {
++    if (!_backendReadyV81) {
+       await offlineStore.queueOfflineReleaseV62(
+           tankId: id, occurredAt: DateTime.now());
+       await offlineStore.setLastTankId(null);
+       if (mounted) setState(() => currentUnit = {});
+       if (mounted)
+-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+-            content: Text(
+-                'Unidade liberada offline. A liberação será sincronizada quando a internet voltar.')));
++        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
++            content: Text(offlineStore.onlineReauthRequiredV81
++                ? 'Unidade liberada localmente. Entre novamente com internet para sincronizar a liberação.'
++                : 'Unidade liberada offline. A liberação será sincronizada quando a internet voltar.')));
+       return;
+     }
+     final code = '${currentUnit['unit_code'] ?? tankFor(id)?['code'] ?? ''}';

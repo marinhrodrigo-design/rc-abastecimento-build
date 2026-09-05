@@ -1,0 +1,304 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -541,6 +541,126 @@
+ 
+   bool _fuelingRpc(String rpc) => rpc.startsWith('rca_record_fueling');
+ 
++  Map<String, dynamic> _offlineFuelingReportSnapshotV73(
++      Map<String, dynamic> params, {String? currentQueueId}) {
++    final ref = cachedReferenceData ?? const <String, dynamic>{};
++    final baseRef = _baseReferenceDataV69 ?? ref;
++    final machines = _rows(ref['machines']);
++    final works = _rows(ref['works']);
++    final tanks = _rows(baseRef['tanks']);
++    final thirdParty = _rows(ref['third_party_vehicles']);
++    final institutional = _map(ref['institutional_company']);
++    final institutionalName = '${institutional['company_name'] ?? ''}'.trim();
++    String? firstText(Iterable<dynamic> values) {
++      for (final value in values) {
++        if (_hasValue(value)) return '$value'.trim();
++      }
++      return null;
++    }
++    final machineId = _intOrNull(params['p_machine_id']);
++    final workId = _intOrNull(params['p_work_id']);
++    final tankId = _intOrNull(params['p_source_tank_id']);
++    final thirdId = _intOrNull(params['p_third_party_vehicle_id']);
++
++    Map<String, dynamic>? machine, work, tank, third;
++    for (final x in machines) {
++      if (_intOrNull(x['id']) == machineId) {
++        machine = x;
++        break;
++      }
++    }
++    for (final x in works) {
++      if (_intOrNull(x['id']) == workId) {
++        work = x;
++        break;
++      }
++    }
++    for (final x in tanks) {
++      if (_intOrNull(x['id']) == tankId) {
++        tank = x;
++        break;
++      }
++    }
++    for (final x in thirdParty) {
++      if (_intOrNull(x['id']) == thirdId) {
++        third = x;
++        break;
++      }
++    }
++
++    final buyer = firstText([
++      work?['company_name'],
++      work?['client_name'],
++      params['p_receiver_company']
++    ]);
++    final seller = institutionalName.isNotEmpty ? institutionalName : null;
++    final thirdOwner = firstText([
++      third?['company_name'],
++      params['p_third_party_company']
++    ]);
++    final owner = machineId != null ? seller : thirdOwner;
++
++    String measurement = '${machine?['measurement_type'] ?? ''}'
++        .trim()
++        .toLowerCase();
++    if (measurement.isEmpty) {
++      final hasKm = params['p_km_value'] != null;
++      final hasHour = params['p_hourmeter_value'] != null;
++      measurement = hasKm && hasHour
++          ? 'both'
++          : hasHour
++              ? 'hourmeter'
++              : hasKm
++                  ? 'km'
++                  : 'none';
++    }
++
++    double opening = _num(tank?['accounting_meter']);
++    for (final q in _queue) {
++      if (currentQueueId != null && '${q['id']}' == currentQueueId) break;
++      if (q['sync_rejected'] == true) continue;
++      if (q['sync_blocked'] == true && q['sync_conflict'] != true) continue;
++      if (!_fuelingRpc('${q['rpc'] ?? ''}')) continue;
++      final qp = _map(q['params']);
++      if (_intOrNull(qp['p_source_tank_id']) == tankId) {
++        opening += _num(qp['p_liters']);
++      }
++    }
++    final liters = _num(params['p_liters']);
++    final closing = tankId == null ? null : opening + liters;
++    final profile = _map(_state['profile']);
++    final operator = firstText([
++      profile['display_name'],
++      profile['name'],
++      profile['username']
++    ]);
++
++    return <String, dynamic>{
++      'institutional_company': institutional,
++      'company_name': seller,
++      'empresa': seller,
++      'empresa_fornecedora_vendedora': seller,
++      'empresa_recebedora_compradora': buyer,
++      'obra': work?['name'],
++      'responsavel_obra': work?['responsible'],
++      'proprietario_equipamento': owner,
++      'origem': tank?['code'] ?? tank?['name'],
++      'work_company_name': buyer,
++      'work_responsible': work?['responsible'],
++      'measurement_type': measurement,
++      'asset_number': machine?['numeroAtivo'],
++      'asset_plate': machine?['placa'],
++      'asset_model': [machine?['marca'], machine?['modelo']]
++          .where(_hasValue)
++          .join(' '),
++      'third_party_company': thirdOwner,
++      'operator': operator,
++      'opening_meter': tankId == null ? null : opening,
++      'closing_meter': closing,
++      'totalizer': closing,
++    };
++  }
++
+   List<Map<String, dynamic>> pendingFuelingsForCurrentUser(
+       {bool includeLegacy = true}) {
+     final uid = activeUserIdV62;
+@@ -560,6 +680,10 @@
+       final resolved = q['resolved_params'] is Map
+           ? _map(q['resolved_params'])
+           : const <String, dynamic>{};
++      final snapshot = q['report_snapshot_v73'] is Map
++          ? _map(q['report_snapshot_v73'])
++          : _offlineFuelingReportSnapshotV73(params,
++              currentQueueId: '${q['id']}');
+       dynamic mediaParam(String key) {
+         final original = params[key];
+         if (original is String && original.startsWith('offline://')) {
+@@ -610,22 +734,26 @@
+                 ? 'pending_review'
+                 : 'pending_offline',
+         'asset_id': machineId,
+-        'asset_number':
+-            machine?['numeroAtivo'] ?? (third.isNotEmpty ? third : '-'),
+-        'asset_plate': machine?['placa'],
+-        'asset_model': [machine?['marca'], machine?['modelo']]
+-            .where((v) => _hasValue(v))
+-            .join(' '),
++        'asset_number': snapshot['asset_number'] ??
++            machine?['numeroAtivo'] ??
++            (third.isNotEmpty ? third : '-'),
++        'asset_plate': snapshot['asset_plate'] ?? machine?['placa'],
++        'asset_model': snapshot['asset_model'] ??
++            [machine?['marca'], machine?['modelo']]
++                .where((v) => _hasValue(v))
++                .join(' '),
+         'third_party_vehicle_id':
+             _intOrNull(params['p_third_party_vehicle_id']),
+         'third_party_plate': third.isEmpty ? null : third,
+         'third_party_description': params['p_third_party_description'],
+         'work_id': workId,
+-        'work': work?['name'] ?? 'Sem obra',
++        'work': snapshot['obra'] ?? work?['name'] ?? 'Sem obra',
++        'work_responsible': snapshot['work_responsible'],
++        'work_company_name': snapshot['work_company_name'],
+         'liters': params['p_liters'],
+         'fuel_type': params['p_fuel_type'] ?? 'Combustível',
+         'source_tank_id': tankId,
+-        'source_tank': tank?['code'] ?? tank?['name'] ?? '-',
++        'source_tank': snapshot['origem'] ?? tank?['code'] ?? tank?['name'] ?? '-',
+         'source_tank_name': tank?['name'],
+         'source_tank_type': tank?['tank_type'],
+         'occurred_at': params['p_occurred_at'] ?? q['created_at'],
+@@ -633,11 +761,30 @@
+         'km_value': params['p_km_value'],
+         'hourmeter_value': params['p_hourmeter_value'],
+         'km_hourmeter': params['p_hourmeter_value'] ?? params['p_km_value'],
++        'measurement_type': snapshot['measurement_type'],
+         'receiver': params['p_receiver_name'],
+-        'operator': profile['display_name'] ??
++        'receiver_company': snapshot['empresa_recebedora_compradora'],
++        'operator': snapshot['operator'] ??
++            profile['display_name'] ??
+             profile['name'] ??
+             profile['username'] ??
+             'Usuário offline',
++        'buyer_company_name_snapshot': snapshot['empresa_recebedora_compradora'],
++        'seller_company_name_snapshot': snapshot['empresa_fornecedora_vendedora'],
++        'equipment_owner_name_snapshot': snapshot['proprietario_equipamento'],
++        'institutional_company': snapshot['institutional_company'],
++        'report_context': {
++          'institutional_company': snapshot['institutional_company'],
++          'empresa': snapshot['empresa'],
++          'empresa_fornecedora_vendedora':
++              snapshot['empresa_fornecedora_vendedora'],
++          'empresa_recebedora_compradora':
++              snapshot['empresa_recebedora_compradora'],
++          'obra': snapshot['obra'],
++          'responsavel_obra': snapshot['responsavel_obra'],
++          'proprietario_equipamento': snapshot['proprietario_equipamento'],
++          'origem': snapshot['origem'],
++        },
+         'notes': params['p_notes'],
+         'location_address': params['p_location_address'],
+         'latitude': params['p_latitude'],
+@@ -646,6 +793,9 @@
+         'location_accuracy_m': params['p_location_accuracy_m'],
+         'sale_price_per_liter': price > 0 ? price : null,
+         'total_value': price > 0 ? price * litersValue : null,
++        'opening_meter': snapshot['opening_meter'],
++        'closing_meter': snapshot['closing_meter'],
++        'totalizer': snapshot['totalizer'],
+         'meter_photo_path': mediaParam('p_meter_photo_path'),
+         'totalizer_evidence_photo_path': mediaParam('p_totalizer_photo_path'),
+         'totalizer_photo_before_path': mediaParam('p_totalizer_photo_path'),
+@@ -1022,10 +1172,13 @@
+       params['p_offline_event_id'] ??= _newOfflineEventIdV58();
+     }
+     final queue = _queue;
++    final reportSnapshot =
++        _fuelingRpc(rpc) ? _offlineFuelingReportSnapshotV73(params) : null;
+     queue.add(<String, dynamic>{
+       'id': '${DateTime.now().microsecondsSinceEpoch}',
+       'rpc': rpc,
+       'params': params,
++      if (reportSnapshot != null) 'report_snapshot_v73': reportSnapshot,
+       'created_at': DateTime.now().toUtc().toIso8601String(),
+       'user_id': activeUserIdV62,
+     });
+@@ -3055,7 +3208,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v72',
++                      child: Text('v73',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -9253,6 +9406,7 @@
+ }
+ 
+ String _recordSequenceV28(Map<String, dynamic> x) {
++  if (x['offline_pending'] == true) return 'PENDENTE';
+   final raw = '${x['code'] ?? ''}';
+   final m = RegExp(r'(\d+)$').firstMatch(raw);
+   final n = int.tryParse(m?.group(1) ?? '');
+@@ -11432,6 +11586,7 @@
+   }
+ 
+   static String _fuelSequence(Map<String, dynamic> x) {
++    if (x['offline_pending'] == true) return 'PENDENTE';
+     final code = '${x['code'] ?? ''}'.trim();
+     final match = RegExp(r'(\d+)$').firstMatch(code);
+     final raw = match?.group(1) ?? '';
+@@ -11567,16 +11722,23 @@
+ 
+     for (final x in items) {
+       final id = _intOrNull(x['id']);
+-      Map<String, dynamic> ctx = {};
++      Map<String, dynamic> ctx = x['report_context'] is Map
++          ? _map(x['report_context'])
++          : <String, dynamic>{};
+       if (id != null) {
+         try {
+           ctx = await api.reportContextV23(id);
+         } catch (_) {}
+       }
+       final inst = _map(ctx['institutional_company']);
++      final itemInst = _map(x['institutional_company']);
+       final companyName = _hasValue(inst['company_name'])
+           ? '${inst['company_name']}'
+-          : 'Empresa não cadastrada';
++          : _hasValue(itemInst['company_name'])
++              ? '${itemInst['company_name']}'
++              : _hasValue(ctx['empresa'])
++                  ? '${ctx['empresa']}'
++                  : 'Empresa não cadastrada';
+       final type = '${x['type'] ?? ''}';
+       final transfer = type == 'tank_transfer';
+       final fueling = type == 'fueling';
+@@ -11690,8 +11852,7 @@
+         ));
+         rows.add(pairRows(
+-          row(Icons.speed_outlined, 'KM',
+-              '${x['km_value'] ?? x['km_hourmeter'] ?? '-'}', navy),
++          row(Icons.speed_outlined, 'KM', '${x['km_value'] ?? '-'}', navy),
+           row(Icons.speed_outlined, 'Horímetro',
+               '${x['hourmeter_value'] ?? '-'}', navy),
+         ));
+@@ -11707,11 +11868,12 @@
+               salePriceRaw == null ? '-' : _fmtMoney(totalSaleValue), navy),
+         ));
++        final totalizerValue = x['totalizer'] ?? x['closing_meter'];
+         rows.add(pairRows(
+           row(Icons.local_gas_station_rounded, 'Volume',
+               _fmtLiters(x['liters']), navy),
+           row(Icons.storage_outlined, 'Totalizador',
+-              _fmtLiters(x['totalizer'] ?? x['closing_meter']), navy),
++              totalizerValue == null ? '-' : _fmtLiters(totalizerValue), navy),
+         ));
+         if (_hasValue(x['notes'])) {
+           rows.add(row(

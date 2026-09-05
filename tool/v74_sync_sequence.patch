@@ -1,0 +1,418 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -243,6 +243,7 @@
+ class OfflineStore {
+   final ValueNotifier<bool> online = ValueNotifier(true);
+   final ValueNotifier<int> pendingCount = ValueNotifier(0);
++  final ValueNotifier<bool> syncing = ValueNotifier(false);
+   final ValueNotifier<int> syncRevision = ValueNotifier(0);
+   final Connectivity _connectivity = Connectivity();
+   File? _stateFile;
+@@ -259,6 +260,121 @@
+   Map<String, dynamic>? get cachedReferenceData =>
+       _referenceWithPendingOverlayV69();
+   int? get lastTankId => _intOrNull(_state['last_tank_id']);
++  Map<String, dynamic>? get _sequenceSnapshotV74 =>
++      _state['sequence_snapshot_v74'] is Map
++          ? _map(_state['sequence_snapshot_v74'])
++          : null;
++
++  int _lastKnownSequenceV74(int tankId) {
++    var last = 0;
++    for (final item in _rows(_sequenceSnapshotV74?['items'])) {
++      if (_intOrNull(item['tank_id']) == tankId) {
++        last = max(last, _intOrNull(item['last_sequence']) ?? 0);
++      }
++    }
++    for (final q in _queue) {
++      if (q['sync_rejected'] == true || !_fuelingRpc('${q['rpc'] ?? ''}')) {
++        continue;
++      }
++      final params = _map(q['params']);
++      if (_intOrNull(params['p_source_tank_id']) != tankId) continue;
++      final local = _intOrNull(q['offline_sequence_v74']);
++      if (local != null) last = max(last, local);
++    }
++    return last;
++  }
++
++  String _sourceCodeV74(int tankId) {
++    for (final tank in _rows(_baseReferenceDataV69?['tanks'])) {
++      if (_intOrNull(tank['id']) == tankId) {
++        final code = '${tank['code'] ?? tank['name'] ?? ''}'.trim();
++        if (code.isNotEmpty && code != 'null') return code;
++      }
++    }
++    for (final item in _rows(_sequenceSnapshotV74?['items'])) {
++      if (_intOrNull(item['tank_id']) == tankId) {
++        final code = '${item['source_code'] ?? ''}'.trim();
++        if (code.isNotEmpty && code != 'null') return code;
++      }
++    }
++    return 'UNIDADE';
++  }
++
++  String _offlineCodeV74(int tankId, int sequence) =>
++      '${_sourceCodeV74(tankId)}-${sequence.toString().padLeft(6, '0')}';
++
++  void _backfillPendingSequencesV74() {
++    final queue = _queue;
++    final nextByTank = <int, int>{};
++    for (final item in _rows(_sequenceSnapshotV74?['items'])) {
++      final tankId = _intOrNull(item['tank_id']);
++      if (tankId != null) {
++        nextByTank[tankId] = _intOrNull(item['last_sequence']) ?? 0;
++      }
++    }
++    for (final q in queue) {
++      if (q['sync_rejected'] == true || !_fuelingRpc('${q['rpc'] ?? ''}')) {
++        continue;
++      }
++      final tankId = _intOrNull(_map(q['params'])['p_source_tank_id']);
++      if (tankId == null) continue;
++      final existing = _intOrNull(q['offline_sequence_v74']);
++      if (existing != null) {
++        nextByTank[tankId] = max(nextByTank[tankId] ?? 0, existing);
++        q['offline_code_v74'] ??= _offlineCodeV74(tankId, existing);
++        continue;
++      }
++      final next = (nextByTank[tankId] ?? 0) + 1;
++      nextByTank[tankId] = next;
++      q['offline_sequence_v74'] = next;
++      q['offline_code_v74'] = _offlineCodeV74(tankId, next);
++    }
++    _state['queue'] = queue;
++  }
++
++  Future<void> refreshSequenceSnapshotV74() async {
++    if (!online.value || Supabase.instance.client.auth.currentUser == null) {
++      return;
++    }
++    final value = _map(
++        await Supabase.instance.client.rpc('rca_sequence_snapshot_v74'));
++    _state['sequence_snapshot_v74'] = value;
++    _backfillPendingSequencesV74();
++    await _persist();
++    syncRevision.value++;
++  }
++
++  Future<void> _learnSequenceFromResultV74(
++      Map<String, dynamic> result, Map<String, dynamic> params) async {
++    final tankId = _intOrNull(params['p_source_tank_id']);
++    if (tankId == null) return;
++    final code = '${result['code'] ?? result['movement_code'] ?? ''}'.trim();
++    final match = RegExp(r'(\d+)$').firstMatch(code);
++    final sequence = int.tryParse(match?.group(1) ?? '');
++    if (sequence == null) return;
++    final snapshot = _sequenceSnapshotV74 ?? <String, dynamic>{};
++    final items = _rows(snapshot['items']);
++    var found = false;
++    for (final item in items) {
++      if (_intOrNull(item['tank_id']) == tankId) {
++        item['last_sequence'] = max(_intOrNull(item['last_sequence']) ?? 0, sequence);
++        item['source_code'] ??= _sourceCodeV74(tankId);
++        found = true;
++        break;
++      }
++    }
++    if (!found) {
++      items.add({
++        'tank_id': tankId,
++        'source_code': _sourceCodeV74(tankId),
++        'last_sequence': sequence
++      });
++    }
++    snapshot['items'] = items;
++    snapshot['captured_at'] = DateTime.now().toUtc().toIso8601String();
++    _state['sequence_snapshot_v74'] = snapshot;
++    await _persist();
++  }
+ 
+   Map<String, dynamic>? _referenceWithPendingOverlayV69() {
+     final raw = _baseReferenceDataV69;
+@@ -721,7 +837,9 @@
+         'offline_legacy_owner': legacy,
+         'queue_id': '${q['id']}',
+         'id': null,
+-        'code': 'PENDENTE (OFFLINE)',
++        'code': q['offline_code_v74'] ?? 'PENDENTE (OFFLINE)',
++        'offline_sequence_v74': q['offline_sequence_v74'],
++        'offline_sequence_provisional_v74': q['offline_sequence_v74'] != null,
+         'type': 'fueling',
+         'status': q['sync_rejected'] == true
+             ? 'rejected'
+@@ -1182,6 +1300,9 @@
+       final result =
+           _map(await Supabase.instance.client.rpc(rpc, params: params));
+       markOnline();
++      if (_fuelingRpc(rpc)) {
++        await _learnSequenceFromResultV74(result, params);
++      }
+       return result;
+     } catch (e) {
+       if (_isNetworkError(e)) {
+@@ -1206,6 +1327,8 @@
+ 
+   Future<Map<String, dynamic>> _queueAndResult(
+       String rpc, Map<String, dynamic> params) async {
++    int? offlineSequenceV74;
++    String? offlineCodeV74;
+     if (_fuelingRpc(rpc)) {
+       if (!hasCachedCanFuelV68 || !cachedCanFuelV68)
+         throw Exception(
+@@ -1232,6 +1355,8 @@
+             'Saldo insuficiente para abastecimento offline. Disponível: ${_fmtLiters(available)}.');
+       params['p_is_offline'] = true;
+       params['p_offline_event_id'] ??= _newOfflineEventIdV58();
++      offlineSequenceV74 = _lastKnownSequenceV74(tankId) + 1;
++      offlineCodeV74 = _offlineCodeV74(tankId, offlineSequenceV74);
+     }
+     final queue = _queue;
+     final reportSnapshot =
+@@ -1240,6 +1365,9 @@
+       'id': '${DateTime.now().microsecondsSinceEpoch}',
+       'rpc': rpc,
+       'params': params,
++      if (offlineSequenceV74 != null)
++        'offline_sequence_v74': offlineSequenceV74,
++      if (offlineCodeV74 != null) 'offline_code_v74': offlineCodeV74,
+       if (reportSnapshot != null) 'report_snapshot_v73': reportSnapshot,
+       'created_at': DateTime.now().toUtc().toIso8601String(),
+       'user_id': activeUserIdV62,
+@@ -1263,7 +1391,8 @@
+         : _intOrNull(params['p_source_tank_id']);
+     return <String, dynamic>{
+       'queued': true,
+-      'code': 'PENDENTE (OFFLINE)',
++      'code': offlineCodeV74 ?? 'PENDENTE (OFFLINE)',
++      'offline_sequence_v74': offlineSequenceV74,
+       'liters': params['p_liters'],
+       'balance_after': _balance(tankId),
+     };
+@@ -1360,6 +1489,9 @@
+       final fresh =
+           _map(await Supabase.instance.client.rpc('rca_reference_data_v33'));
+       await cacheReferenceData(fresh);
++      try {
++        await refreshSequenceSnapshotV74();
++      } catch (_) {}
+     } catch (_) {}
+   }
+ 
+@@ -1368,6 +1500,7 @@
+     final uid = Supabase.instance.client.auth.currentUser?.id;
+     if (uid == null) return;
+     _syncing = true;
++    syncing.value = true;
+     try {
+       if (!appLoggedOutV62 &&
+           activeUserIdV62 == uid &&
+@@ -1519,7 +1652,29 @@
+       }
+     } finally {
+       _syncing = false;
++      syncing.value = false;
++    }
++  }
++
++  Future<Map<String, int>> syncPendingManualV74() async {
++    if (!online.value) {
++      throw Exception('Sem internet. Conecte o aparelho e tente novamente.');
+     }
++    if (_syncing) {
++      throw Exception('A sincronização já está em andamento.');
++    }
++    final before = pendingCount.value;
++    if (before == 0) return {'before': 0, 'synced': 0, 'after': 0};
++    await retryPending();
++    final after = pendingCount.value;
++    try {
++      await refreshSequenceSnapshotV74();
++    } catch (_) {}
++    return {
++      'before': before,
++      'synced': max(0, before - after),
++      'after': after,
++    };
+   }
+ 
+   Future<void> _persist() {
+@@ -1560,6 +1715,27 @@
+ 
+ final offlineStore = OfflineStore();
+ 
++Future<void> _syncPendingWithFeedbackV74(BuildContext context) async {
++  try {
++    final result = await offlineStore.syncPendingManualV74();
++    if (!context.mounted) return;
++    final synced = result['synced'] ?? 0;
++    final after = result['after'] ?? 0;
++    final message = after == 0
++        ? (synced > 0
++            ? 'Sincronização concluída. $synced registro(s) enviado(s).'
++            : 'Não há registros pendentes para sincronizar.')
++        : synced > 0
++            ? '$synced registro(s) sincronizado(s). $after ainda pendente(s).'
++            : 'Nenhum registro foi sincronizado. Verifique os avisos dos registros pendentes.';
++    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
++  } catch (e) {
++    if (!context.mounted) return;
++    ScaffoldMessenger.of(context)
++        .showSnackBar(SnackBar(content: Text(_friendlyError(e))));
++  }
++}
++
+ class FuelApi {
+   SupabaseClient get client => Supabase.instance.client;
+ 
+@@ -1570,6 +1746,9 @@
+       final value = _map(await client.rpc('rca_reference_data_v33'));
+       offlineStore.markOnline();
+       await offlineStore.cacheReferenceData(value);
++      try {
++        await offlineStore.refreshSequenceSnapshotV74();
++      } catch (_) {}
+       return value;
+     } catch (e) {
+       if (_isNetworkError(e)) offlineStore.markOffline();
+@@ -3794,15 +3973,40 @@
+             valueListenable: offlineStore.online,
+             builder: (_, isOnline, __) => ValueListenableBuilder<int>(
+               valueListenable: offlineStore.pendingCount,
+-              builder: (_, pending, __) => Text(
+-                isOnline
+-                    ? (pending > 0
+-                        ? 'Online • sincronizando $pending lançamento(s) pendente(s).'
+-                        : 'Atualização automática online a cada poucos segundos.')
+-                    : (pending > 0
+-                        ? 'Offline • $pending lançamento(s) salvo(s) no aparelho.'
+-                        : 'Offline • os próximos lançamentos serão salvos no aparelho.'),
+-                style: const TextStyle(fontSize: 12, color: Colors.black54),
++              builder: (_, pending, __) => ValueListenableBuilder<bool>(
++                valueListenable: offlineStore.syncing,
++                builder: (_, isSyncing, __) => Column(
++                  crossAxisAlignment: CrossAxisAlignment.stretch,
++                  children: [
++                    Text(
++                      isOnline
++                          ? (pending > 0
++                              ? 'Online • $pending lançamento(s) aguardando sincronização.'
++                              : 'Atualização automática online a cada poucos segundos.')
++                          : (pending > 0
++                              ? 'Offline • $pending lançamento(s) salvo(s) no aparelho.'
++                              : 'Offline • os próximos lançamentos serão salvos no aparelho.'),
++                      style: const TextStyle(
++                          fontSize: 12, color: Colors.black54),
++                    ),
++                    if (pending > 0) ...[
++                      const SizedBox(height: 8),
++                      OutlinedButton.icon(
++                        onPressed: !isOnline || isSyncing
++                            ? null
++                            : () => _syncPendingWithFeedbackV74(context),
++                        icon: Icon(isSyncing
++                            ? Icons.sync_rounded
++                            : Icons.cloud_upload_outlined),
++                        label: Text(isSyncing
++                            ? 'Sincronizando...'
++                            : isOnline
++                                ? 'Sincronizar pendentes'
++                                : 'Sem internet para sincronizar'),
++                      ),
++                    ],
++                  ],
++                ),
+               ),
+             ),
+           ),
+@@ -9497,7 +9701,10 @@
+ }
+ 
+ String _recordSequenceV28(Map<String, dynamic> x) {
+-  if (x['offline_pending'] == true) return 'PENDENTE';
++  if (x['offline_pending'] == true) {
++    final local = _intOrNull(x['offline_sequence_v74']);
++    if (local != null) return local.toString().padLeft(4, '0');
++  }
+   final raw = '${x['code'] ?? ''}';
+   final m = RegExp(r'(\d+)$').firstMatch(raw);
+   final n = int.tryParse(m?.group(1) ?? '');
+@@ -9589,7 +9796,7 @@
+                                 const Padding(
+                                     padding: EdgeInsets.only(top: 3),
+                                     child: Text(
+-                                        'PENDENTE (OFFLINE) • salvo neste aparelho',
++                                        'SALVO OFFLINE • aguardando sincronização',
+                                         style: TextStyle(
+                                             fontSize: 11,
+                                             fontWeight: FontWeight.w900,
+@@ -10915,16 +11122,47 @@
+           if (item['offline_pending'] == true)
+             Card(
+                 color: const Color(0xFFFFF4E5),
+-                child: ListTile(
+-                    leading: const Icon(Icons.cloud_off_rounded,
+-                        color: Colors.orange),
+-                    title: const Text('Registro salvo offline neste aparelho',
+-                        style: TextStyle(fontWeight: FontWeight.w900)),
+-                    subtitle: Text(item['sync_conflict'] == true
+-                        ? 'CONFLITO • AGUARDANDO ANÁLISE'
+-                        : item['sync_rejected'] == true
+-                            ? 'REJEITADO'
+-                            : 'Será sincronizado automaticamente quando a conexão estiver disponível.'))),
++                child: Padding(
++                    padding: const EdgeInsets.only(bottom: 10),
++                    child: Column(children: [
++                      ListTile(
++                          leading: const Icon(Icons.cloud_off_rounded,
++                              color: Colors.orange),
++                          title: const Text(
++                              'Registro salvo offline neste aparelho',
++                              style: TextStyle(fontWeight: FontWeight.w900)),
++                          subtitle: Text(item['sync_conflict'] == true
++                              ? 'CONFLITO • AGUARDANDO ANÁLISE'
++                              : item['sync_rejected'] == true
++                                  ? 'REJEITADO'
++                                  : 'Sequencial local: ${_recordSequenceV28(item)} • aguardando envio ao servidor.')),
++                      if (item['sync_conflict'] != true &&
++                          item['sync_rejected'] != true)
++                        Padding(
++                            padding: const EdgeInsets.symmetric(horizontal: 12),
++                            child: ValueListenableBuilder<bool>(
++                                valueListenable: offlineStore.online,
++                                builder: (_, isOnline, __) =>
++                                    ValueListenableBuilder<bool>(
++                                        valueListenable: offlineStore.syncing,
++                                        builder: (_, isSyncing, __) =>
++                                            SizedBox(
++                                                width: double.infinity,
++                                                child: OutlinedButton.icon(
++                                                    onPressed: !isOnline ||
++                                                            isSyncing
++                                                        ? null
++                                                        : () =>
++                                                            _syncPendingWithFeedbackV74(
++                                                                context),
++                                                    icon: const Icon(Icons
++                                                        .cloud_upload_outlined),
++                                                    label: Text(isSyncing
++                                                        ? 'Sincronizando...'
++                                                        : isOnline
++                                                            ? 'Sincronizar pendentes'
++                                                            : 'Sem internet para sincronizar'))))))
++                    ]))),
+           Card(
+               color: comboioToComboio ? _comboioToComboioPale : null,
+               child: Padding(
+@@ -11700,7 +11938,10 @@
+   }
+ 
+   static String _fuelSequence(Map<String, dynamic> x) {
+-    if (x['offline_pending'] == true) return 'PENDENTE';
++    if (x['offline_pending'] == true) {
++      final local = _intOrNull(x['offline_sequence_v74']);
++      if (local != null) return local.toString().padLeft(4, '0');
++    }
+     final code = '${x['code'] ?? ''}'.trim();
+     final match = RegExp(r'(\d+)$').firstMatch(code);
+     final raw = match?.group(1) ?? '';

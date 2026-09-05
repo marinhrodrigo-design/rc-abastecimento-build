@@ -1,0 +1,75 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -15033,15 +15169,17 @@
+   @override
+   Widget build(BuildContext context) => Scaffold(
+       appBar: AppBar(title: const Text('Equipamentos de terceiros')),
+-      floatingActionButton: FloatingActionButton(
+-          onPressed: loading ? null : () => edit(),
+-          child: const Icon(Icons.add)),
++      floatingActionButton: widget.canEdit
++          ? FloatingActionButton(
++              onPressed: loading ? null : () => edit(),
++              child: const Icon(Icons.add))
++          : null,
+       body: items == null
+           ? const Center(child: CircularProgressIndicator())
+           : RefreshIndicator(
+               onRefresh: load,
+               child: ListView(padding: const EdgeInsets.all(12), children: [
+-                if (companies.isEmpty)
++                if (widget.canEdit && companies.isEmpty)
+                   const Card(
+                       child: ListTile(
+                           leading: Icon(Icons.business_outlined, color: _blue),
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -15058,20 +15196,22 @@
+                                 const TextStyle(fontWeight: FontWeight.w900)),
+                         subtitle: Text(
+                             'Empresa / locadora: ${x['company_name'] ?? 'Não informada'}'),
+-                        onTap: loading ? null : () => edit(x),
+-                        trailing: PopupMenuButton<String>(
+-                            enabled: !loading,
+-                            onSelected: (v) {
+-                              if (v == 'edit') edit(x);
+-                              if (v == 'delete') removeThirdParty(x);
+-                            },
+-                            itemBuilder: (_) => const [
+-                                  PopupMenuItem(
+-                                      value: 'edit', child: Text('Editar')),
+-                                  PopupMenuItem(
+-                                      value: 'delete',
+-                                      child: Text('Excluir',
+-                                          style: TextStyle(color: Colors.red)))
+-                                ])))),
++                        onTap: widget.canEdit && !loading ? () => edit(x) : null,
++                        trailing: widget.canEdit
++                            ? PopupMenuButton<String>(
++                                enabled: !loading,
++                                onSelected: (v) {
++                                  if (v == 'edit') edit(x);
++                                  if (v == 'delete') removeThirdParty(x);
++                                },
++                                itemBuilder: (_) => const [
++                                      PopupMenuItem(
++                                          value: 'edit', child: Text('Editar')),
++                                      PopupMenuItem(
++                                          value: 'delete',
++                                          child: Text('Excluir',
++                                              style: TextStyle(color: Colors.red)))
++                                    ])
++                            : null))),
+               ])));
+ }
+--- lib/v29_features.dart
++++ lib/v29_features.dart
+@@ -764,7 +764,7 @@
+   Future<void> createUser() async {
+     final name = TextEditingController(),
+         username = TextEditingController(),
+-        password = TextEditingController(text: '1234');
++        password = TextEditingController();
+     String? role;
+     final ok = await showDialog<bool>(
+         context: context,

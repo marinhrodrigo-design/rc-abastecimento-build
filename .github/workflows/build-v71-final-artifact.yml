@@ -52,8 +52,8 @@ jobs:
           mkdir -p /tmp/v72src
           gh run download 33941735891 -n RC-Abastecimento-v72-diagnostic-source -D /tmp/v72src
           rm -rf app/lib
-          cp -r /tmp/v72src/lib app/lib
-          cp /tmp/v72src/pubspec.yaml app/pubspec.yaml
+          cp -r /tmp/v72src/app/lib app/lib
+          cp /tmp/v72src/app/pubspec.yaml app/pubspec.yaml
 
       - name: Configure Android and stable signing
         working-directory: app

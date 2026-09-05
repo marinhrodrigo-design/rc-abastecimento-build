@@ -5,6 +5,7 @@ on:
     branches: ['fix/rc-abastecimento-v74-sync-sequence']
     paths:
       - 'tool/v74_sync_sequence.patch'
+      - 'tool/v74_version_label.patch'
       - '.github/workflows/diagnose-v74-sync-sequence.yml'
   workflow_dispatch:
 
@@ -51,9 +52,11 @@ jobs:
             cp /tmp/v73final/pubspec.yaml app/pubspec.yaml
           fi
 
-      - name: Apply v74 sync and sequence patch
+      - name: Apply v74 sync, sequence and version patches
         working-directory: app
-        run: patch -p0 --forward --batch < ../tool/v74_sync_sequence.patch
+        run: |
+          patch -p0 --forward --batch < ../tool/v74_sync_sequence.patch
+          patch -p0 --forward --batch < ../tool/v74_version_label.patch
 
       - name: Dependencies
         working-directory: app
@@ -70,6 +73,7 @@ jobs:
           from pathlib import Path
           p=Path('lib/main_online.dart').read_text()
           required=[
+            "Text('v74'",
             'syncPendingManualV74',
             '_syncPendingWithFeedbackV74',
             "'Sincronizar pendentes'",
@@ -88,12 +92,15 @@ jobs:
           missing=[x for x in required if x not in p]
           if missing:
             raise SystemExit(f'Missing v74 requirements: {missing}')
-          if "if (x['offline_pending'] == true) return 'PENDENTE';" in p:
-            raise SystemExit('Offline sequence still hardcoded as PENDENTE')
-          if 'PENDENTE (OFFLINE) • salvo neste aparelho' in p:
-            raise SystemExit('Old pending-only label still present')
-          if 'fuel-test-login' in p:
-            raise SystemExit('Test login regression')
+          forbidden=[
+            "Text('v73'",
+            "if (x['offline_pending'] == true) return 'PENDENTE';",
+            'PENDENTE (OFFLINE) • salvo neste aparelho',
+            'fuel-test-login',
+          ]
+          found=[x for x in forbidden if x in p]
+          if found:
+            raise SystemExit(f'v74 regression found: {found}')
           print('v74_sync_sequence_regression_gate=True')
           PY
 
@@ -104,7 +111,7 @@ jobs:
       - name: Upload validated source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v74-sync-sequence-validated-source
+          name: RC-Abastecimento-v74-final-validated-source
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart

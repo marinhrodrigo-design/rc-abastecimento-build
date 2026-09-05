@@ -1,0 +1,156 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -1521,15 +1521,40 @@
+           }
+         }
+       }
++      if (force) {
++        final queue = _queue;
++        var claimedLegacy = false;
++        for (final q in queue) {
++          final rpc = '${q['rpc'] ?? ''}';
++          final owner = '${q['user_id'] ?? ''}'.trim();
++          if (_fuelingRpc(rpc) &&
++              owner.isEmpty &&
++              q['sync_rejected'] != true) {
++            // "Sincronizar pendentes" is an explicit confirmation by the
++            // authenticated user. Older app versions could save a fueling
++            // without user_id, making it visible but impossible to send.
++            q['user_id'] = uid;
++            q['legacy_claimed_at_v75'] =
++                DateTime.now().toUtc().toIso8601String();
++            claimedLegacy = true;
++          }
++        }
++        if (claimedLegacy) {
++          _state['queue'] = queue;
++          await _persist();
++          syncRevision.value++;
++        }
++      }
+       final snapshot = List<Map<String, dynamic>>.from(_queue);
+       for (final queued in snapshot) {
+         final owner = '${queued['user_id'] ?? ''}'.trim();
+-        if (owner.isEmpty)
+-          continue; // registro legado: precisa ser confirmado pelo usuário na tela.
++        if (owner.isEmpty) continue;
+         if (owner != uid) continue;
+         if (queued['sync_rejected'] == true)
+           continue; // estado final: nunca tenta novamente.
+-        if (queued['sync_blocked'] == true && queued['sync_conflict'] != true)
++        if (queued['sync_conflict'] == true)
++          continue; // conflito já separado: não bloqueia nem é reenviado em loop.
++        if (queued['sync_blocked'] == true)
+           continue; // erro determinístico não trava os demais registros.
+         try {
+           final original = _map(queued['params']);
+@@ -1668,6 +1693,13 @@
+     if (before == 0) return {'before': 0, 'synced': 0, 'after': 0};
+     await retryPending();
+     final after = pendingCount.value;
++    final uid = Supabase.instance.client.auth.currentUser?.id;
++    final conflicts = _queue.where((q) {
++      final owner = '${q['user_id'] ?? ''}'.trim();
++      return q['sync_conflict'] == true &&
++          q['sync_rejected'] != true &&
++          (uid == null || owner.isEmpty || owner == uid);
++    }).length;
+     try {
+       await refreshSequenceSnapshotV74();
+     } catch (_) {}
+@@ -1675,6 +1707,7 @@
+       'before': before,
+       'synced': max(0, before - after),
+       'after': after,
++      'conflicts': conflicts,
+     };
+   }
+ 
+@@ -1722,13 +1755,18 @@
+     if (!context.mounted) return;
+     final synced = result['synced'] ?? 0;
+     final after = result['after'] ?? 0;
++    final conflicts = result['conflicts'] ?? 0;
+     final message = after == 0
+         ? (synced > 0
+             ? 'Sincronização concluída. $synced registro(s) enviado(s).'
+             : 'Não há registros pendentes para sincronizar.')
+         : synced > 0
+-            ? '$synced registro(s) sincronizado(s). $after ainda pendente(s).'
+-            : 'Nenhum registro foi sincronizado. Verifique os avisos dos registros pendentes.';
++            ? conflicts > 0
++                ? '$synced registro(s) sincronizado(s). $conflicts conflito(s) aguardam análise.'
++                : '$synced registro(s) sincronizado(s). $after ainda pendente(s).'
++            : conflicts > 0
++                ? '$conflicts conflito(s) aguardam análise. Os demais pendentes continuam sendo processados.'
++                : 'Nenhum registro foi sincronizado. Abra o registro pendente para ver o motivo.';
+     ScaffoldMessenger.of(context)
+         .showSnackBar(SnackBar(content: Text(message)));
+   } catch (e) {
+@@ -3474,7 +3512,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v74',
++                      child: Text('v75',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -9795,14 +9833,24 @@
+                                       fontWeight: FontWeight.w900,
+                                       fontSize: 15)),
+                               if (item['offline_pending'] == true)
+-                                const Padding(
+-                                    padding: EdgeInsets.only(top: 3),
++                                Padding(
++                                    padding: const EdgeInsets.only(top: 3),
+                                     child: Text(
+-                                        'SALVO OFFLINE • aguardando sincronização',
++                                        item['sync_conflict'] == true
++                                            ? 'CONFLITO • AGUARDANDO ANÁLISE'
++                                            : item['sync_rejected'] == true
++                                                ? 'REJEITADO'
++                                                : _hasValue(item['sync_error'])
++                                                    ? 'PENDENTE • ${item['sync_error']}'
++                                                    : 'SALVO OFFLINE • aguardando sincronização',
++                                        maxLines: 2,
++                                        overflow: TextOverflow.ellipsis,
+                                         style: TextStyle(
+                                             fontSize: 11,
+                                             fontWeight: FontWeight.w900,
+-                                            color: Colors.orange)))
++                                            color: item['sync_rejected'] == true
++                                                ? Colors.red
++                                                : Colors.orange)))
+                             ])),
+                         if (selectionMode)
+                           Checkbox(
+@@ -11134,10 +11182,25 @@
+                               'Registro salvo offline neste aparelho',
+                               style: TextStyle(fontWeight: FontWeight.w900)),
+                           subtitle: Text(item['sync_conflict'] == true
+-                              ? 'CONFLITO • AGUARDANDO ANÁLISE'
++                              ? 'CONFLITO • AGUARDANDO ANÁLISE${_hasValue(item['sync_error']) ? '\n${item['sync_error']}' : ''}'
+                               : item['sync_rejected'] == true
+-                                  ? 'REJEITADO'
+-                                  : 'Sequencial local: ${_recordSequenceV28(item)} • aguardando envio ao servidor.')),
++                                  ? 'REJEITADO${_hasValue(item['sync_error']) ? '\n${item['sync_error']}' : ''}'
++                                  : _hasValue(item['sync_error'])
++                                      ? 'PENDENTE • ${item['sync_error']}'
++                                      : 'Sequencial local: ${_recordSequenceV28(item)} • aguardando envio ao servidor.')),
++                      if (item['sync_conflict'] == true && canEdit)
++                        Padding(
++                            padding: const EdgeInsets.symmetric(horizontal: 12),
++                            child: SizedBox(
++                                width: double.infinity,
++                                child: OutlinedButton.icon(
++                                    onPressed: () => Navigator.push(
++                                        context,
++                                        MaterialPageRoute(
++                                            builder: (_) =>
++                                                const OfflineConflictsV58Screen())),
++                                    icon: const Icon(Icons.rule_folder_outlined),
++                                    label: const Text('Analisar conflito')))),
+                       if (item['sync_conflict'] != true &&
+                           item['sync_rejected'] != true)
+                         Padding(

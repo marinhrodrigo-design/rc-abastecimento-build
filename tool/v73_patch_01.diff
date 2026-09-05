@@ -1,0 +1,148 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -267,10 +267,10 @@
+     final tanks = _rows(ref['tanks']);
+     final reserved = <int, double>{};
+     final incoming = <int, double>{};
+-    final uid = activeUserIdV62;
++    // Physical stock is shared by every user on this device. Personal history
++    // remains user-scoped elsewhere, but every pending operation must reserve
++    // the same physical fuel so a user switch cannot overbook a tank.
+     for (final q in _queue) {
+-      final owner = '${q['user_id'] ?? ''}'.trim();
+-      if (owner.isNotEmpty && uid != null && owner != uid) continue;
+       if (q['sync_rejected'] == true) continue;
+       if (q['sync_blocked'] == true && q['sync_conflict'] != true) continue;
+       final rpc = '${q['rpc'] ?? ''}';
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -873,19 +873,84 @@
+     await _persist();
+   }
+ 
++  Future<Map<String, dynamic>?> _readStateCandidateV73(File file) async {
++    if (!await file.exists()) return null;
++    final raw = await file.readAsString();
++    if (raw.trim().isEmpty) return null;
++    final decoded = jsonDecode(raw);
++    if (decoded is! Map) return null;
++    final state = _map(decoded);
++    final queue = state['queue'];
++    if (queue != null && queue is! List) return null;
++    state['queue'] ??= <dynamic>[];
++    return state;
++  }
++
++  Future<void> _loadDurableStateV73() async {
++    final file = _stateFile!;
++    final tmp = File('${file.path}.tmp');
++    final bak = File('${file.path}.bak');
++    final candidates = <File>[file, tmp, bak];
++    var hadStoredData = false;
++    Object? lastError;
++
++    for (final candidate in candidates) {
++      try {
++        if (await candidate.exists() && await candidate.length() > 0) {
++          hadStoredData = true;
++        }
++        final recovered = await _readStateCandidateV73(candidate);
++        if (recovered == null) continue;
++        _state = recovered;
++        if (candidate.path != file.path) {
++          _state['storage_recovered_v73'] = candidate.path.endsWith('.tmp')
++              ? 'tmp'
++              : 'backup';
++          final recovery = File('${file.path}.recovery');
++          await recovery.writeAsString(jsonEncode(_state), flush: true);
++          // Keep the previous primary as a forensic copy when it was corrupt.
++          if (await file.exists()) {
++            final corrupt = File(
++                '${file.path}.corrupt_${DateTime.now().millisecondsSinceEpoch}');
++            try {
++              await file.rename(corrupt.path);
++            } catch (_) {
++              try {
++                await file.copy(corrupt.path);
++              } catch (_) {}
++              try {
++                await file.delete();
++              } catch (_) {}
++            }
++          }
++          await recovery.rename(file.path);
++          if (await tmp.exists()) {
++            try {
++              await tmp.delete();
++            } catch (_) {}
++          }
++        }
++        return;
++      } catch (e) {
++        lastError = e;
++      }
++    }
++
++    _state = <String, dynamic>{'queue': <dynamic>[]};
++    if (hadStoredData) {
++      // Never silently discard evidence of a damaged queue. Invalid source files
++      // are left untouched and the marker survives the next successful write.
++      _state['storage_recovery_failed_v73'] = true;
++      _state['storage_recovery_error_v73'] = '${lastError ?? 'invalid_state'}';
++    }
++  }
++
+   Future<void> init() async {
+     final dir = await getApplicationSupportDirectory();
+     _stateFile = File('${dir.path}/rc_abastecimento_offline.json');
+     _evidenceDir = Directory('${dir.path}/offline_evidence');
+     await _evidenceDir!.create(recursive: true);
+-    try {
+-      if (await _stateFile!.exists()) {
+-        final decoded = jsonDecode(await _stateFile!.readAsString());
+-        if (decoded is Map) _state = _map(decoded);
+-      }
+-    } catch (_) {
+-      _state = <String, dynamic>{'queue': <dynamic>[]};
+-    }
++    await _loadDurableStateV73();
+     _state['queue'] ??= <dynamic>[];
+     unawaited(_pruneOfflineMediaCacheV72());
+     if (_state['balance_model_v69'] != true) {
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -1463,9 +1528,31 @@
+       final file = _stateFile;
+       if (file == null) return;
+       final tmp = File('${file.path}.tmp');
+-      await tmp.writeAsString(jsonEncode(_state), flush: true);
+-      if (await file.exists()) await file.delete();
+-      await tmp.rename(file.path);
++      final bak = File('${file.path}.bak');
++      final payload = jsonEncode(_state);
++
++      await tmp.writeAsString(payload, flush: true);
++      final verified = await _readStateCandidateV73(tmp);
++      if (verified == null) {
++        throw const FormatException('Falha ao validar a fila offline temporária');
++      }
++
++      if (await file.exists()) {
++        // Preserve the last known primary before replacement. If Android closes
++        // the process during the swap, init() can recover from tmp or backup.
++        await file.copy(bak.path);
++      }
++      try {
++        await tmp.rename(file.path);
++      } on FileSystemException {
++        if (await file.exists()) await file.delete();
++        await tmp.rename(file.path);
++      }
++
++      final primary = await _readStateCandidateV73(file);
++      if (primary == null) {
++        throw const FormatException('Falha ao validar a fila offline gravada');
++      }
+     });
+     return _writeChain;
+   }

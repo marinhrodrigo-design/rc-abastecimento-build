@@ -1,0 +1,167 @@
+name: Build R&C Abastecimento v71 Final Artifact
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths:
+      - '.github/workflows/build-v71-final-artifact.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v71-final-artifact
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact validated v71 source snapshot
+        run: |
+          mkdir -p /tmp/v71src /tmp/v70src
+          gh run download 33932928403 -n RC-Abastecimento-v71-lint-source -D /tmp/v71src
+          gh run download 33916946810 -n RC-Abastecimento-v70-approved-source -D /tmp/v70src
+          rm -rf app/lib
+          mkdir -p app/lib
+          cp /tmp/v71src/main_online.dart app/lib/main_online.dart
+          cp /tmp/v71src/v29_features.dart app/lib/v29_features.dart
+          cp /tmp/v71src/v30_features.dart app/lib/v30_features.dart
+          cp /tmp/v71src/v31_features.dart app/lib/v31_features.dart
+          cp /tmp/v70src/app/pubspec.yaml app/pubspec.yaml
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)) else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml');t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"');m.write_text(t)
+          g=Path('android/app/build.gradle.kts');x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          x=x.replace(marker,signing+marker,1)
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Regression checks v71 final
+        working-directory: app
+        run: |
+          grep -Fq "Text('v71'" lib/main_online.dart
+          grep -Fq "fuelingV71" lib/main_online.dart
+          grep -Fq "rca_record_fueling_v71" lib/main_online.dart
+          grep -Fq "p_totalizer_before_captured_at" lib/main_online.dart
+          grep -Fq "totalizerBeforeCapturedAtV71" lib/main_online.dart
+          grep -Fq "Foto obrigatória antes de iniciar" lib/main_online.dart
+          grep -Fq "Tirar foto do totalizador antes do abastecimento" lib/main_online.dart
+          grep -Fq "rca_general_records_v71" lib/main_online.dart
+          grep -Fq "rca_my_fuelings_v71" lib/v29_features.dart
+          grep -Fq "PENDENTE (OFFLINE) • salvo neste aparelho" lib/main_online.dart
+          grep -Fq "pending_reserved_liters" lib/main_online.dart
+          grep -Fq "Saldo insuficiente para abastecimento offline" lib/main_online.dart
+          grep -Fq "GPS indisponível no momento da conclusão" lib/main_online.dart
+          if grep -Fq "fuel-test-login" lib/main_online.dart; then echo 'ERRO: login de teste encontrado'; exit 1; fi
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart').read_text()
+          forbidden=[
+            "Placa: ${x['placa'] ?? '-'}",
+            "Placa: ${x['plate']??'-'}",
+            "Placa: ${x['plate'] ?? '-'}",
+          ]
+          if any(p.count(x) for x in forbidden):
+            raise SystemExit('ERRO: placa ausente ainda exibida com hífen')
+          print('plate_fix_ok=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Build APK
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-number=39 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Prepare final artifact
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v71-final.apk
+
+      - name: Upload validated source snapshot
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v71-final-approved-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v71-final
+          path: RC-Abastecimento-v71-final.apk
+          retention-days: 30

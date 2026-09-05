@@ -4,7 +4,7 @@ on:
   push:
     branches: ['fix/rc-abastecimento-v72-final']
     paths:
-      - 'tool/v72_patch_00.diff'
+      - 'tool/v72_patch_*.diff'
       - '.github/workflows/diagnose-v72-source.yml'
   workflow_dispatch:
 
@@ -37,9 +37,13 @@ jobs:
           rm -rf app/lib
           cp -r /tmp/v71src/lib app/lib
           cp /tmp/v71src/pubspec.yaml app/pubspec.yaml
-      - name: Apply v72 correction
+      - name: Apply v72 corrections sequentially
         working-directory: app
-        run: patch -p0 --forward --batch < ../tool/v72_patch_00.diff
+        run: |
+          for patch_file in ../tool/v72_patch_*.diff; do
+            echo "Applying $patch_file"
+            patch -p0 --forward --batch < "$patch_file"
+          done
       - name: Dependencies
         working-directory: app
         run: flutter pub get
@@ -56,11 +60,13 @@ jobs:
             'Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de abastecimento.',
             'Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de origem.',
             'Foto obrigatória já registrada antes do início ✓',
+            "Text('v71'",
           ]
           found={x:p.count(x) for x in forbidden}
           if any(found.values()):
-            raise SystemExit(f'Texto redundante ainda presente: {found}')
+            raise SystemExit(f'Conteúdo antigo ainda presente: {found}')
           required=[
+            "Text('v72'",
             'readOfflineMediaCacheV72',
             'mirrorOfflineMediaV72',
             '_pruneOfflineMediaCacheV72',
@@ -71,7 +77,7 @@ jobs:
           ]
           missing=[x for x in required if x not in p]
           if missing:
-            raise SystemExit(f'Correção offline incompleta: {missing}')
+            raise SystemExit(f'Correção v72 incompleta: {missing}')
           if p.count("if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);") < 3:
             raise SystemExit('Evidências offline ainda podem ser removidas antes do PDF.')
           print('v72_regression_gate=True')
@@ -90,4 +96,5 @@ jobs:
             app/lib/v31_features.dart
             app/pubspec.yaml
             tool/v72_patch_00.diff
+            tool/v72_patch_01.diff
           retention-days: 14

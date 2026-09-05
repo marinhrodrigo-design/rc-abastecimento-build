@@ -1,0 +1,133 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -13269,34 +13385,40 @@
+                   MaterialPageRoute(
+                       builder: (_) => const CompaniesAdminScreen()))),
+           const SizedBox(height: 10),
+-          HomeActionCard(
+-              icon: Icons.location_city_outlined,
+-              title: 'Obras',
+-              subtitle:
+-                  'Vincular cada obra à empresa cliente/contratante e ao responsável da obra',
+-              onTap: () => Navigator.push(
+-                  context,
+-                  MaterialPageRoute(
+-                      builder: (_) => WorksAdminScreen(profile: profile)))),
+-          const SizedBox(height: 10),
+-          HomeActionCard(
+-              icon: Icons.precision_manufacturing_outlined,
+-              title: 'Ativos próprios',
+-              subtitle: 'Equipamentos que pertencem à sua empresa',
+-              onTap: () => Navigator.push(
+-                  context,
+-                  MaterialPageRoute(
+-                      builder: (_) => const MachinesAdminScreen()))),
+-          const SizedBox(height: 10),
+-          HomeActionCard(
+-              icon: Icons.handyman_outlined,
+-              title: 'Equipamentos de terceiros',
+-              subtitle:
+-                  'Equipamentos contratados e sua empresa proprietária/locadora',
+-              onTap: () => Navigator.push(
+-                  context,
+-                  MaterialPageRoute(
+-                      builder: (_) => const ThirdPartyAdminScreen()))),
++        ],
++        HomeActionCard(
++            icon: Icons.location_city_outlined,
++            title: 'Obras',
++            subtitle: isAdmin
++                ? 'Cadastrar, editar e consultar obras'
++                : 'Consultar obras cadastradas',
++            onTap: () => Navigator.push(
++                context,
++                MaterialPageRoute(
++                    builder: (_) => WorksAdminScreen(profile: profile)))),
++        const SizedBox(height: 10),
++        HomeActionCard(
++            icon: Icons.precision_manufacturing_outlined,
++            title: 'Ativos próprios',
++            subtitle: isAdmin
++                ? 'Cadastrar, editar e consultar equipamentos próprios'
++                : 'Consultar equipamentos próprios',
++            onTap: () => Navigator.push(
++                context,
++                MaterialPageRoute(
++                    builder: (_) => MachinesAdminScreen(canEdit: isAdmin)))),
++        const SizedBox(height: 10),
++        HomeActionCard(
++            icon: Icons.handyman_outlined,
++            title: 'Equipamentos de terceiros',
++            subtitle: isAdmin
++                ? 'Cadastrar, editar e consultar equipamentos contratados'
++                : 'Consultar equipamentos contratados',
++            onTap: () => Navigator.push(
++                context,
++                MaterialPageRoute(
++                    builder: (_) => ThirdPartyAdminScreen(canEdit: isAdmin)))),
++        if (isAdmin) ...[
+           const SizedBox(height: 10),
+           HomeActionCard(
+               icon: Icons.oil_barrel_outlined,
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -13314,8 +13436,10 @@
+                   context,
+                   MaterialPageRoute(
+                       builder: (_) => const TruckFunctionAdminScreen()))),
+-        ]),
+-      );
++        ],
++      ]),
++    );
++  }
+ }
+ 
+ class TruckFunctionAdminScreen extends StatefulWidget {
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14552,7 +14676,8 @@
+ }
+ 
+ class MachinesAdminScreen extends StatefulWidget {
+-  const MachinesAdminScreen({super.key});
++  final bool canEdit;
++  const MachinesAdminScreen({super.key, this.canEdit = false});
+   @override
+   State<MachinesAdminScreen> createState() => _MachinesAdminScreenState();
+ }
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14578,6 +14703,7 @@
+   }
+ 
+   Future<void> edit([Map<String, dynamic>? item]) async {
++    if (!widget.canEdit) return;
+     final number = TextEditingController(text: '${item?['numeroAtivo'] ?? ''}');
+     final model = TextEditingController(text: '${item?['modelo'] ?? ''}');
+     final plate = TextEditingController(text: '${item?['placa'] ?? ''}');
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14741,6 +14867,7 @@
+   }
+ 
+   Future<void> removeMachine(Map<String, dynamic> x) async {
++    if (!widget.canEdit) return;
+     final label = '${x['numeroAtivo'] ?? x['asset_number'] ?? 'este ativo'}';
+     final ok = await showDialog<bool>(
+         context: context,
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14786,8 +14913,10 @@
+         .toList();
+     return Scaffold(
+         appBar: AppBar(title: const Text('Ativos próprios')),
+-        floatingActionButton: FloatingActionButton(
+-            onPressed: () => edit(), child: const Icon(Icons.add)),
++        floatingActionButton: widget.canEdit
++            ? FloatingActionButton(
++                onPressed: () => edit(), child: const Icon(Icons.add))
++            : null,
+         body: items == null
+             ? const Center(child: CircularProgressIndicator())
+             : Column(children: [

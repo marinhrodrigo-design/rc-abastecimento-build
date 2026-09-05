@@ -1,0 +1,62 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -3510,7 +3510,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v75',
++                      child: Text('v76',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -9500,7 +9500,7 @@
+       quick(Icons.receipt_long_rounded, 'Recebimento (NF)', 'Registrar entrada',
+           _receipt),
+       quick(Icons.today_rounded, 'Registro Diário', 'Movimentações do dia',
+-          () => openRecordsV71(const DailyRecordsV28Screen())),
++          () => openRecordsV71(DailyRecordsV28Screen(canEdit: isAdmin))),
+       quick(
+           Icons.manage_search_rounded,
+           'Registro Geral',
+@@ -10009,7 +10009,8 @@
+ }
+ 
+ class DailyRecordsV28Screen extends StatefulWidget {
+-  const DailyRecordsV28Screen({super.key});
++  final bool canEdit;
++  const DailyRecordsV28Screen({super.key, this.canEdit = false});
+   @override
+   State<DailyRecordsV28Screen> createState() => _DailyRecordsV28ScreenState();
+ }
+@@ -10155,7 +10156,8 @@
+                 onOpen: () => Navigator.push(
+                     context,
+                     MaterialPageRoute(
+-                        builder: (_) => MovementDetailScreen(item: x))),
++                        builder: (_) => MovementDetailScreen(
++                            item: x, canEdit: widget.canEdit))),
+                 onPdf: () => preview(x)))
+           ])));
+ }
+@@ -11064,6 +11066,12 @@
+         kmValue == null &&
+         hourmeterValue == null &&
+         legacyMeterValue != null;
++    final syncError = '${item['sync_error'] ?? ''}'.trim();
++    final normalizedSyncError = syncError.toUpperCase();
++    final conflictErrorDetail = syncError.isNotEmpty &&
++            normalizedSyncError != 'CONFLITO • AGUARDANDO ANÁLISE'
++        ? '\n$syncError'
++        : '';
+ 
+     final rows = <_RecordDetailData>[
+       _RecordDetailData(Icons.calendar_today_outlined, 'Data e hora',
+@@ -11180,7 +11188,7 @@
+                               'Registro salvo offline neste aparelho',
+                               style: TextStyle(fontWeight: FontWeight.w900)),
+                           subtitle: Text(item['sync_conflict'] == true
+-                              ? 'CONFLITO • AGUARDANDO ANÁLISE${_hasValue(item['sync_error']) ? '\n${item['sync_error']}' : ''}'
++                              ? 'CONFLITO • AGUARDANDO ANÁLISE$conflictErrorDetail'
+                               : item['sync_rejected'] == true
+                                   ? 'REJEITADO${_hasValue(item['sync_error']) ? '\n${item['sync_error']}' : ''}'
+                                   : _hasValue(item['sync_error'])

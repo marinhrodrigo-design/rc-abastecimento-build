@@ -1,0 +1,110 @@
+name: Diagnose R&C Abastecimento v78 offline cache queue
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v78-offline-cache-queue']
+    paths:
+      - 'tool/v78_offline_cache_queue.patch'
+      - '.github/workflows/diagnose-v78-offline-cache-queue.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create validation workspace
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact v77 final approved source
+        run: |
+          rm -rf /tmp/v77final /tmp/v77final.zip
+          mkdir -p /tmp/v77final
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9975772489/zip" \
+            -o /tmp/v77final.zip
+          unzip -q /tmp/v77final.zip -d /tmp/v77final
+          rm -rf app/lib
+          if [ -d /tmp/v77final/app/lib ]; then
+            cp -r /tmp/v77final/app/lib app/lib
+            cp /tmp/v77final/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v77final/lib app/lib
+            cp /tmp/v77final/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v78 patch
+        working-directory: app
+        run: patch -p0 --forward --batch < ../tool/v78_offline_cache_queue.patch
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format source
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: Regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          required=[
+            "Text('v78'",
+            'reference_data_by_user_v78',
+            'last_tank_by_user_v78',
+            '_belongsToActiveUserV78',
+            '_hasSyncWorkV78',
+            'reconcileServerQueueV78',
+            'rca_offline_event_statuses_v78',
+            'Este usuário precisa entrar online uma vez nesta versão',
+            'if (!_fuelingRpc',
+            "if (q['sync_rejected'] == true) return false;",
+          ]
+          missing=[x for x in required if x not in main]
+          if missing:
+            raise SystemExit(f'v78 incomplete: {missing}')
+          forbidden=["Text('v77'", "pendingCount.value = queue.length;"]
+          found={x:main.count(x) for x in forbidden}
+          if any(found.values()):
+            raise SystemExit(f'v78 regression: {found}')
+          if main.count('pendingCount.value = _pendingQueueCountV68();') < 8:
+            raise SystemExit('Pending notifier is not consistently scoped')
+          print('v78_regression_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v78-offline-cache-queue-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

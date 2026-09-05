@@ -1,0 +1,132 @@
+name: Diagnose R&C Abastecimento v81 offline sync visibility
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v81-offline-sync-visibility']
+    paths:
+      - 'tool/v81_patch_00.diff'
+      - '.github/workflows/diagnose-v81-offline-sync-visibility.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create validation workspace
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact approved v80 source
+        run: |
+          rm -rf /tmp/v80src /tmp/v80src.zip
+          mkdir -p /tmp/v80src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9977905388/zip" \
+            -o /tmp/v80src.zip
+          unzip -q /tmp/v80src.zip -d /tmp/v80src
+          rm -rf app/lib
+          if [ -d /tmp/v80src/app/lib ]; then
+            cp -r /tmp/v80src/app/lib app/lib
+            cp /tmp/v80src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v80src/lib app/lib
+            cp /tmp/v80src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v81 source correction
+        working-directory: app
+        run: patch -p1 --forward --batch < ../tool/v81_patch_00.diff
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v81 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
+          required_main=[
+            "Text('v81'",
+            'bool get backendReadyV81',
+            'bool get onlineReauthRequiredV81',
+            'if (!backendReadyV81 || _containsLocal(params))',
+            'if (!offlineStore.backendReadyV81)',
+            "'ONLINE • REENTRAR'",
+            'esta sessão foi iniciada offline',
+            "'error': firstError",
+            'Não foi possível sincronizar: $reason',
+            'rca_record_fueling_v71',
+            'syncPendingManualV74',
+            'sourceDisplayLabelV80()',
+            "title: 'Novo abastecimento'",
+            "const title = 'Novo abastecimento';",
+          ]
+          required_v31=[
+            'bool get _backendReadyV81',
+            'if (!_backendReadyV81)',
+            'if (_backendReadyV81)',
+            'onlineReauthRequiredV81',
+            'Entre novamente com internet para validar e sincronizar.',
+          ]
+          missing=[x for x in required_main if x not in main]
+          missing += [f'v31:{x}' for x in required_v31 if x not in v31]
+          if missing:
+            raise SystemExit(f'v81 correction incomplete: {missing}')
+          forbidden=[
+            "Text('v80'",
+            'Não foi possível atualizar o status da unidade agora. O abastecimento continua salvo e a sincronização será tentada novamente.',
+            "title: 'Abastecer como comboio'",
+            "? 'Abastecer como comboio'",
+          ]
+          found={x:(main+v31).count(x) for x in forbidden}
+          if any(found.values()):
+            raise SystemExit(f'v81 regression found: {found}')
+          if main.count('backendReadyV81') < 3:
+            raise SystemExit('Backend-authenticated online mode is not consistently enforced')
+          if v31.count('_backendReadyV81') < 4:
+            raise SystemExit('Operational home still mixes network reachability with authenticated backend readiness')
+          if main.count('sourceDisplayLabelV80()') < 3:
+            raise SystemExit('v80 source unit/asset identity fix was lost')
+          print('v81_offline_sync_visibility_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v81 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v81-offline-sync-visibility-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

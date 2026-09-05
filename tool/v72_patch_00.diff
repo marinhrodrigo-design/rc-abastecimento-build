@@ -61,14 +61,14 @@
          ].where((v) => _hasValue(v)).toList(),
          'sync_error': q['sync_error'],
          'sync_conflict': q['sync_conflict'] == true,
-@@ -717,6 +729,7 @@
-     _stateFile = File('${dir.path}/rc_abastecimento_offline.json');
-     _evidenceDir = Directory('${dir.path}/offline_evidence');
-     await _evidenceDir!.create(recursive: true);
+@@ -726,6 +738,7 @@
+       _state = <String, dynamic>{'queue': <dynamic>[]};
+     }
+     _state['queue'] ??= <dynamic>[];
 +    unawaited(_pruneOfflineMediaCacheV72());
-     try {
-       if (await _stateFile!.exists()) {
-         final decoded = jsonDecode(await _stateFile!.readAsString());
+     if (_state['balance_model_v69'] != true) {
+       final ref = _baseReferenceDataV69;
+       if (ref != null) {
 @@ -848,6 +861,92 @@
      return 'offline://${file.path}';
    }

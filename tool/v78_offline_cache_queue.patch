@@ -1,0 +1,333 @@
+--- lib/main_online.dart	2026-09-05 19:40:28.000000000 +0000
++++ lib/main_online.dart	2026-09-05 20:02:27.680561103 +0000
+@@ -255,11 +255,35 @@
+   List<Map<String, dynamic>> get _queue => _rows(_state['queue']);
+   Map<String, dynamic>? get cachedProfile =>
+       _state['profile'] is Map ? _map(_state['profile']) : null;
+-  Map<String, dynamic>? get _baseReferenceDataV69 =>
+-      _state['reference_data'] is Map ? _map(_state['reference_data']) : null;
++  String? get _activeUserKeyV78 {
++    final v = (activeUserIdV62 ??
++            Supabase.instance.client.auth.currentUser?.id ??
++            '')
++        .trim();
++    return v.isEmpty ? null : v;
++  }
++
++  Map<String, dynamic>? get _baseReferenceDataV69 {
++    final uid = _activeUserKeyV78;
++    final byUser = _state['reference_data_by_user_v78'];
++    if (uid != null && byUser is Map) {
++      final item = _map(byUser)[uid];
++      return item is Map ? _map(item) : null;
++    }
++    return _state['reference_data'] is Map
++        ? _map(_state['reference_data'])
++        : null;
++  }
+   Map<String, dynamic>? get cachedReferenceData =>
+       _referenceWithPendingOverlayV69();
+-  int? get lastTankId => _intOrNull(_state['last_tank_id']);
++  int? get lastTankId {
++    final uid = _activeUserKeyV78;
++    final byUser = _state['last_tank_by_user_v78'];
++    if (uid != null && byUser is Map) {
++      return _intOrNull(_map(byUser)[uid]);
++    }
++    return _intOrNull(_state['last_tank_id']);
++  }
+   Map<String, dynamic>? get _sequenceSnapshotV74 =>
+       _state['sequence_snapshot_v74'] is Map
+           ? _map(_state['sequence_snapshot_v74'])
+@@ -429,8 +453,24 @@
+       _state['abandoned_session_v68'] is Map
+           ? _map(_state['abandoned_session_v68'])
+           : null;
+-  int _pendingQueueCountV68() =>
+-      _queue.where((q) => q['sync_rejected'] != true).length;
++  bool _belongsToActiveUserV78(Map<String, dynamic> q,
++      {bool allowLegacy = true}) {
++    final uid = _activeUserKeyV78;
++    final owner = '${q['user_id'] ?? ''}'.trim();
++    if (owner.isEmpty) return allowLegacy;
++    return uid != null && owner == uid;
++  }
++
++  int _pendingQueueCountV68() => _queue.where((q) {
++        if (q['sync_rejected'] == true) return false;
++        if (!_fuelingRpc('${q['rpc'] ?? ''}')) return false;
++        return _belongsToActiveUserV78(q);
++      }).length;
++
++  bool _hasSyncWorkV78() => _queue.any((q) {
++        if (q['sync_rejected'] == true) return false;
++        return _belongsToActiveUserV78(q, allowLegacy: false);
++      });
+   Future<void> cacheFuelingPermissionV68(bool allowed) async {
+     _state['can_fueling_create_v68'] = allowed;
+     await _persist();
+@@ -566,6 +606,7 @@
+     _state['profile'] = profile;
+     _state['active_user_id_v62'] = uid;
+     _state['app_logged_out_v62'] = false;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+   }
+ 
+@@ -588,10 +629,16 @@
+     final p = _map(item['profile']);
+     if (p.isEmpty)
+       throw Exception('Dados offline deste usuário não estão disponíveis.');
++    final uid = '${item['user_id'] ?? p['user_id'] ?? p['id'] ?? ''}'.trim();
++    final perUserRef = _state['reference_data_by_user_v78'];
++    if (uid.isNotEmpty && perUserRef is Map && !_map(perUserRef).containsKey(uid)) {
++      throw Exception(
++          'Este usuário precisa entrar online uma vez nesta versão para atualizar as unidades e permissões offline deste aparelho.');
++    }
+     _state['profile'] = p;
+-    _state['active_user_id_v62'] =
+-        '${item['user_id'] ?? p['user_id'] ?? p['id'] ?? ''}';
++    _state['active_user_id_v62'] = uid;
+     _state['app_logged_out_v62'] = false;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+     return p;
+   }
+@@ -600,12 +647,14 @@
+     _state['app_logged_out_v62'] = true;
+     _state.remove('active_user_id_v62');
+     _state.remove('profile');
++    pendingCount.value = 0;
+     await _persist();
+   }
+ 
+   Future<void> markAppLoggedInV62([String? uid]) async {
+     _state['app_logged_out_v62'] = false;
+     if (uid != null && uid.isNotEmpty) _state['active_user_id_v62'] = uid;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+   }
+ 
+@@ -630,7 +679,7 @@
+       'user_id': owner
+     });
+     _state['queue'] = queue;
+-    pendingCount.value = queue.length;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+     syncRevision.value++;
+   }
+@@ -651,7 +700,7 @@
+       'user_id': owner
+     });
+     _state['queue'] = queue;
+-    pendingCount.value = queue.length;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+     syncRevision.value++;
+   }
+@@ -964,6 +1013,79 @@
+     syncRevision.value++;
+   }
+ 
++  Future<void> reconcileServerQueueV78() async {
++    if (!online.value || Supabase.instance.client.auth.currentUser == null) {
++      return;
++    }
++    final eventIds = <String>[];
++    for (final q in _queue) {
++      if (!_fuelingRpc('${q['rpc'] ?? ''}')) continue;
++      if (!_belongsToActiveUserV78(q)) continue;
++      final eventId = '${_map(q['params'])['p_offline_event_id'] ?? ''}'.trim();
++      if (eventId.isNotEmpty && !eventIds.contains(eventId)) eventIds.add(eventId);
++    }
++    if (eventIds.isEmpty) return;
++
++    final rows = await api.offlineEventStatusesV78(eventIds);
++    if (rows.isEmpty) return;
++    final byEvent = <String, Map<String, dynamic>>{
++      for (final row in rows)
++        if ('${row['offline_event_id'] ?? ''}'.trim().isNotEmpty)
++          '${row['offline_event_id']}': row
++    };
++
++    final queue = _queue;
++    final removeIds = <String>{};
++    var changed = false;
++    for (final q in queue) {
++      if (!_fuelingRpc('${q['rpc'] ?? ''}')) continue;
++      final eventId = '${_map(q['params'])['p_offline_event_id'] ?? ''}'.trim();
++      final server = byEvent[eventId];
++      if (server == null) continue;
++      if (_intOrNull(server['movement_id']) != null) {
++        removeIds.add('${q['id']}');
++        changed = true;
++        continue;
++      }
++      final status = '${server['conflict_status'] ?? ''}'.trim().toLowerCase();
++      final notes = '${server['review_notes'] ?? ''}'.trim();
++      if (status == 'rejected') {
++        q['sync_conflict'] = false;
++        q['sync_rejected'] = true;
++        q['sync_blocked'] = true;
++        q['sync_status'] = 'rejected';
++        q['sync_error'] = notes.isEmpty
++            ? 'Rejeitado na análise administrativa.'
++            : 'Rejeitado na análise: $notes';
++        q['reviewed_at_v77'] = server['reviewed_at'];
++        q['review_status_v77'] = 'rejected';
++        changed = true;
++      } else if (status == 'approved') {
++        q['sync_conflict'] = false;
++        q.remove('sync_rejected');
++        q.remove('sync_blocked');
++        q.remove('sync_error');
++        q['sync_status'] = 'approved_retry';
++        q['reviewed_at_v77'] = server['reviewed_at'];
++        q['review_status_v77'] = 'approved';
++        changed = true;
++      } else if (status == 'pending_review') {
++        q['sync_conflict'] = true;
++        q['sync_blocked'] = true;
++        q['sync_status'] = 'pending_review';
++        q['sync_error'] = '${server['reason'] ?? 'CONFLITO • AGUARDANDO ANÁLISE'}';
++        changed = true;
++      }
++    }
++    if (!changed) return;
++    _state['queue'] = removeIds.isEmpty
++        ? queue
++        : queue.where((q) => !removeIds.contains('${q['id']}')).toList();
++    pendingCount.value = _pendingQueueCountV68();
++    await _persist();
++    syncRevision.value++;
++  }
++
+   Future<void> reconcileReviewedConflictsV77() async {
+     if (!online.value || Supabase.instance.client.auth.currentUser == null) {
+       return;
+@@ -1078,6 +1200,18 @@
+   }
+ 
+   Future<void> setLastTankId(int? value) async {
++    final uid = _activeUserKeyV78;
++    final byUser = _state['last_tank_by_user_v78'] is Map
++        ? _map(_state['last_tank_by_user_v78'])
++        : <String, dynamic>{};
++    if (uid != null) {
++      if (value == null) {
++        byUser.remove(uid);
++      } else {
++        byUser[uid] = value;
++      }
++      _state['last_tank_by_user_v78'] = byUser;
++    }
+     if (value == null) {
+       _state.remove('last_tank_id');
+     } else {
+@@ -1214,6 +1348,17 @@
+       _state['balance_model_v69'] = true;
+       await _persist();
+     }
++    if (_state['reference_data_by_user_v78'] is! Map &&
++        _state['reference_data'] is Map) {
++      final profile = _state['profile'] is Map ? _map(_state['profile']) : <String, dynamic>{};
++      final uid = '${profile['user_id'] ?? profile['id'] ?? _state['active_user_id_v62'] ?? ''}'.trim();
++      if (uid.isNotEmpty) {
++        _state['reference_data_by_user_v78'] = {
++          uid: _map(_state['reference_data'])
++        };
++        await _persist();
++      }
++    }
+     if (_state['session_marker_v68'] is Map &&
+         _state['app_logged_out_v62'] != true) {
+       _state['abandoned_session_v68'] = _map(_state['session_marker_v68']);
+@@ -1253,7 +1398,7 @@
+       try {
+         await reconcileAbandonedSessionV68();
+       } catch (_) {}
+-      if (changed || pendingCount.value > 0)
++      if (changed || _hasSyncWorkV78())
+         unawaited(syncPending(force: changed));
+     }
+   }
+@@ -1262,11 +1407,14 @@
+   void markOnline() {
+     final changed = !online.value;
+     online.value = true;
+-    if (changed && pendingCount.value > 0) unawaited(syncPending(force: true));
++    if (changed && _hasSyncWorkV78()) unawaited(syncPending(force: true));
+   }
+ 
+   Future<void> cacheProfile(Map<String, dynamic> value) async {
+     _state['profile'] = value;
++    final uid = '${value['user_id'] ?? value['id'] ?? Supabase.instance.client.auth.currentUser?.id ?? ''}'.trim();
++    if (uid.isNotEmpty) _state['active_user_id_v62'] = uid;
++    pendingCount.value = _pendingQueueCountV68();
+     await _persist();
+   }
+ 
+@@ -1277,6 +1425,14 @@
+ 
+   Future<void> cacheReferenceData(Map<String, dynamic> value) async {
+     _state['reference_data'] = value;
++    final uid = _activeUserKeyV78;
++    if (uid != null) {
++      final byUser = _state['reference_data_by_user_v78'] is Map
++          ? _map(_state['reference_data_by_user_v78'])
++          : <String, dynamic>{};
++      byUser[uid] = Map<String, dynamic>.from(value);
++      _state['reference_data_by_user_v78'] = byUser;
++    }
+     _state['balance_model_v69'] = true;
+     await _persist();
+   }
+@@ -1597,7 +1753,7 @@
+   }
+ 
+   Future<void> syncPending({bool force = false}) async {
+-    if (_syncing || !online.value || pendingCount.value == 0) return;
++    if (_syncing || !online.value || !_hasSyncWorkV78()) return;
+     final uid = Supabase.instance.client.auth.currentUser?.id;
+     if (uid == null) return;
+     _syncing = true;
+@@ -1622,6 +1778,7 @@
+         }
+       }
+       try {
++        await reconcileServerQueueV78();
+         await reconcileReviewedConflictsV77();
+       } catch (e) {
+         if (_isNetworkError(e)) {
+@@ -1774,7 +1931,7 @@
+         }
+       }
+       if (online.value &&
+-          pendingCount.value == 0 &&
++          !_hasSyncWorkV78() &&
+           Supabase.instance.client.auth.currentUser != null) {
+         try {
+           final fresh = _map(
+@@ -2183,6 +2340,12 @@
+           ? <Map<String, dynamic>>[]
+           : _rows(await client.rpc('rca_offline_conflict_statuses_v77',
+               params: {'p_offline_event_ids': offlineEventIds}));
++  Future<List<Map<String, dynamic>>> offlineEventStatusesV78(
++          List<String> offlineEventIds) async =>
++      offlineEventIds.isEmpty
++          ? <Map<String, dynamic>>[]
++          : _rows(await client.rpc('rca_offline_event_statuses_v78',
++              params: {'p_offline_event_ids': offlineEventIds}));
+   Future<Map<String, dynamic>> reviewOfflineConflictV58(int id, String decision,
+           {String? notes}) async =>
+       _map(await client.rpc('rca_review_offline_conflict_v58', params: {
+@@ -3624,7 +3787,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v77',
++                      child: Text('v78',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),

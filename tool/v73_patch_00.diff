@@ -280,7 +280,8 @@
        final type = '${x['type'] ?? ''}';
        final transfer = type == 'tank_transfer';
        final fueling = type == 'fueling';
-@@ -11690,8 +11852,7 @@
+@@ -11689,8 +11851,7 @@
+               _fuelLabel(x['fuel_type']), navy),
          ));
          rows.add(pairRows(
 -          row(Icons.speed_outlined, 'KM',
@@ -289,7 +290,8 @@
            row(Icons.speed_outlined, 'Horímetro',
                '${x['hourmeter_value'] ?? '-'}', navy),
          ));
-@@ -11707,11 +11868,12 @@
+@@ -11705,11 +11866,12 @@
+           row(Icons.assignment_outlined, 'Valor total',
                salePriceRaw == null ? '-' : _fmtMoney(totalSaleValue), navy),
          ));
 +        final totalizerValue = x['totalizer'] ?? x['closing_meter'];

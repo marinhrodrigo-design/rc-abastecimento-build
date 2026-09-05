@@ -1,0 +1,103 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14819,29 +14948,32 @@
+                                     if (_hasValue(x['localizacao']))
+                                       '${x['localizacao']}'
+                                   ].join(' • ')),
+-                                  onTap: () => edit(x),
+-                                  trailing: PopupMenuButton<String>(
+-                                      onSelected: (v) {
+-                                        if (v == 'edit') edit(x);
+-                                        if (v == 'delete') removeMachine(x);
+-                                      },
+-                                      itemBuilder: (_) => const [
+-                                            PopupMenuItem(
+-                                                value: 'edit',
+-                                                child: Text('Editar')),
+-                                            PopupMenuItem(
+-                                                value: 'delete',
+-                                                child: Text('Excluir',
+-                                                    style: TextStyle(
+-                                                        color: Colors.red)))
+-                                          ])));
++                                  onTap: widget.canEdit ? () => edit(x) : null,
++                                  trailing: widget.canEdit
++                                      ? PopupMenuButton<String>(
++                                          onSelected: (v) {
++                                            if (v == 'edit') edit(x);
++                                            if (v == 'delete') removeMachine(x);
++                                          },
++                                          itemBuilder: (_) => const [
++                                                PopupMenuItem(
++                                                    value: 'edit',
++                                                    child: Text('Editar')),
++                                                PopupMenuItem(
++                                                    value: 'delete',
++                                                    child: Text('Excluir',
++                                                        style: TextStyle(
++                                                            color: Colors.red)))
++                                              ])
++                                      : null));
+                         }))
+               ]));
+   }
+ }
+ 
+ class ThirdPartyAdminScreen extends StatefulWidget {
+-  const ThirdPartyAdminScreen({super.key});
++  final bool canEdit;
++  const ThirdPartyAdminScreen({super.key, this.canEdit = false});
+   @override
+   State<ThirdPartyAdminScreen> createState() => _ThirdPartyAdminScreenState();
+ }
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14859,17 +14991,19 @@
+   Future<void> load() async {
+     if (mounted) setState(() => loading = true);
+     try {
+-      final r = await Future.wait<dynamic>(
+-          [api.referenceData(), api.managedCompanies()]);
+-      final c =
+-          List<Map<String, dynamic>>.from(r[1] as List<Map<String, dynamic>>)
+-            ..removeWhere(
+-                (x) => x['active'] == false || x['is_equipment_owner'] != true);
+-      c.sort((a, b) =>
+-          '${a['name']}'.toLowerCase().compareTo('${b['name']}'.toLowerCase()));
++      final reference = await api.referenceData();
++      final c = <Map<String, dynamic>>[];
++      if (widget.canEdit) {
++        c.addAll(await api.managedCompanies());
++        c.removeWhere(
++            (x) => x['active'] == false || x['is_equipment_owner'] != true);
++        c.sort((a, b) => '${a['name']}'
++            .toLowerCase()
++            .compareTo('${b['name']}'.toLowerCase()));
++      }
+       if (mounted)
+         setState(() {
+-          items = _rows(_map(r[0])['third_party_vehicles']);
++          items = _rows(reference['third_party_vehicles']);
+           companies = c;
+         });
+     } catch (e) {
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14899,6 +15033,7 @@
+   }
+ 
+   Future<void> edit([Map<String, dynamic>? item]) async {
++    if (!widget.canEdit) return;
+     final plate = TextEditingController(text: '${item?['plate'] ?? ''}'),
+         desc = TextEditingController(text: '${item?['description'] ?? ''}');
+     int? companyId = companyIdFor('${item?['company_name'] ?? ''}');
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -14992,6 +15127,7 @@
+   }
+ 
+   Future<void> removeThirdParty(Map<String, dynamic> x) async {
++    if (!widget.canEdit) return;
+     final label = _hasValue(x['plate'])
+         ? '${x['plate']}'
+         : '${x['description'] ?? 'este equipamento'}';

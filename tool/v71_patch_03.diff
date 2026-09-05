@@ -1,0 +1,19 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -2597,7 +2597,6 @@
+       ),
+       const SizedBox(height:12),
+       if(kinds.isNotEmpty||manualThird)OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>meter=x);},child:Text(meter==null?metricPhotoLabel(kinds):'Medição registrada ✓')),
+-      const ListTile(contentPadding:EdgeInsets.zero,leading:Icon(Icons.photo_camera_back_outlined,color:_blue),title:Text('Totalizador antes do abastecimento'),subtitle:Text('Foto obrigatória já registrada antes do início ✓')),
+       OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>identity=x);},child:Text(identity==null?'Foto da placa ou identificação *':'Foto da placa ou identificação ✓')),
+       OutlinedButton(onPressed:saving?null:()async{final x=await cam();if(x!=null)setState(()=>extra=x);},child:Text(extra==null?'4ª foto (opcional)':'4ª foto registrada ✓')),
+       OutlinedButton(onPressed:saving?null:()async{final x=await sign('Assinatura do responsável pelo recebimento');if(x!=null)setState(()=>rs=x);},child:Text(rs==null?'Assinatura do responsável pelo recebimento *':'Assinatura do responsável pelo recebimento ✓')),
+@@ -3589,8 +3588,6 @@
+               const SizedBox(height: 10),
+               photoButton('KM / horímetro antes', kmBeforePhoto, (x) => kmBeforePhoto = x, required: true),
+               const SizedBox(height: 8),
+-              const ListTile(contentPadding: EdgeInsets.zero, leading: Icon(Icons.photo_camera_back_outlined, color: _blue), title: Text('Totalizador antes do abastecimento'), subtitle: Text('Foto obrigatória já registrada antes do início ✓')),
+-              const SizedBox(height: 8),
+               photoButton('Totalizador depois', totalizerAfterPhoto, (x) => totalizerAfterPhoto = x, required: true),
+               const SizedBox(height: 8),
+               photoButton(plateApplicable ? 'Foto da placa antes' : 'Foto do ativo/equipamento antes', plateBeforePhoto, (x) => plateBeforePhoto = x, required: true),

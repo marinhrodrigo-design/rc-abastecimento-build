@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento v71 Final Artifact
+name: Build R&C Abastecimento v72 Final Artifact
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v71-final-artifact
+  group: rc-abastecimento-v72-final-artifact
   cancel-in-progress: true
 
 permissions:
@@ -47,18 +47,13 @@ jobs:
       - name: Create Android platform
         run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
 
-      - name: Restore exact validated v71 source snapshot
+      - name: Restore exact validated v72 source snapshot
         run: |
-          mkdir -p /tmp/v71src /tmp/v70src
-          gh run download 33932928403 -n RC-Abastecimento-v71-lint-source -D /tmp/v71src
-          gh run download 33916946810 -n RC-Abastecimento-v70-approved-source -D /tmp/v70src
+          mkdir -p /tmp/v72src
+          gh run download 33941735891 -n RC-Abastecimento-v72-diagnostic-source -D /tmp/v72src
           rm -rf app/lib
-          mkdir -p app/lib
-          cp /tmp/v71src/main_online.dart app/lib/main_online.dart
-          cp /tmp/v71src/v29_features.dart app/lib/v29_features.dart
-          cp /tmp/v71src/v30_features.dart app/lib/v30_features.dart
-          cp /tmp/v71src/v31_features.dart app/lib/v31_features.dart
-          cp /tmp/v70src/app/pubspec.yaml app/pubspec.yaml
+          cp -r /tmp/v72src/lib app/lib
+          cp /tmp/v72src/pubspec.yaml app/pubspec.yaml
 
       - name: Configure Android and stable signing
         working-directory: app
@@ -99,22 +94,25 @@ jobs:
         working-directory: app
         run: flutter pub get
 
-      - name: Regression checks v71 final
+      - name: Regression checks v72 final
         working-directory: app
         run: |
-          grep -Fq "Text('v71'" lib/main_online.dart
+          grep -Fq "Text('v72'" lib/main_online.dart
           grep -Fq "fuelingV71" lib/main_online.dart
           grep -Fq "rca_record_fueling_v71" lib/main_online.dart
           grep -Fq "p_totalizer_before_captured_at" lib/main_online.dart
-          grep -Fq "totalizerBeforeCapturedAtV71" lib/main_online.dart
-          grep -Fq "Foto obrigatória antes de iniciar" lib/main_online.dart
           grep -Fq "Tirar foto do totalizador antes do abastecimento" lib/main_online.dart
+          grep -Fq "readOfflineMediaCacheV72" lib/main_online.dart
+          grep -Fq "mirrorOfflineMediaV72" lib/main_online.dart
+          grep -Fq "_pruneOfflineMediaCacheV72" lib/main_online.dart
           grep -Fq "rca_general_records_v71" lib/main_online.dart
           grep -Fq "rca_my_fuelings_v71" lib/v29_features.dart
           grep -Fq "PENDENTE (OFFLINE) • salvo neste aparelho" lib/main_online.dart
           grep -Fq "pending_reserved_liters" lib/main_online.dart
           grep -Fq "Saldo insuficiente para abastecimento offline" lib/main_online.dart
-          grep -Fq "GPS indisponível no momento da conclusão" lib/main_online.dart
+          if grep -Fq "Antes de preencher qualquer dado do abastecimento" lib/main_online.dart; then echo 'ERRO: texto redundante encontrado'; exit 1; fi
+          if grep -Fq "Foto obrigatória já registrada antes do início ✓" lib/main_online.dart; then echo 'ERRO: bloco redundante encontrado'; exit 1; fi
+          if grep -Fq "Text('v71'" lib/main_online.dart; then echo 'ERRO: versão visual antiga encontrada'; exit 1; fi
           if grep -Fq "fuel-test-login" lib/main_online.dart; then echo 'ERRO: login de teste encontrado'; exit 1; fi
           python3 - <<'PY'
           from pathlib import Path
@@ -126,7 +124,9 @@ jobs:
           ]
           if any(p.count(x) for x in forbidden):
             raise SystemExit('ERRO: placa ausente ainda exibida com hífen')
-          print('plate_fix_ok=True')
+          if p.count("if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);") < 3:
+            raise SystemExit('ERRO: evidências offline podem ser apagadas antes do PDF')
+          print('v72_final_regression_gate=True')
           PY
 
       - name: Flutter Analyze fatal warnings gate
@@ -135,7 +135,7 @@ jobs:
 
       - name: Build APK
         working-directory: app
-        run: flutter build apk --release --target lib/main_online.dart --build-number=39 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+        run: flutter build apk --release --target lib/main_online.dart --build-number=40 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Verify APK signing certificate
         working-directory: app
@@ -145,12 +145,12 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
 
       - name: Prepare final artifact
-        run: cp app/build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v71-final.apk
+        run: cp app/build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v72-final.apk
 
       - name: Upload validated source snapshot
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v71-final-approved-source
+          name: RC-Abastecimento-v72-final-approved-source
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart
@@ -162,6 +162,6 @@ jobs:
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v71-final
-          path: RC-Abastecimento-v71-final.apk
+          name: RC-Abastecimento-v72-final
+          path: RC-Abastecimento-v72-final.apk
           retention-days: 30

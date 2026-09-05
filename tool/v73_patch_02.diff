@@ -1,0 +1,125 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -9189,9 +9276,11 @@
+             'Clientes, locadoras e fornecedores',
+             () => open(const CompaniesAdminScreen())),
+       quick(Icons.precision_manufacturing_outlined, 'Ativos',
+-          'Equipamentos próprios', () => open(const MachinesAdminScreen())),
++          'Equipamentos próprios',
++          () => open(MachinesAdminScreen(canEdit: isAdmin))),
+       quick(Icons.handyman_outlined, 'Equip. terceiros',
+-          'Proprietária / locadora', () => open(const ThirdPartyAdminScreen())),
++          'Proprietária / locadora',
++          () => open(ThirdPartyAdminScreen(canEdit: isAdmin))),
+       if (isAdmin)
+         quick(Icons.oil_barrel_outlined, 'Tanques estacionários',
+             'Capacidade e saldo', () => open(const TanksAdminScreen())),
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -10624,7 +10713,8 @@
+                     subtitle: _hasValue(x['placa'])
+                         ? Text('Placa: ${x['placa']}')
+                         : null,
+-                    onTap: () => open(const MachinesAdminScreen())))),
++                    onTap: () => open(MachinesAdminScreen(
++                        canEdit: widget.profile['is_admin'] == true))))),
+         section(
+             'Equipamentos de terceiros',
+             _rows(data['third_party']),
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -10634,7 +10724,8 @@
+                     title: Text(
+                         _plateDescriptionLabel(x['plate'], x['description'])),
+                     subtitle: Text('${x['company_name'] ?? '-'}'),
+-                    onTap: () => open(const ThirdPartyAdminScreen())))),
++                    onTap: () => open(ThirdPartyAdminScreen(
++                        canEdit: widget.profile['is_admin'] == true))))),
+         section(
+             'Notas Fiscais',
+             _rows(data['invoices']),
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -10695,6 +10786,25 @@
+         _hasValue(item['fuel_type']) ? '${item['fuel_type']}' : 'Não informado';
+     final fueling = '${item['type']}' == 'fueling';
+     final comboioToComboio = _isComboioToComboio(item);
++    final measurementType =
++        '${item['measurement_type'] ?? ''}'.trim().toLowerCase();
++    final kmValue = item['km_value'];
++    final hourmeterValue = item['hourmeter_value'];
++    final legacyMeterValue = item['km_hourmeter'];
++    final meterUnavailable = item['km_unavailable'] == true;
++    final showKm = fueling &&
++        (measurementType == 'km' ||
++            measurementType == 'both' ||
++            (measurementType.isEmpty && kmValue != null));
++    final showHourmeter = fueling &&
++        (measurementType == 'hourmeter' ||
++            measurementType == 'both' ||
++            (measurementType.isEmpty && hourmeterValue != null));
++    final showLegacyMeter = fueling &&
++        measurementType.isEmpty &&
++        kmValue == null &&
++        hourmeterValue == null &&
++        legacyMeterValue != null;
+ 
+     final rows = <_RecordDetailData>[
+       _RecordDetailData(Icons.calendar_today_outlined, 'Data e hora',
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -10709,13 +10819,15 @@
+       if (item['liters'] != null)
+         _RecordDetailData(Icons.water_drop_outlined,
+             'Abastecimento/Lubrificação', _fmtLiters(item['liters'])),
+-      if (fueling)
+-        _RecordDetailData(
+-            Icons.speed_outlined,
+-            'KM / horímetro',
+-            item['km_unavailable'] == true
+-                ? 'Indisponível'
+-                : '${item['km_hourmeter'] ?? '-'}'),
++      if (showKm)
++        _RecordDetailData(Icons.speed_outlined, 'KM',
++            meterUnavailable ? 'Indisponível' : '${kmValue ?? '-'}'),
++      if (showHourmeter)
++        _RecordDetailData(Icons.speed_outlined, 'Horímetro',
++            meterUnavailable ? 'Indisponível' : '${hourmeterValue ?? '-'}'),
++      if (showLegacyMeter)
++        _RecordDetailData(Icons.speed_outlined, 'Medição (registro legado)',
++            meterUnavailable ? 'Indisponível' : '$legacyMeterValue'),
+       if (fueling && _hasValue(item['totalizer_photo_before_captured_at']))
+         _RecordDetailData(
+             Icons.photo_camera_outlined,
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -12260,7 +12372,7 @@
+   Future<void> createUser() async {
+     final name = TextEditingController();
+     final username = TextEditingController();
+-    final password = TextEditingController(text: '1234');
++    final password = TextEditingController();
+     String? selected;
+     final units = operationalUnits;
+     final ok = await showDialog<bool>(
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -13245,10 +13357,14 @@
+ class AdminCatalogScreen extends StatelessWidget {
+   final Map<String, dynamic> profile;
+   const AdminCatalogScreen({super.key, required this.profile});
+-  @override
+-  Widget build(BuildContext context) => Scaffold(
+-        appBar: AppBar(title: const Text('Cadastros')),
+-        body: ListView(padding: const EdgeInsets.all(16), children: [
++
++  @override
++  Widget build(BuildContext context) {
++    final isAdmin = profile['is_admin'] == true;
++    return Scaffold(
++      appBar: AppBar(title: const Text('Cadastros')),
++      body: ListView(padding: const EdgeInsets.all(16), children: [
++        if (isAdmin) ...[
+           HomeActionCard(
+               icon: Icons.badge_outlined,
+               title: 'Dados da empresa',

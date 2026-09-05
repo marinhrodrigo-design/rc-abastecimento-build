@@ -1,0 +1,253 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -557,6 +557,19 @@
+       if (!legacy && uid != null && owner != uid) continue;
+       if (legacy && !includeLegacy) continue;
+       final params = _map(q['params']);
++      final resolved = q['resolved_params'] is Map
++          ? _map(q['resolved_params'])
++          : const <String, dynamic>{};
++      dynamic mediaParam(String key) {
++        final original = params[key];
++        if (original is String && original.startsWith('offline://')) {
++          try {
++            final file = File(original.substring('offline://'.length));
++            if (file.existsSync()) return original;
++          } catch (_) {}
++        }
++        return resolved[key] ?? original;
++      }
+       final machineId = _intOrNull(params['p_machine_id']);
+       final workId = _intOrNull(params['p_work_id']);
+       final tankId = _intOrNull(params['p_source_tank_id']);
+@@ -633,21 +646,21 @@
+         'location_accuracy_m': params['p_location_accuracy_m'],
+         'sale_price_per_liter': price > 0 ? price : null,
+         'total_value': price > 0 ? price * litersValue : null,
+-        'meter_photo_path': params['p_meter_photo_path'],
+-        'totalizer_evidence_photo_path': totalizerBefore,
+-        'totalizer_photo_before_path': totalizerBefore,
++        'meter_photo_path': mediaParam('p_meter_photo_path'),
++        'totalizer_evidence_photo_path': mediaParam('p_totalizer_photo_path'),
++        'totalizer_photo_before_path': mediaParam('p_totalizer_photo_path'),
+         'totalizer_photo_before_captured_at':
+             params['p_totalizer_before_captured_at'],
+-        'identity_evidence_photo_path': params['p_identity_photo_path'],
++        'identity_evidence_photo_path': mediaParam('p_identity_photo_path'),
+         'identity_evidence_kind': params['p_identity_evidence_kind'],
+-        'extra_evidence_photo_path': params['p_extra_photo_path'],
+-        'receiver_signature_path': params['p_receiver_signature_path'],
+-        'operator_signature_path': params['p_operator_signature_path'],
++        'extra_evidence_photo_path': mediaParam('p_extra_photo_path'),
++        'receiver_signature_path': mediaParam('p_receiver_signature_path'),
++        'operator_signature_path': mediaParam('p_operator_signature_path'),
+         'photo_paths': [
+-          params['p_meter_photo_path'],
+-          totalizerBefore,
+-          params['p_identity_photo_path'],
+-          params['p_extra_photo_path']
++          mediaParam('p_meter_photo_path'),
++          mediaParam('p_totalizer_photo_path'),
++          mediaParam('p_identity_photo_path'),
++          mediaParam('p_extra_photo_path')
+         ].where((v) => _hasValue(v)).toList(),
+         'sync_error': q['sync_error'],
+         'sync_conflict': q['sync_conflict'] == true,
+@@ -717,6 +730,7 @@
+     _stateFile = File('${dir.path}/rc_abastecimento_offline.json');
+     _evidenceDir = Directory('${dir.path}/offline_evidence');
+     await _evidenceDir!.create(recursive: true);
++    unawaited(_pruneOfflineMediaCacheV72());
+     try {
+       if (await _stateFile!.exists()) {
+         final decoded = jsonDecode(await _stateFile!.readAsString());
+@@ -848,6 +862,92 @@
+     return 'offline://${file.path}';
+   }
+ 
++
++  String? _offlineRemoteLocalNameV72(String remotePath) {
++    final name = remotePath.split('/').last;
++    final match = RegExp(r'^offline_\d+_(.+)$').firstMatch(name);
++    return match?.group(1);
++  }
++
++  Future<Uint8List?> readOfflineMediaCacheV72(String remotePath) async {
++    final dir = _evidenceDir;
++    final localName = _offlineRemoteLocalNameV72(remotePath);
++    if (dir == null || localName == null || localName.isEmpty) return null;
++    try {
++      final file = File('${dir.path}/$localName');
++      if (!await file.exists()) return null;
++      return await file.readAsBytes();
++    } catch (_) {
++      return null;
++    }
++  }
++
++  Future<void> mirrorOfflineMediaV72(
++      String remotePath, Uint8List bytes) async {
++    final dir = _evidenceDir;
++    final localName = _offlineRemoteLocalNameV72(remotePath);
++    if (dir == null || localName == null || localName.isEmpty) return;
++    try {
++      final file = File('${dir.path}/$localName');
++      if (!await file.exists()) await file.writeAsBytes(bytes, flush: true);
++    } catch (_) {}
++  }
++
++  Future<void> _pruneOfflineMediaCacheV72() async {
++    final dir = _evidenceDir;
++    if (dir == null || !await dir.exists()) return;
++    final protected = <String>{};
++    void collect(dynamic value) {
++      if (value is String && value.startsWith('offline://')) {
++        protected.add(value.substring('offline://'.length));
++      } else if (value is List) {
++        for (final x in value) collect(x);
++      } else if (value is Map) {
++        for (final x in value.values) collect(x);
++      }
++    }
++    for (final q in _queue) collect(q['params']);
++
++    final candidates = <File>[];
++    await for (final entity in dir.list()) {
++      if (entity is File && !protected.contains(entity.path)) {
++        candidates.add(entity);
++      }
++    }
++    candidates.sort((a, b) {
++      try {
++        return a.lastModifiedSync().compareTo(b.lastModifiedSync());
++      } catch (_) {
++        return 0;
++      }
++    });
++    final now = DateTime.now();
++    var totalBytes = 0;
++    for (final file in candidates) {
++      try {
++        totalBytes += await file.length();
++      } catch (_) {}
++    }
++    const maxBytes = 512 * 1024 * 1024;
++    for (final file in List<File>.from(candidates)) {
++      try {
++        final age = now.difference(await file.lastModified());
++        if (age > const Duration(days: 30)) {
++          totalBytes -= await file.length();
++          await file.delete();
++          candidates.remove(file);
++        }
++      } catch (_) {}
++    }
++    for (final file in candidates) {
++      if (totalBytes <= maxBytes) break;
++      try {
++        totalBytes -= await file.length();
++        await file.delete();
++      } catch (_) {}
++    }
++  }
++
+   bool _containsLocal(dynamic value) {
+     if (value is String) return value.startsWith('offline://');
+     if (value is List) return value.any(_containsLocal);
+@@ -1129,7 +1229,7 @@
+               }
+             }
+             _state['queue'] = queue;
+-            _deleteLocalRefs(original);
++            if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);
+             pendingCount.value = _pendingQueueCountV68();
+             await _persist();
+             syncRevision.value++;
+@@ -1149,20 +1249,20 @@
+               }
+             }
+             _state['queue'] = queue;
+-            _deleteLocalRefs(
+-                original); // evidências já estão no Storage e ficam vinculadas ao conflito para auditoria.
++            if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);
+             pendingCount.value = _pendingQueueCountV68();
+             await _persist();
+             syncRevision.value++;
+             continue;
+           }
+-          _deleteLocalRefs(original);
++          if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);
+           final remaining =
+               _queue.where((x) => '${x['id']}' != '${queued['id']}').toList();
+           _state['queue'] = remaining;
+           pendingCount.value = _pendingQueueCountV68();
+           syncRevision.value++;
+           await _persist();
++          unawaited(_pruneOfflineMediaCacheV72());
+           await _refreshReferenceAfterSyncV69();
+         } catch (e) {
+           if (_isNetworkError(e)) {
+@@ -2042,8 +2142,12 @@
+         return null;
+       }
+     }
++    final cached = await offlineStore.readOfflineMediaCacheV72(value);
++    if (cached != null) return cached;
+     try {
+-      return await client.storage.from('fuel-evidence').download(value);
++      final bytes = await client.storage.from('fuel-evidence').download(value);
++      await offlineStore.mirrorOfflineMediaV72(value, bytes);
++      return bytes;
+     } catch (_) {
+       return null;
+     }
+@@ -5078,10 +5182,6 @@
+                               textAlign: TextAlign.center,
+                               style: TextStyle(
+                                   fontSize: 20, fontWeight: FontWeight.w900)),
+-                          const SizedBox(height: 8),
+-                          const Text(
+-                              'Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de abastecimento. Esta foto ficará vinculada permanentemente ao registro e ao PDF.',
+-                              textAlign: TextAlign.center),
+                           const SizedBox(height: 16),
+                           InputDecorator(
+                               decoration: const InputDecoration(
+@@ -5409,12 +5509,6 @@
+                     child: Text(meter == null
+                         ? metricPhotoLabel(kinds)
+                         : 'Medição registrada ✓')),
+-              const ListTile(
+-                  contentPadding: EdgeInsets.zero,
+-                  leading: Icon(Icons.photo_camera_back_outlined, color: _blue),
+-                  title: Text('Totalizador antes do abastecimento'),
+-                  subtitle:
+-                      Text('Foto obrigatória já registrada antes do início ✓')),
+               OutlinedButton(
+                   onPressed: saving
+                       ? null
+@@ -7076,11 +7170,6 @@
+               const Text('Foto obrigatória antes de iniciar',
+                   textAlign: TextAlign.center,
+                   style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900)),
+-              const SizedBox(height: 10),
+-              const Text(
+-                  'Antes de preencher qualquer dado do abastecimento, registre uma foto atual do totalizador da unidade de origem. A foto ficará vinculada ao registro e ao PDF.',
+-                  textAlign: TextAlign.center,
+-                  style: TextStyle(height: 1.35, color: Colors.black54)),
+               const SizedBox(height: 20),
+               Card(
+                   child: ListTile(
+@@ -7353,13 +7442,6 @@
+                   (x) => kmBeforePhoto = x,
+                   required: true),
+               const SizedBox(height: 8),
+-              const ListTile(
+-                  contentPadding: EdgeInsets.zero,
+-                  leading: Icon(Icons.photo_camera_back_outlined, color: _blue),
+-                  title: Text('Totalizador antes do abastecimento'),
+-                  subtitle:
+-                      Text('Foto obrigatória já registrada antes do início ✓')),
+-              const SizedBox(height: 8),
+               photoButton('Totalizador depois', totalizerAfterPhoto,
+                   (x) => totalizerAfterPhoto = x,
+                   required: true),

@@ -1,0 +1,11 @@
+--- lib/main_online.dart
++++ lib/main_online.dart
+@@ -3474,7 +3474,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v73',
++                      child: Text('v74',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),

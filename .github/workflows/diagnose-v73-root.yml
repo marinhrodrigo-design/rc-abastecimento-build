@@ -1,0 +1,117 @@
+name: Diagnose R&C Abastecimento v73 root fix
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v73-root']
+    paths:
+      - 'tool/v73_patch_00.diff'
+      - '.github/workflows/diagnose-v73-root.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create validation workspace
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact approved v72 source
+        run: |
+          rm -rf /tmp/v72src
+          mkdir -p /tmp/v72src
+          gh run download 33941887601 -n RC-Abastecimento-v72-final-approved-source -D /tmp/v72src
+          rm -rf app/lib
+          if [ -d /tmp/v72src/app/lib ]; then
+            cp -r /tmp/v72src/app/lib app/lib
+            cp /tmp/v72src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v72src/lib app/lib
+            cp /tmp/v72src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v73 root correction
+        working-directory: app
+        run: patch -p0 --forward --batch < ../tool/v73_patch_00.diff
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format changed source
+        working-directory: app
+        run: dart format lib/main_online.dart
+
+      - name: Regression checks v73 root
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart').read_text()
+          required=[
+            "Text('v73'",
+            '_offlineFuelingReportSnapshotV73',
+            "'report_snapshot_v73': reportSnapshot",
+            "'report_context': {",
+            "if (x['offline_pending'] == true) return 'PENDENTE';",
+            "final totalizerValue = x['totalizer'] ?? x['closing_meter'];",
+            "totalizerValue == null ? '-' : _fmtLiters(totalizerValue)",
+            "row(Icons.speed_outlined, 'KM', '${x['km_value'] ?? '-'}', navy)",
+            'readOfflineMediaCacheV72',
+            'mirrorOfflineMediaV72',
+            '_pruneOfflineMediaCacheV72',
+            'rca_record_fueling_v71',
+            'rca_general_records_v71',
+          ]
+          missing=[x for x in required if x not in p]
+          if missing:
+            raise SystemExit(f'Correção v73 incompleta: {missing}')
+          forbidden=[
+            "Text('v72'",
+            "x['km_value'] ?? x['km_hourmeter']",
+            'Antes de preencher qualquer dado do abastecimento',
+            'Foto obrigatória já registrada antes do início ✓',
+            "Placa: ${x['placa'] ?? '-'}",
+            "Placa: ${x['plate']??'-'}",
+            "Placa: ${x['plate'] ?? '-'}",
+            'fuel-test-login',
+          ]
+          found={x:p.count(x) for x in forbidden}
+          if any(found.values()):
+            raise SystemExit(f'Regressão encontrada: {found}')
+          if p.count("if (!_fuelingRpc(rpc)) _deleteLocalRefs(original);") < 3:
+            raise SystemExit('Proteção das evidências offline regrediu')
+          print('v73_root_regression_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v73 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v73-root-diagnostic-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 14

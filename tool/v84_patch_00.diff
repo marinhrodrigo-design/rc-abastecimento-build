@@ -1,0 +1,204 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -27,6 +27,8 @@
+ const _supabaseKey = String.fromEnvironment('SUPABASE_KEY');
+ const _blue = Color(0xFF0B4EA2);
+ const _deviceChannelV42 = MethodChannel('rc.abastecimento/device');
++final GlobalKey<ScaffoldMessengerState> _syncMessengerKeyV84 =
++    GlobalKey<ScaffoldMessengerState>();
+ 
+ String _randomSaltV69() {
+   final r = Random.secure();
+@@ -91,6 +93,7 @@
+   @override
+   Widget build(BuildContext context) {
+     return MaterialApp(
++      scaffoldMessengerKey: _syncMessengerKeyV84,
+       debugShowCheckedModeBanner: false,
+       title: 'R&C Abastecimento',
+       theme: ThemeData(
+@@ -116,6 +119,46 @@
+   }
+ }
+ 
++void _showSyncMessageV84(String message) {
++  final messenger = _syncMessengerKeyV84.currentState;
++  if (messenger == null || message.trim().isEmpty) return;
++  messenger.hideCurrentSnackBar();
++  messenger.showSnackBar(SnackBar(
++    content: Text(message),
++    duration: const Duration(seconds: 6),
++  ));
++}
++
++String _syncResultMessageV84(Map<String, dynamic> result,
++    {bool automatic = false}) {
++  final synced = _intOrNull(result['synced']) ?? 0;
++  final after = _intOrNull(result['after']) ?? 0;
++  final conflicts = _intOrNull(result['conflicts']) ?? 0;
++  final reason = '${result['error'] ?? ''}'.trim();
++  final prefix = automatic ? 'Internet restabelecida. ' : '';
++  if (after == 0) {
++    return synced > 0
++        ? '${prefix}Sincronização concluída com sucesso. $synced registro(s) enviado(s).'
++        : '${prefix}Não há registros pendentes para sincronizar.';
++  }
++  if (synced > 0) {
++    if (conflicts > 0) {
++      return '${prefix}$synced registro(s) sincronizado(s). $conflicts conflito(s) aguardam análise.';
++    }
++    if (reason.isNotEmpty) {
++      return '${prefix}$synced registro(s) sincronizado(s). $after ainda pendente(s). Motivo: $reason';
++    }
++    return '${prefix}$synced registro(s) sincronizado(s). $after ainda pendente(s).';
++  }
++  if (conflicts > 0) {
++    return '${prefix}Não foi possível concluir toda a sincronização. $conflicts conflito(s) aguardam análise.';
++  }
++  if (reason.isNotEmpty) {
++    return '${prefix}Não foi possível sincronizar: $reason';
++  }
++  return '${prefix}Nenhum registro foi sincronizado. Os dados continuam salvos no aparelho.';
++}
++
+ Map<String, dynamic> _map(dynamic value) {
+   if (value is Map<String, dynamic>) return value;
+   if (value is Map) return value.map((k, v) => MapEntry(k.toString(), v));
+@@ -251,6 +294,9 @@
+   Map<String, dynamic> _state = <String, dynamic>{'queue': <dynamic>[]};
+   Future<void> _writeChain = Future<void>.value();
+   bool _syncing = false;
++  bool _reconnectSyncingV84 = false;
++  String? _sessionLoginV84;
++  String? _sessionCredentialV84;
+ 
+   List<Map<String, dynamic>> get _queue => _rows(_state['queue']);
+   Map<String, dynamic>? get cachedProfile =>
+@@ -554,6 +600,11 @@
+           ? _map(_state['offline_users_v62'])
+           : <String, dynamic>{};
+   String _offlineKeyV62(String username) => username.trim().toLowerCase();
++  void _rememberSessionCredentialV84(String username, String password) {
++    _sessionLoginV84 = _offlineKeyV62(username);
++    _sessionCredentialV84 = password;
++  }
++
+   String _offlineHashV62(String username, String password) {
+     final device = '${_state['device_id_v39'] ?? 'rc-device'}';
+     return crypto.sha256
+@@ -598,6 +649,7 @@
+ 
+   Future<void> cacheOfflineLoginV62(
+       String username, String password, Map<String, dynamic> profile) async {
++    _rememberSessionCredentialV84(username, password);
+     final key = _offlineKeyV62(username);
+     final users = _offlineUsersV62;
+     final uid =
+@@ -628,6 +680,7 @@
+     final item = _map(raw);
+     if (!await _verifyCredentialV69(item, username, password))
+       throw Exception('Usuário ou senha/PIN inválidos.');
++    _rememberSessionCredentialV84(username, password);
+     if ('${item['kdf'] ?? ''}' != 'pbkdf2-sha256') {
+       final upgraded = await _credentialV69(username, password);
+       item.addAll(upgraded);
+@@ -770,6 +823,8 @@
+   }
+ 
+   Future<void> markAppLoggedOutV62() async {
++    _sessionLoginV84 = null;
++    _sessionCredentialV84 = null;
+     _state['app_logged_out_v62'] = true;
+     _state.remove('active_user_id_v62');
+     _state.remove('profile');
+@@ -1505,6 +1560,40 @@
+         const Duration(seconds: 12), (_) => unawaited(_refreshOnlineState()));
+   }
+ 
++  Future<void> _syncImmediatelyAfterReconnectV84() async {
++    if (_reconnectSyncingV84 || !online.value || !_hasSyncWorkV78()) return;
++    _reconnectSyncingV84 = true;
++    final before = pendingCount.value;
++    try {
++      if (Supabase.instance.client.auth.currentUser == null) {
++        final activeLogin = activeLoginV83;
++        final rememberedLogin = _sessionLoginV84;
++        final credential = _sessionCredentialV84;
++        if (activeLogin == null ||
++            rememberedLogin == null ||
++            credential == null ||
++            credential.isEmpty ||
++            activeLogin != rememberedLogin) {
++          throw Exception(
++              'A internet voltou, mas não foi possível validar automaticamente a sessão offline. Toque em Sincronizar pendentes e informe sua senha/PIN.');
++        }
++        await reauthenticateOnlineForSyncV83(credential);
++      }
++      await reconcileAbandonedSessionV68();
++      final result = await syncPendingManualV74();
++      if (before > 0) {
++        _showSyncMessageV84(_syncResultMessageV84(result, automatic: true));
++      }
++    } catch (e) {
++      if (before > 0) {
++        _showSyncMessageV84(
++            'Internet restabelecida. Não foi possível sincronizar: ${_friendlyError(e)}');
++      }
++    } finally {
++      _reconnectSyncingV84 = false;
++    }
++  }
++
+   Future<void> _refreshOnlineState() async {
+     var reachable = false;
+     try {
+@@ -1527,10 +1616,14 @@
+     final changed = online.value != reachable;
+     online.value = reachable;
+     if (reachable) {
++      if (changed && _hasSyncWorkV78()) {
++        unawaited(_syncImmediatelyAfterReconnectV84());
++        return;
++      }
+       try {
+         await reconcileAbandonedSessionV68();
+       } catch (_) {}
+-      if (changed || _hasSyncWorkV78()) unawaited(syncPending(force: changed));
++      if (_hasSyncWorkV78()) unawaited(syncPending(force: changed));
+     }
+   }
+ 
+@@ -2214,23 +2307,7 @@
+     }
+     final result = await offlineStore.syncPendingManualV74();
+     if (!context.mounted) return;
+-    final synced = result['synced'] ?? 0;
+-    final after = result['after'] ?? 0;
+-    final conflicts = result['conflicts'] ?? 0;
+-    final reason = '${result['error'] ?? ''}'.trim();
+-    final message = after == 0
+-        ? (synced > 0
+-            ? 'Sincronização concluída. $synced registro(s) enviado(s).'
+-            : 'Não há registros pendentes para sincronizar.')
+-        : synced > 0
+-            ? conflicts > 0
+-                ? '$synced registro(s) sincronizado(s). $conflicts conflito(s) aguardam análise.'
+-                : '$synced registro(s) sincronizado(s). $after ainda pendente(s).'
+-            : conflicts > 0
+-                ? '$conflicts conflito(s) aguardam análise. Os demais pendentes continuam sendo processados.'
+-                : reason.isNotEmpty
+-                    ? 'Não foi possível sincronizar: $reason'
+-                    : 'Nenhum registro foi sincronizado. Tente novamente.';
++    final message = _syncResultMessageV84(result);
+     ScaffoldMessenger.of(context)
+         .showSnackBar(SnackBar(content: Text(message)));
+   } catch (e) {
+@@ -4009,7 +4086,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v83',
++                      child: Text('v84',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),

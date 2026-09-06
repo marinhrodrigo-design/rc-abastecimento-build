@@ -1,0 +1,141 @@
+name: Diagnose R&C Abastecimento v84 automatic reconnect sync
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v84-auto-sync-reconnect']
+    paths:
+      - 'tool/v84_patch_00.diff'
+      - '.github/workflows/diagnose-v84-auto-sync-reconnect.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create validation workspace
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact approved v83 source
+        run: |
+          rm -rf /tmp/v83src /tmp/v83src.zip
+          mkdir -p /tmp/v83src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9981767686/zip" \
+            -o /tmp/v83src.zip
+          unzip -q /tmp/v83src.zip -d /tmp/v83src
+          rm -rf app/lib
+          if [ -d /tmp/v83src/app/lib ]; then
+            cp -r /tmp/v83src/app/lib app/lib
+            cp /tmp/v83src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v83src/lib app/lib
+            cp /tmp/v83src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v84 automatic reconnect sync correction
+        working-directory: app
+        run: patch -p1 --forward --batch < ../tool/v84_patch_00.diff
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v84 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v29=Path('lib/v29_features.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
+          alltxt=main+'\n'+v29+'\n'+v31
+          required=[
+            "Text('v84'",
+            '_syncImmediatelyAfterReconnectV84',
+            '_rememberSessionCredentialV84',
+            '_sessionCredentialV84',
+            '_syncMessengerKeyV84',
+            '_syncResultMessageV84',
+            "if (changed && _hasSyncWorkV78())",
+            'reauthenticateOnlineForSyncV83(credential)',
+            'final result = await syncPendingManualV74();',
+            'Sincronização concluída com sucesso.',
+            'Não foi possível sincronizar:',
+            'if (machine != null && offlineStore.backendReadyV81)',
+            'bool get backendReadyV81',
+            'bool get onlineReauthRequiredV81',
+            'reference_data_by_user_v78',
+            'rca_record_fueling_v71',
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v84 correction incomplete: {missing}')
+          forbidden=[
+            "Text('v83'",
+            "Text('v82'",
+            'if (machine != null && offlineStore.online.value)',
+            "pendingCount.value = queue.length;",
+          ]
+          found={x:alltxt.count(x) for x in forbidden}
+          if any(found.values()): raise SystemExit(f'v84 regression found: {found}')
+          reconnect_start=main.index('Future<void> _syncImmediatelyAfterReconnectV84() async')
+          reconnect_end=main.index('\n  Future<void> _refreshOnlineState() async', reconnect_start)
+          reconnect=main[reconnect_start:reconnect_end]
+          for token in [
+            'Supabase.instance.client.auth.currentUser == null',
+            '_sessionCredentialV84',
+            'reauthenticateOnlineForSyncV83(credential)',
+            'syncPendingManualV74()',
+            '_syncResultMessageV84(result, automatic: true)',
+          ]:
+            if token not in reconnect:
+              raise SystemExit(f'Automatic reconnect sync missing {token}')
+          offline_login_start=main.index('Future<Map<String, dynamic>> offlineLoginV62(')
+          offline_login_end=main.index('\n  String? get activeLoginV83', offline_login_start)
+          if '_rememberSessionCredentialV84(username, password)' not in main[offline_login_start:offline_login_end]:
+            raise SystemExit('Offline login does not retain current-session credential for automatic reconnect')
+          logout_start=main.index('Future<void> markAppLoggedOutV62() async')
+          logout_end=main.index('\n  Future<void> markAppLoggedInV62', logout_start)
+          logout=main[logout_start:logout_end]
+          if '_sessionCredentialV84 = null' not in logout or '_sessionLoginV84 = null' not in logout:
+            raise SystemExit('In-memory sync credential is not cleared on logout')
+          print('v84_auto_reconnect_sync_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v84 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v84-auto-sync-reconnect-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

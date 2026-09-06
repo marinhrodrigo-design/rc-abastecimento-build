@@ -1,0 +1,109 @@
+name: Diagnose R&C Abastecimento v86 UI and admin conflicts
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v86-restore-ui-admin-conflicts']
+    paths:
+      - '.github/workflows/diagnose-v86-ui-admin-conflicts.yml'
+      - '.github/scripts/patch_v86.py'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore exact approved v85 source
+        run: |
+          rm -rf app /tmp/v85src /tmp/v85src.zip
+          mkdir -p app /tmp/v85src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9982387229/zip" \
+            -o /tmp/v85src.zip
+          unzip -q /tmp/v85src.zip -d /tmp/v85src
+          if [ -d /tmp/v85src/app/lib ]; then
+            cp -r /tmp/v85src/app/lib app/lib
+            cp /tmp/v85src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v85src/lib app/lib
+            cp /tmp/v85src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v86 corrections
+        run: python3 .github/scripts/patch_v86.py
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v86 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v29=Path('lib/v29_features.dart').read_text()
+          alltxt=main+'\n'+v29
+          required=[
+            "Text('v86'",
+            "'Pendências / conflitos'",
+            'const OfflineConflictsV58Screen()',
+            "Text('Lubrificou?')",
+            "Nº ${_recordSequenceV28(item)}",
+            "Nº ${_recordSequenceV28(widget.item)}",
+            'color: Color(0xFFD51F2A)',
+            "Ativo: ${asset(p['machine_id'])}",
+            "Lubrificou?: ${p['lubricated'] == true ? 'Sim' : 'Não'}",
+            'CONFLITO • AGUARDANDO ANÁLISE',
+            '_syncImmediatelyAfterReconnectV84',
+            'reauthenticateOnlineForSyncV83',
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing:
+            raise SystemExit(f'v86 missing required behavior: {missing}')
+          forbidden=[
+            "Text('v85'",
+            "title: const Text('Lubrificação realizada'),",
+            "title: const Text('Lubrificado'))",
+          ]
+          found=[x for x in forbidden if x in alltxt]
+          if found:
+            raise SystemExit(f'v86 regression found: {found}')
+          if v29.count('_recordSequenceV28(x)') < 2:
+            raise SystemExit('My Fuelings does not show sequence for pending and finalized records')
+          print('v86_regression_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v86 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v86-ui-admin-conflicts-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

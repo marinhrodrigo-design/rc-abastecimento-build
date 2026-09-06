@@ -1,0 +1,20 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -3843,7 +3843,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v81',
++                      child: Text('v82',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -5810,7 +5810,7 @@
+       requiredMessage('Assinatura de quem abasteceu');
+       return;
+     }
+-    if (machine != null && offlineStore.online.value) {
++    if (machine != null && offlineStore.backendReadyV81) {
+       try {
+         final check = await api.meterCheckV48(machine!, km: k, hourmeter: h);
+         if (check['regression'] == true) {

@@ -1,0 +1,120 @@
+--- a/lib/v29_features.dart
++++ b/lib/v29_features.dart
+@@ -492,14 +492,27 @@
+                                   const SizedBox(width: 12),
+                                   Expanded(
+                                       child: Text('Abastecimento • $assetText',
++                                          maxLines: 2,
++                                          overflow: TextOverflow.ellipsis,
+                                           style: const TextStyle(
+-                                              fontWeight: FontWeight.w900))),
+-                                  Text(status,
+-                                      style: const TextStyle(
+-                                          fontSize: 11,
+-                                          fontWeight: FontWeight.w900,
+-                                          color: Colors.orange))
++                                              fontWeight: FontWeight.w900)))
+                                 ]),
++                                const SizedBox(height: 8),
++                                Align(
++                                    alignment: Alignment.centerLeft,
++                                    child: Container(
++                                        padding: const EdgeInsets.symmetric(
++                                            horizontal: 10, vertical: 6),
++                                        decoration: BoxDecoration(
++                                            color: const Color(0xFFFFF4E5),
++                                            borderRadius:
++                                                BorderRadius.circular(999)),
++                                        child: Text(status,
++                                            softWrap: true,
++                                            style: const TextStyle(
++                                                fontSize: 11,
++                                                fontWeight: FontWeight.w900,
++                                                color: Colors.orange)))),
+                                 const SizedBox(height: 10),
+                                 Text(
+                                     '${_fmtDate(x['occurred_at'] ?? x['created_at'])}\n${x['work'] ?? 'Sem obra'} • ${_fmtLiters(x['liters'])}\n${x['fuel_type'] ?? 'Combustível'} • Origem: $sourceText'),
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -4086,7 +4086,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v84',
++                      child: Text('v85',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -10074,6 +10074,7 @@
+     final tanks = _sortedFuelUnits(ref?['tanks']);
+     final isAdmin = widget.profile['is_admin'] == true;
+     final isManager = widget.profile['is_manager'] == true;
++    final canCorrect = isAdmin || widget.profile['can_correct'] == true;
+     final currentCode = '${currentUnit['unit_code'] ?? ''}'.trim(),
+         currentName = '${currentUnit['unit_name'] ?? ''}'.trim();
+     final actions = <Widget>[
+@@ -10084,7 +10085,7 @@
+       quick(Icons.receipt_long_rounded, 'Recebimento (NF)', 'Registrar entrada',
+           _receipt),
+       quick(Icons.today_rounded, 'Registro Diário', 'Movimentações do dia',
+-          () => openRecordsV71(DailyRecordsV28Screen(canEdit: isAdmin))),
++          () => openRecordsV71(DailyRecordsV28Screen(canEdit: canCorrect))),
+       quick(
+           Icons.manage_search_rounded,
+           'Registro Geral',
+@@ -10776,7 +10777,7 @@
+   Map<String, dynamic> summary = {};
+   bool busy = false;
+   bool filters = true;
+-  bool isAdmin = false;
++  bool canCorrect = false;
+   String? error;
+   final Set<String> selected = <String>{};
+   @override
+@@ -10817,7 +10818,8 @@
+       final values =
+           await Future.wait<dynamic>([api.worksCatalogV28(), api.profile()]);
+       works = (values[0] as List).cast<Map<String, dynamic>>();
+-      isAdmin = _map(values[1])['is_admin'] == true;
++      final profile = _map(values[1]);
++      canCorrect = profile['is_admin'] == true || profile['can_correct'] == true;
+     } catch (_) {
+       try {
+         works = await api.worksCatalogV28();
+@@ -11219,7 +11221,7 @@
+                           context,
+                           MaterialPageRoute(
+                               builder: (_) => MovementDetailScreen(
+-                                  item: x, canEdit: isAdmin)));
++                                  item: x, canEdit: canCorrect)));
+                       if (changed == true && mounted)
+                         await search(collapse: false);
+                     },
+@@ -11962,8 +11964,9 @@
+   Future<void> load() async {
+     try {
+       final p = await api.profile();
+-      if (p['is_admin'] != true)
+-        throw Exception('Somente o Admin pode corrigir abastecimentos');
++      if (p['is_admin'] != true && p['can_correct'] != true)
++        throw Exception(
++            'Seu perfil não possui permissão para corrigir abastecimentos');
+       final ref = await api.referenceData();
+       final ws = _rows(ref['works']),
+           ms = _rows(ref['machines']),
+@@ -12130,12 +12133,12 @@
+               children: [
+                   const Card(
+                       child: ListTile(
+-                          leading: Icon(Icons.admin_panel_settings_outlined,
++                          leading: Icon(Icons.verified_user_outlined,
+                               color: _blue),
+-                          title: Text('Edição completa exclusiva do Admin',
++                          title: Text('Correção autorizada e auditada',
+                               style: TextStyle(fontWeight: FontWeight.w900)),
+                           subtitle: Text(
+-                              'Alterações em litros/origem recalculam estoque e FIFO. Dados anteriores, novos e motivo ficam preservados na auditoria.'))),
++                              'Admin, gerente ou supervisor com permissão podem corrigir horímetro e outros dados. Alterações em litros/origem recalculam estoque e FIFO. Dados anteriores, novos e motivo ficam preservados na auditoria.'))),
+                   if (error != null)
+                     Card(
+                         child: ListTile(

@@ -97,7 +97,6 @@ jobs:
             'canCancel: isAdmin || isManager',
             'cancelFuelingV87(',
             "rca_cancel_fueling_v87",
-            'Somente Admin/Gerente',
             'Sequencial preservado',
             '_syncImmediatelyAfterReconnectV84',
             'backendReadyV81',

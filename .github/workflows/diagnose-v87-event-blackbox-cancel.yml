@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/diagnose-v87-event-blackbox-cancel.yml'
       - '.github/v87-combined.patch.gz.b64'
+      - 'tool/fix_v87_analyze.py'
   workflow_dispatch:
 
 concurrency:
@@ -56,7 +57,14 @@ jobs:
         working-directory: app
         run: flutter pub get
 
-      - name: Format
+      - name: Format base v87 changes
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: Apply v87 analyze fixes
+        run: python3 tool/fix_v87_analyze.py
+
+      - name: Format v87 fixes
         working-directory: app
         run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
 
@@ -118,6 +126,12 @@ jobs:
             if token not in main: raise SystemExit(f'Missing durable audit element: {token}')
           if 'canCancel: isAdmin || isManager' not in main:
             raise SystemExit('Cancel UI is not restricted to Admin/Manager')
+          # The unit-conflict resolver must live in the conflicts screen, not OperationalHome.
+          op=alltxt.find('class _OperationalHomeV29ScreenState')
+          off=alltxt.find('class _OfflineConflictsV58ScreenState')
+          resolver=alltxt.find('Future<void> resolveUnitConflictV87')
+          if not (op >= 0 and off >= 0 and resolver > off):
+            raise SystemExit('Unit conflict resolver is not in OfflineConflicts screen')
           print('v87_regression_gate=True')
           PY
 

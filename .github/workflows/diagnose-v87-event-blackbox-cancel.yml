@@ -114,10 +114,8 @@ jobs:
           ]
           found={x:alltxt.count(x) for x in forbidden}
           if any(found.values()): raise SystemExit(f'v87 regression/policy violation: {found}')
-          # Make sure event trail is persistent and chained, not RAM-only.
           for token in ["_state['audit_events_v87']", "'prev_hash'", "'event_hash'", 'crypto.sha256']:
             if token not in main: raise SystemExit(f'Missing durable audit element: {token}')
-          # Cancel permission exposed only to Admin/Manager in management home.
           if 'canCancel: isAdmin || isManager' not in main:
             raise SystemExit('Cancel UI is not restricted to Admin/Manager')
           print('v87_regression_gate=True')
@@ -127,10 +125,11 @@ jobs:
         working-directory: app
         run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
 
-      - name: Upload validated v87 source
+      - name: Upload v87 source snapshot
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-v87-event-blackbox-cancel-validated-source
+          name: RC-Abastecimento-v87-event-blackbox-cancel-source-snapshot
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart

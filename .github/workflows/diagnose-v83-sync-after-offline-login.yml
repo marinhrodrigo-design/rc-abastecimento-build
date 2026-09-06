@@ -1,0 +1,305 @@
+name: Diagnose R&C Abastecimento v83 sync after offline login
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v83-sync-after-offline-login']
+    paths:
+      - '.github/workflows/diagnose-v83-sync-after-offline-login.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Create validation workspace
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Restore exact approved v82 source
+        run: |
+          rm -rf /tmp/v82src /tmp/v82src.zip
+          mkdir -p /tmp/v82src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9981524110/zip" \
+            -o /tmp/v82src.zip
+          unzip -q /tmp/v82src.zip -d /tmp/v82src
+          rm -rf app/lib
+          if [ -d /tmp/v82src/app/lib ]; then
+            cp -r /tmp/v82src/app/lib app/lib
+            cp /tmp/v82src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v82src/lib app/lib
+            cp /tmp/v82src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v83 sync reauthentication correction
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart')
+          s=p.read_text()
+          s=s.replace("child: Text('v82',", "child: Text('v83',", 1)
+          needle="  Future<void> markAppLoggedOutV62() async {\n"
+          insert=r'''  String? get activeLoginV83 {
+            final uid = activeUserIdV62;
+            if (uid == null || uid.isEmpty) return null;
+            for (final entry in _offlineUsersV62.entries) {
+              final raw = entry.value;
+              if (raw is! Map) continue;
+              final item = _map(raw);
+              final itemUid =
+                  '${item['user_id'] ?? _map(item['profile'])['user_id'] ?? _map(item['profile'])['id'] ?? ''}'
+                      .trim();
+              if (itemUid == uid) return entry.key.trim().toLowerCase();
+            }
+            return null;
+          }
+
+          Future<void> reauthenticateOnlineForSyncV83(String password) async {
+            if (!online.value) {
+              throw Exception('Sem internet. Conecte o aparelho e tente novamente.');
+            }
+            final username = activeLoginV83;
+            if (username == null || username.isEmpty) {
+              throw Exception(
+                  'Não foi possível identificar o usuário desta sessão offline. Saia e entre novamente com internet.');
+            }
+            final raw = _offlineUsersV62[username];
+            if (raw is! Map) {
+              throw Exception(
+                  'Este usuário não possui credencial offline válida neste aparelho.');
+            }
+            final item = _map(raw);
+            if (!await _verifyCredentialV69(item, username, password)) {
+              throw Exception('Usuário ou senha/PIN inválidos.');
+            }
+
+            final client = Supabase.instance.client;
+            final expectedUid = activeUserIdV62;
+            final loginPassword = _authPasswordForLogin(password);
+            try {
+              try {
+                await client.auth.signOut(scope: SignOutScope.local);
+              } catch (_) {}
+              var signedIn = false;
+              if (username.contains('@')) {
+                await client.auth
+                    .signInWithPassword(email: username, password: loginPassword);
+                signedIn = true;
+              } else if (username == 'admin' || username == 'adminfuel') {
+                for (final email in const [
+                  'marinhrodrigo@gmail.com',
+                  'adminfuel@rccombustivel.app'
+                ]) {
+                  try {
+                    await client.auth
+                        .signInWithPassword(email: email, password: loginPassword);
+                    signedIn = true;
+                    break;
+                  } catch (_) {}
+                }
+              } else {
+                try {
+                  await client.auth.signInWithPassword(
+                      email: '$username@rccombustivel.app', password: loginPassword);
+                  signedIn = true;
+                } catch (_) {}
+                if (!signedIn) {
+                  await client.auth.signInWithPassword(
+                      email: '$username@rcmanutencao.app', password: loginPassword);
+                  signedIn = true;
+                }
+              }
+              if (!signedIn || client.auth.currentUser == null) {
+                throw Exception('Usuário ou senha/PIN inválidos.');
+              }
+              final signedUid = client.auth.currentUser!.id;
+              if (expectedUid != null &&
+                  expectedUid.isNotEmpty &&
+                  signedUid != expectedUid) {
+                await client.auth.signOut(scope: SignOutScope.local);
+                throw Exception(
+                    'A credencial informada pertence a outro usuário. Confirme a senha/PIN do usuário que iniciou esta sessão offline.');
+              }
+
+              final sid = await ensureAppSessionIdV30(renew: true);
+              final dev = await _stableDeviceIdV42();
+              final claim = _map(await client.rpc('rca_session_claim_v42', params: {
+                'p_session_id': sid,
+                'p_device_id': dev,
+                'p_explicit_login': false
+              }));
+              if (claim['ok'] == false) {
+                await client.auth.signOut(scope: SignOutScope.local);
+                throw Exception(
+                    '${claim['message'] ?? 'Não foi possível validar esta sessão para sincronização.'}');
+              }
+
+              final profile = _map(await client.rpc('rca_profile'));
+              markOnline();
+              await cacheProfile(profile);
+              await cacheFuelingPermissionV68(profile['can_fueling_create'] == true);
+              await cacheOfflineLoginV62(username, password, profile);
+              try {
+                final ref = _map(await client.rpc('rca_reference_data_v33'));
+                await cacheReferenceData(ref);
+              } catch (_) {}
+              await markAppLoggedInV62(signedUid);
+              await beginSessionMarkerV68();
+            } catch (e) {
+              if (_isNetworkError(e)) {
+                markOffline();
+                throw Exception(
+                    'A conexão caiu durante a validação. Tente sincronizar novamente quando a internet estiver estável.');
+              }
+              rethrow;
+            }
+          }
+
+          '''
+          if needle not in s: raise SystemExit('v83 insert point missing')
+          s=s.replace(needle,insert+needle,1)
+          old="""Future<void> _syncPendingWithFeedbackV74(BuildContext context) async {\n  try {\n    final result = await offlineStore.syncPendingManualV74();\n"""
+          new=r'''Future<String?> _requestSyncCredentialV83(BuildContext context) async {
+            final controller = TextEditingController();
+            final value = await showDialog<String>(
+                context: context,
+                barrierDismissible: false,
+                builder: (ctx) => AlertDialog(
+                      title: const Text('Validar sessão para sincronizar'),
+                      content: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Text(
+                              'A internet voltou, mas esta sessão foi iniciada offline. Informe sua senha/PIN uma vez para validar a sessão e enviar os registros pendentes.'),
+                          const SizedBox(height: 14),
+                          TextField(
+                            controller: controller,
+                            autofocus: true,
+                            obscureText: true,
+                            decoration: const InputDecoration(
+                                labelText: 'Senha/PIN',
+                                prefixIcon: Icon(Icons.lock_outline_rounded)),
+                            onSubmitted: (value) {
+                              if (value.trim().isNotEmpty) Navigator.pop(ctx, value);
+                            },
+                          ),
+                        ],
+                      ),
+                      actions: [
+                        TextButton(
+                            onPressed: () => Navigator.pop(ctx),
+                            child: const Text('Cancelar')),
+                        FilledButton(
+                            onPressed: () {
+                              final value = controller.text;
+                              if (value.trim().isNotEmpty) Navigator.pop(ctx, value);
+                            },
+                            child: const Text('Validar e sincronizar')),
+                      ],
+                    ));
+            controller.dispose();
+            return value;
+          }
+
+          Future<void> _syncPendingWithFeedbackV74(BuildContext context) async {
+            try {
+              if (offlineStore.onlineReauthRequiredV81) {
+                final credential = await _requestSyncCredentialV83(context);
+                if (credential == null || credential.trim().isEmpty) return;
+                if (!context.mounted) return;
+                await offlineStore.reauthenticateOnlineForSyncV83(credential);
+                if (!context.mounted) return;
+              }
+              final result = await offlineStore.syncPendingManualV74();
+          '''
+          if old not in s: raise SystemExit('v83 manual sync handler point missing')
+          s=s.replace(old,new,1)
+          s=s.replace("? 'ONLINE • REENTRAR'", "? 'ONLINE • VALIDAR'", 1)
+          s=s.replace('Internet disponível, mas esta sessão foi iniciada offline. Saia e entre novamente com internet para sincronizar os registros pendentes.', 'Internet disponível, mas esta sessão foi iniciada offline. Toque em Sincronizar pendentes e confirme sua senha/PIN para validar a sessão.', 1)
+          p.write_text(s)
+
+          p=Path('lib/v31_features.dart')
+          s=p.read_text()
+          s=s.replace('Internet disponível, mas esta sessão foi iniciada offline. Para enviar os registros ao servidor, saia e entre novamente com internet.', 'Internet disponível, mas esta sessão foi iniciada offline. Toque em Sincronizar pendentes e confirme sua senha/PIN para validar e enviar os registros.')
+          s=s.replace('Unidade selecionada localmente. Entre novamente com internet para validar e sincronizar.', 'Unidade selecionada localmente. Use Sincronizar pendentes e confirme sua senha/PIN para validar e sincronizar.')
+          s=s.replace('Unidade liberada localmente. Entre novamente com internet para sincronizar a liberação.', 'Unidade liberada localmente. Use Sincronizar pendentes e confirme sua senha/PIN para sincronizar a liberação.')
+          p.write_text(s)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v83 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
+          required=[
+            "Text('v83'",
+            'String? get activeLoginV83',
+            'reauthenticateOnlineForSyncV83',
+            '_requestSyncCredentialV83',
+            'if (offlineStore.onlineReauthRequiredV81)',
+            'await offlineStore.reauthenticateOnlineForSyncV83(credential)',
+            "'Validar e sincronizar'",
+            "'ONLINE • VALIDAR'",
+            'signedUid != expectedUid',
+            "client.auth.signInWithPassword",
+            'Toque em Sincronizar pendentes e confirme sua senha/PIN',
+          ]
+          alltxt=main+'\n'+v31
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v83 correction incomplete: {missing}')
+          if "Text('v82'" in main:
+            raise SystemExit('v82 version marker still present')
+          start=main.index('Future<void> _syncPendingWithFeedbackV74')
+          end=main.index('\nclass FuelApi', start)
+          handler=main[start:end]
+          if handler.index('reauthenticateOnlineForSyncV83') > handler.index('syncPendingManualV74'):
+            raise SystemExit('reauthentication does not happen before manual synchronization')
+          print('v83_sync_after_offline_login_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v83 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v83-sync-after-offline-login-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

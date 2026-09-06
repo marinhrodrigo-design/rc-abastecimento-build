@@ -1,0 +1,108 @@
+name: Diagnose R&C Abastecimento v89 Offline Meter Correction
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v89-offline-meter-correction']
+    paths:
+      - '.github/workflows/diagnose-v89-offline-meter-correction.yml'
+      - '.github/v89-offline-meter-correction.patch.gz.b64'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v89-diagnose
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore exact approved v88 source
+        run: |
+          rm -rf app /tmp/v88src /tmp/v88src.zip
+          mkdir -p app /tmp/v88src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9998027082/zip" \
+            -o /tmp/v88src.zip
+          unzip -q /tmp/v88src.zip -d /tmp/v88src
+          if [ -d /tmp/v88src/app/lib ]; then
+            cp -r /tmp/v88src/app/lib app/lib
+            cp /tmp/v88src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v88src/lib app/lib
+            cp /tmp/v88src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v89 fix patch
+        run: |
+          base64 -d .github/v89-offline-meter-correction.patch.gz.b64 | gzip -d > /tmp/v89.patch
+          patch -p0 < /tmp/v89.patch
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v89 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v29=Path('lib/v29_features.dart').read_text()
+          alltxt=main+'\n'+v29
+          required=[
+            "Text('v89'",
+            "rca_correct_offline_conflict_v89",
+            "correctOfflineConflictV89(",
+            "Corrigir dados antes da análise",
+            "Dados corrigidos. Agora confira e aprove ou rejeite o abastecimento.",
+            "último registro conhecido no aparelho",
+            "!offlineStore.backendReadyV81",
+            "_doubleOrNull(sm['kmHorimetro'])",
+            "_doubleOrNull(sm['meter_physical_value'])",
+            "measurementType == 'km'",
+            "_syncImmediatelyAfterReconnectV84",
+            "'audit_events_v87'",
+            "canCancel: isAdmin || isManager",
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v89 incomplete: {missing}')
+          forbidden=["Text('v88'", "title: const Text('Horímetro'), value: meterText"]
+          found={x:alltxt.count(x) for x in forbidden}
+          if any(found.values()): raise SystemExit(f'v89 regression found: {found}')
+          print('v89_regression_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v89 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v89-offline-meter-correction-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

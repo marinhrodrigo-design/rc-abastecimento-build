@@ -1,0 +1,141 @@
+name: Diagnose R&C Abastecimento v87 Event Blackbox and Cancel Policy
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v87-event-blackbox-cancel-policy']
+    paths:
+      - '.github/workflows/diagnose-v87-event-blackbox-cancel.yml'
+      - '.github/v87-combined.patch.gz.b64'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v87-diagnose
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore exact approved v86 source
+        run: |
+          rm -rf app /tmp/v86src /tmp/v86src.zip
+          mkdir -p app /tmp/v86src
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9982988618/zip" \
+            -o /tmp/v86src.zip
+          unzip -q /tmp/v86src.zip -d /tmp/v86src
+          if [ -d /tmp/v86src/app/lib ]; then
+            cp -r /tmp/v86src/app/lib app/lib
+            cp /tmp/v86src/app/pubspec.yaml app/pubspec.yaml
+          else
+            cp -r /tmp/v86src/lib app/lib
+            cp /tmp/v86src/pubspec.yaml app/pubspec.yaml
+          fi
+
+      - name: Apply v87 event blackbox and cancel patch
+        run: |
+          base64 -d .github/v87-combined.patch.gz.b64 | gzip -d > /tmp/v87.patch
+          patch -p0 < /tmp/v87.patch
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Format
+        working-directory: app
+        run: dart format lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart
+
+      - name: v87 regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v29=Path('lib/v29_features.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
+          alltxt=main+'\n'+v29+'\n'+v31
+          required=[
+            "Text('v87'",
+            "'audit_events_v87'",
+            'recordEventV87(',
+            'syncAuditEventsV87()',
+            "rca_sync_app_events_v87",
+            "'fueling_started'",
+            "'fueling_field_changed'",
+            "'fueling_evidence_captured'",
+            "'fueling_signature_captured'",
+            "'fueling_totalizer_before'",
+            "'fueling_location_captured'",
+            "'fueling_confirmed'",
+            "'fueling_sync_started'",
+            "'fueling_sync_succeeded'",
+            "'fueling_sync_failed'",
+            "'app_closed'",
+            "'app_session_abandoned'",
+            "'logout'",
+            "'p_lubricated': lubricated",
+            "'p_offline_event_id': fuelingEventId",
+            "title: const Text('Lubrificou?')",
+            'offlineUnitUseConflictsV87()',
+            'reviewOfflineUnitUseConflictV87(',
+            'resolveUnitConflictV87(',
+            'canCancel: isAdmin || isManager',
+            'cancelFuelingV87(',
+            "rca_cancel_fueling_v87",
+            'Somente Admin/Gerente',
+            'Sequencial preservado',
+            '_syncImmediatelyAfterReconnectV84',
+            'backendReadyV81',
+            'rca_record_fueling_v71',
+            'sourceDisplayLabelV80()',
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v87 incomplete: {missing}')
+          forbidden=[
+            "Text('v86'",
+            "'p_lubricated': false",
+            "'p_offline_event_id': null",
+            'canCancel: canCorrect',
+            'canCancel: widget.profile[\'is_supervisor\']',
+          ]
+          found={x:alltxt.count(x) for x in forbidden}
+          if any(found.values()): raise SystemExit(f'v87 regression/policy violation: {found}')
+          # Make sure event trail is persistent and chained, not RAM-only.
+          for token in ["_state['audit_events_v87']", "'prev_hash'", "'event_hash'", 'crypto.sha256']:
+            if token not in main: raise SystemExit(f'Missing durable audit element: {token}')
+          # Cancel permission exposed only to Admin/Manager in management home.
+          if 'canCancel: isAdmin || isManager' not in main:
+            raise SystemExit('Cancel UI is not restricted to Admin/Manager')
+          print('v87_regression_gate=True')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Upload validated v87 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v87-event-blackbox-cancel-validated-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30

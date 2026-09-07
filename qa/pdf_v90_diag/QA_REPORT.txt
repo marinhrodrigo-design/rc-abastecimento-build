@@ -1,0 +1,14 @@
+fuel_report_v90.bbox.html: pages=6
+work_final_v90.bbox.html: pages=3
+fuel_report_v90-1.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 1295) edge_margin_px=53
+fuel_report_v90-2.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 1295) edge_margin_px=53
+fuel_report_v90-3.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 1295) edge_margin_px=53
+fuel_report_v90-4.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 1253) edge_margin_px=53
+fuel_report_v90-5.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 1122) edge_margin_px=53
+fuel_report_v90-6.png: image=(1241, 1754) content_bbox=(53, 59, 1187, 889) edge_margin_px=53
+work_final_v90-1.png: image=(1241, 1754) content_bbox=(61, 75, 1179, 1691) edge_margin_px=61
+work_final_v90-2.png: image=(1241, 1754) content_bbox=(61, 75, 1179, 1678) edge_margin_px=61
+work_final_v90-3.png: image=(1241, 1754) content_bbox=(61, 75, 1179, 959) edge_margin_px=61
+
+FAIL
+work_final_v90.txt: MISSING 'NF-12345678901234567890123456789012345678901234'

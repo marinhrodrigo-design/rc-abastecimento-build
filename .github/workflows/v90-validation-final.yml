@@ -1,0 +1,124 @@
+name: Final validate R&C Abastecimento v90
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-validation-final.yml'
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          python3 -m pip install --quiet pillow
+      - name: Prepare exact source + v90 fixes
+        run: |
+          rm -rf app qa/pdf_v90_final qa/v90_source
+          flutter create --platforms=android --org com.rc --project-name rc_abastecimento app >/dev/null
+          rm -rf app/lib app/test
+          cp -r qa/v89_source/lib app/lib
+          cp qa/v89_source/pubspec.yaml app/pubspec.yaml
+          mkdir -p app/assets app/test app/qa_output qa/pdf_v90_final qa/v90_source
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" app/assets/MaterialIcons-Regular.otf
+          cp tool/apply_v90_full_qa_fixes.py app/apply_v90_full_qa_fixes.py
+          (cd app && python3 apply_v90_full_qa_fixes.py && flutter pub get >/dev/null)
+          cp qa/v90_pdf_stress_test.dart app/test/pdf_v90_stress_test.dart
+      - name: Source regression gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('app/lib/main_online.dart').read_text()
+          req=["Text('v90'","-AB-${sequence.toString().padLeft(6, '0')}","_pdfSafeMapV90","_hasValue(st?['plate'])","vehicleLike(st, thirdParty: true)","identityKind: (hasPlate || manualThird) ? 'plate' : 'side'","_measurementTypeForPdf","'Foto do KM'","'Foto do Horímetro'","rca_correct_offline_conflict_v89","rca_cancel_fueling_v87","rca_session_resume_offline_v88","_syncImmediatelyAfterReconnectV84","rca_sync_app_events_v87"]
+          missing=[x for x in req if x not in s]
+          if missing: raise SystemExit(f'missing={missing}')
+          if "Text('v89'" in s: raise SystemExit('old visible version')
+          if s.count("requiredMessage('Placa/Identificação do equipamento não cadastrado')")!=1: raise SystemExit('third-party validation duplication')
+          a=s.index('class FuelPdfReport {'); b=s.index('class WorkFinalPdf {',a); c=s.index('class AdminSecurityV35Screen',b)
+          region=s[a:c]
+          for bad in ('•','→','—','–'):
+            if bad in region: raise SystemExit(f'unsupported static PDF separator {bad!r}')
+          for bad in ('pw.Transform.rotate','pw.RotatedBox','Matrix4.rotation','quarterTurns'):
+            if bad in region: raise SystemExit(f'PDF rotation construct {bad}')
+          print('SOURCE_GATES=PASS')
+          PY
+          cd app && flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+      - name: Generate stress PDFs
+        working-directory: app
+        run: flutter test test/pdf_v90_stress_test.dart --reporter expanded
+      - name: Render PDF evidence
+        run: |
+          for f in app/qa_output/*.pdf; do
+            b=$(basename "$f" .pdf)
+            cp "$f" "qa/pdf_v90_final/$b.pdf"
+            pdfinfo "$f" > "qa/pdf_v90_final/$b.pdfinfo.txt"
+            pdftotext -layout "$f" "qa/pdf_v90_final/$b.txt"
+            pdftotext -bbox-layout "$f" "qa/pdf_v90_final/$b.bbox.html"
+            pdftoppm -png -r 150 "$f" "qa/pdf_v90_final/$b" >/dev/null 2>&1
+          done
+      - name: Validate PDF content, geometry and glyphs
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import re,html
+          failures=[]; notes=[]
+          for p in sorted(Path('qa/pdf_v90_final').glob('*.bbox.html')):
+            t=p.read_text(errors='replace')
+            pages=re.findall(r'<page width="([0-9.]+)" height="([0-9.]+)">(.*?)</page>',t,re.S)
+            notes.append(f'{p.name}: pages={len(pages)}')
+            for pi,(ws,hs,body) in enumerate(pages,1):
+              w,h=float(ws),float(hs)
+              for xmin,ymin,xmax,ymax,text in re.findall(r'<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">(.*?)</word>',body,re.S):
+                x1,y1,x2,y2=map(float,(xmin,ymin,xmax,ymax))
+                if x1<-.2 or y1<-.2 or x2>w+.2 or y2>h+.2: failures.append(f'{p.name} p{pi}: outside page {html.unescape(text)!r}')
+              for x1,y1,x2,y2 in re.findall(r'<line xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">',body):
+                if float(x2)-float(x1)<3 and float(y2)-float(y1)>8: failures.append(f'{p.name} p{pi}: suspicious vertical text line')
+          for p in sorted(Path('qa/pdf_v90_final').glob('*.png')):
+            im=Image.open(p).convert('L'); mask=im.point(lambda x:255 if x<245 else 0); bbox=mask.getbbox()
+            if bbox:
+              x1,y1,x2,y2=bbox; margin=min(x1,y1,im.width-x2,im.height-y2); notes.append(f'{p.name}: edge_margin_px={margin}')
+              if margin<6: failures.append(f'{p.name}: content touches page edge')
+          fuel=Path('qa/pdf_v90_final/fuel_report_v90.txt').read_text(errors='replace')
+          work=Path('qa/pdf_v90_final/work_final_v90.txt').read_text(errors='replace')
+          compact=lambda x: re.sub(r'\s+','',x)
+          for tok in ['Nº: 0001','CB99','123456','9876.5','222222','12345.6','XYZ9Z99','LOCALIZACAO_QA','RESPONSÁVEL DA OBRA PDF QA','HYDRA ENGENHARIA PDF QA LTDA','CLIENTE RECEBEDOR PDF QA','R$ 7,89','R$ 973,63']:
+            if tok not in fuel: failures.append(f'fuel missing {tok!r}')
+          nf='NF-12345678901234567890123456789012345678901234'
+          if compact(nf) not in compact(fuel): failures.append('fuel missing complete long NF after line wrapping')
+          for tok in ['HYDRA ENGENHARIA PDF QA LTDA','OBRA FINAL PDF QA','034-999','XYZ9Z99','ADMINISTRADOR PDF QA']:
+            if tok not in work: failures.append(f'work missing {tok!r}')
+          if compact(nf) not in compact(work): failures.append('work missing complete long NF after line wrapping')
+          # U+FFFD or black-square extraction usually exposes a broken glyph. Rendered PNG is also visually archived.
+          for name,text in [('fuel',fuel),('work',work)]:
+            if '\ufffd' in text: failures.append(f'{name}: replacement glyph U+FFFD present')
+          report='\n'.join(notes)+'\n\n'+('PASS: content, wrapping, bounds, horizontal layout and glyph safety validated.' if not failures else 'FAIL:\n'+'\n'.join(failures))+'\n'
+          Path('qa/pdf_v90_final/QA_REPORT.txt').write_text(report); print(report)
+          if failures: raise SystemExit(1)
+          PY
+      - name: Preserve validated source and evidence
+        run: |
+          cp app/lib/main_online.dart app/lib/v29_features.dart app/lib/v30_features.dart app/lib/v31_features.dart app/pubspec.yaml qa/v90_source/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/v90_source qa/pdf_v90_final
+          git commit -m "test: record final validated v90 source and PDF evidence"
+          git push origin HEAD:fix/rc-abastecimento-v90-full-qa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v90-final-validation
+          path: |
+            qa/v90_source
+            qa/pdf_v90_final
+          retention-days: 14

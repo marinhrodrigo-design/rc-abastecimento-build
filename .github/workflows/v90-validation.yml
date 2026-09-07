@@ -1,0 +1,108 @@
+name: Validate R&C Abastecimento v90
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-validation.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          python3 -m pip install --quiet pillow
+      - name: Prepare app and apply fixes
+        run: |
+          rm -rf app qa/pdf_v90_final qa/v90_source
+          flutter create --platforms=android --org com.rc --project-name rc_abastecimento app >/dev/null
+          rm -rf app/lib app/test
+          cp -r qa/v89_source/lib app/lib
+          cp qa/v89_source/pubspec.yaml app/pubspec.yaml
+          mkdir -p app/assets app/test app/qa_output qa/pdf_v90_final qa/v90_source
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" app/assets/MaterialIcons-Regular.otf
+          cp tool/apply_v90_full_qa_fixes.py app/apply_v90_full_qa_fixes.py
+          (cd app && python3 apply_v90_full_qa_fixes.py && flutter pub get >/dev/null)
+      - name: Source gates
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('app/lib/main_online.dart').read_text()
+          required=["Text('v90'","-AB-${sequence.toString().padLeft(6, '0')}","_hasValue(st?['plate'])","vehicleLike(st, thirdParty: true)","identityKind: (hasPlate || manualThird) ? 'plate' : 'side'","_measurementTypeForPdf","'Foto do KM'","'Foto do Horímetro'","rca_correct_offline_conflict_v89","rca_cancel_fueling_v87","rca_session_resume_offline_v88"]
+          missing=[x for x in required if x not in s]
+          if missing: raise SystemExit(f'missing: {missing}')
+          if s.count("requiredMessage('Placa/Identificação do equipamento não cadastrado')") != 1: raise SystemExit('duplicated third-party validation')
+          if "Text('v89'" in s: raise SystemExit('old visible version')
+          for x in ['pw.Transform.rotate','pw.RotatedBox','Matrix4.rotation','quarterTurns']:
+            if x in s: raise SystemExit(f'rotation token in PDF source: {x}')
+          print('SOURCE_GATE=PASS')
+          PY
+          cd app && flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+      - name: Generate stress PDFs
+        run: |
+          cp qa/v90_pdf_stress_test.dart app/test/pdf_v90_stress_test.dart
+          cd app && flutter test test/pdf_v90_stress_test.dart --reporter expanded
+      - name: Render and validate PDFs
+        run: |
+          for f in app/qa_output/*.pdf; do
+            b=$(basename "$f" .pdf)
+            cp "$f" "qa/pdf_v90_final/$b.pdf"
+            pdfinfo "$f" > "qa/pdf_v90_final/$b.pdfinfo.txt"
+            pdftotext -layout "$f" "qa/pdf_v90_final/$b.txt"
+            pdftotext -bbox-layout "$f" "qa/pdf_v90_final/$b.bbox.html"
+            pdftoppm -png -r 150 "$f" "qa/pdf_v90_final/$b" >/dev/null 2>&1
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import re,html
+          failures=[]; notes=[]
+          for p in Path('qa/pdf_v90_final').glob('*.bbox.html'):
+            t=p.read_text(errors='replace')
+            pages=re.findall(r'<page width="([0-9.]+)" height="([0-9.]+)">(.*?)</page>',t,re.S)
+            notes.append(f'{p.name}: pages={len(pages)}')
+            for pi,(ws,hs,body) in enumerate(pages,1):
+              w,h=float(ws),float(hs)
+              for xmin,ymin,xmax,ymax,text in re.findall(r'<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">(.*?)</word>',body,re.S):
+                x1,y1,x2,y2=map(float,(xmin,ymin,xmax,ymax))
+                if x1<-.2 or y1<-.2 or x2>w+.2 or y2>h+.2: failures.append(f'{p.name} p{pi} out-of-page {html.unescape(text)!r} {x1,y1,x2,y2}')
+              for x1,y1,x2,y2 in re.findall(r'<line xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">',body):
+                if float(x2)-float(x1)<3 and float(y2)-float(y1)>8: failures.append(f'{p.name} p{pi} suspicious vertical line')
+          for p in Path('qa/pdf_v90_final').glob('*.png'):
+            im=Image.open(p).convert('L'); mask=im.point(lambda x:255 if x<245 else 0); bbox=mask.getbbox()
+            if bbox:
+              x1,y1,x2,y2=bbox; margin=min(x1,y1,im.width-x2,im.height-y2); notes.append(f'{p.name}: edge_margin_px={margin}')
+              if margin<6: failures.append(f'{p.name} content touches edge margin={margin}')
+          fuel=Path('qa/pdf_v90_final/fuel_report_v90.txt').read_text(errors='replace')
+          work=Path('qa/pdf_v90_final/work_final_v90.txt').read_text(errors='replace')
+          for tok in ['Nº: 0001','CB99','123456','9876.5','222222','12345.6','XYZ9Z99','LOCALIZACAO_QA','RESPONSÁVEL DA OBRA PDF QA','HYDRA ENGENHARIA PDF QA LTDA','CLIENTE RECEBEDOR PDF QA','NF-12345678901234567890123456789012345678901234','R$ 7,89','R$ 973,63']:
+            if tok not in fuel: failures.append(f'fuel missing {tok!r}')
+          for tok in ['OBRA FINAL PDF QA','034-999','XYZ9Z99','NF-12345678901234567890123456789012345678901234','ADMINISTRADOR PDF QA']:
+            if tok not in work: failures.append(f'work missing {tok!r}')
+          report='\n'.join(notes)+'\n\n'+('PASS: PDF content and geometry validated.' if not failures else 'FAIL:\n'+'\n'.join(failures))+'\n'
+          Path('qa/pdf_v90_final/QA_REPORT.txt').write_text(report); print(report)
+          if failures: raise SystemExit(1)
+          PY
+      - name: Preserve validated source and PDF evidence
+        if: success()
+        run: |
+          cp app/lib/main_online.dart app/lib/v29_features.dart app/lib/v30_features.dart app/lib/v31_features.dart app/pubspec.yaml qa/v90_source/
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/v90_source qa/pdf_v90_final
+          git commit -m "test: record validated v90 source and PDF evidence"
+          git push origin HEAD:fix/rc-abastecimento-v90-full-qa

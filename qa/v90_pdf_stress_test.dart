@@ -5,8 +5,15 @@ import 'package:rc_abastecimento/main_online.dart';
 const longToken = '12345678901234567890123456789012345678901234';
 String longText(String marker) => '$marker - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.';
 
+Map<String,dynamic> institutionalCompany() => <String,dynamic>{
+  'company_name':'HYDRA ENGENHARIA PDF QA LTDA',
+  'company_subtitle':'Gestão de combustível',
+  'document':'12.345.678/0001-90',
+  'address':'Avenida Institucional PDF QA, 1000 - Belo Horizonte/MG',
+};
+
 Map<String,dynamic> context({String? nf}) => <String,dynamic>{
-  'institutional_company': <String,dynamic>{'company_name':'HYDRA ENGENHARIA PDF QA LTDA','document':'12.345.678/0001-90'},
+  'institutional_company': institutionalCompany(),
   'empresa':'HYDRA ENGENHARIA PDF QA LTDA',
   'empresa_fornecedora_vendedora':'HYDRA ENGENHARIA PDF QA LTDA',
   'empresa_recebedora_compradora':'CLIENTE RECEBEDOR PDF QA LTDA COM DENOMINAÇÃO EXTENSA',
@@ -42,7 +49,15 @@ void main() {
       await File('qa_output/fuel_report_v90.pdf').writeAsBytes(await FuelPdfReport.build(items),flush:true);
 
       final snapshot=<String,dynamic>{
-        'work':<String,dynamic>{'name':'OBRA FINAL PDF QA COM NOME MUITO EXTENSO PARA VALIDAR QUEBRA DE LINHA','responsible':'RESPONSÁVEL FINAL PDF QA COM NOME COMPLETO MUITO EXTENSO','location':longText('LOCAL_OBRA_FINAL_QA'),'company_name':'CLIENTE FINAL PDF QA LTDA COM DENOMINAÇÃO EMPRESARIAL MUITO EXTENSA','company_document':'12.345.678/0001-90','status':'finalized','finalized_at':'2026-09-06T22:10:00-03:00'},
+        'work':<String,dynamic>{
+          'name':'OBRA FINAL PDF QA COM NOME MUITO EXTENSO PARA VALIDAR QUEBRA DE LINHA',
+          'responsible':'RESPONSÁVEL FINAL PDF QA COM NOME COMPLETO MUITO EXTENSO',
+          'location':longText('LOCAL_OBRA_FINAL_QA'),
+          'company_name':'CLIENTE FINAL PDF QA LTDA COM DENOMINAÇÃO EMPRESARIAL MUITO EXTENSA',
+          'company_document':'12.345.678/0001-90',
+          'status':'finalized','finalized_at':'2026-09-06T22:10:00-03:00',
+          'institutional_company': institutionalCompany(),
+        },
         'summary':<String,dynamic>{'movement_count':6,'fueling_count':4,'fueling_liters':493.6,'purchase_cost_total':2680.25,'sale_total':3894.52,'profit_total':1214.27},
         'fuel_summary':<dynamic>[<String,dynamic>{'fuel_type':'Diesel S10','liters':493.6,'fueling_count':4}],
         'assets':<dynamic>[<String,dynamic>{'kind':'own','label':'034-999 • ATIVO PRÓPRIO PDF QA COM MODELO EXTREMAMENTE COMPRIDO','asset_number':'034-999','plate':'ABC1D23','owner_company':'PROPRIETARIA FINAL QA LTDA','fueling_count':3,'liters':370.2},<String,dynamic>{'kind':'third_party','label':'XYZ9Z99 • EQUIPAMENTO TERCEIRO PDF QA COM DESCRIÇÃO EXTREMAMENTE COMPRIDA','plate':'XYZ9Z99','description':'EQUIPAMENTO TERCEIRO PDF QA','owner_company':'TERCEIRA FINAL QA LTDA','fueling_count':1,'liters':123.4}],

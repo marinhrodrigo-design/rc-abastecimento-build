@@ -35,8 +35,43 @@ if count != 1:
     raise SystemExit(f'Expected one v89 visible label, found {count}')
 s = s.replace(version_anchor, "Text('v90'", 1)
 
-# Helvetica used by the PDF package does not reliably render a few UI separators.
-# Normalize only the two PDF generator classes, keeping the normal app UI unchanged.
+# Sanitize dynamic values before they reach the PDF renderer. The PDF uses
+# Helvetica, which does not reliably render some UI separator glyphs.
+fuel_marker = 'class FuelPdfReport {'
+fuel_start = s.index(fuel_marker)
+helper = r'''dynamic _pdfSafeValueV90(dynamic value) {
+  if (value is String) {
+    return value
+        .replaceAll('•', '-')
+        .replaceAll('→', '->')
+        .replaceAll('—', '-')
+        .replaceAll('–', '-');
+  }
+  if (value is Map) {
+    return value.map((key, val) => MapEntry('$key', _pdfSafeValueV90(val)));
+  }
+  if (value is List) return value.map(_pdfSafeValueV90).toList();
+  return value;
+}
+
+Map<String, dynamic> _pdfSafeMapV90(Map<String, dynamic> value) =>
+    Map<String, dynamic>.from(_pdfSafeValueV90(value) as Map);
+
+'''
+s = s[:fuel_start] + helper + s[fuel_start:]
+
+fuel_build = "static Future<Uint8List> build(List<Map<String, dynamic>> items) async {\n"
+if s.count(fuel_build) != 1:
+    raise SystemExit(f'Fuel PDF build anchor count={s.count(fuel_build)}')
+s = s.replace(fuel_build, fuel_build + "    items = items.map(_pdfSafeMapV90).toList();\n", 1)
+
+work_build = "static Future<Uint8List> build(Map<String, dynamic> snapshot) async {\n"
+if s.count(work_build) != 1:
+    raise SystemExit(f'Work PDF build anchor count={s.count(work_build)}')
+s = s.replace(work_build, work_build + "    snapshot = _pdfSafeMapV90(snapshot);\n", 1)
+
+# Normalize static strings inside the PDF classes as well, while leaving the
+# regular Flutter UI untouched.
 fuel_start = s.index('class FuelPdfReport {')
 work_start = s.index('class WorkFinalPdf {', fuel_start)
 work_end = s.index('class AdminSecurityV35Screen', work_start)
@@ -58,19 +93,19 @@ required = [
     "_measurementTypeForPdf",
     "'Foto do KM'",
     "'Foto do Horímetro'",
+    "_pdfSafeMapV90",
 ]
 missing = [x for x in required if x not in s]
 if missing:
     raise SystemExit(f'Missing v90 preserved behavior: {missing}')
 
-# Regression gate: unsupported separators must be absent specifically in PDF code.
 fuel_start = s.index('class FuelPdfReport {')
 work_start = s.index('class WorkFinalPdf {', fuel_start)
 work_end = s.index('class AdminSecurityV35Screen', work_start)
 pdf_region = s[fuel_start:work_end]
 for bad in ('•', '→', '—', '–'):
     if bad in pdf_region:
-        raise SystemExit(f'Unsupported PDF separator still present: {bad!r}')
+        raise SystemExit(f'Unsupported static PDF separator still present: {bad!r}')
 
 p.write_text(s)
 print('V90_FULL_QA_FIXES_OK')

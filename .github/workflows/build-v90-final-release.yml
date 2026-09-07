@@ -34,24 +34,16 @@ jobs:
       - run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
       - uses: actions/download-artifact@v4
         with:
-          name: RC-Abastecimento-v89-offline-meter-correction-validated-source
-          path: /tmp/v89src
+          name: RC-Abastecimento-v90-final2-validation
+          path: /tmp/v90src
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: 34064804566
-      - name: Restore approved source and apply v90 fixes
+          run-id: 34073802126
+      - name: Restore exact validated v90 source
         run: |
           rm -rf app/lib
-          if [ -d /tmp/v89src/app/lib ]; then
-            cp -r /tmp/v89src/app/lib app/lib
-            cp /tmp/v89src/app/pubspec.yaml app/pubspec.yaml
-          else
-            cp -r /tmp/v89src/lib app/lib
-            cp /tmp/v89src/pubspec.yaml app/pubspec.yaml
-          fi
-          cp tool/apply_v90_full_qa_fixes.py app/apply_v90_full_qa_fixes.py
-          cd app
-          python3 apply_v90_full_qa_fixes.py
+          cp -r /tmp/v90src/app/lib app/lib
+          cp /tmp/v90src/app/pubspec.yaml app/pubspec.yaml
       - name: Configure Android
         working-directory: app
         run: |
@@ -87,14 +79,15 @@ jobs:
           PY
       - working-directory: app
         run: flutter pub get
-      - name: Validate v90 source
+      - name: Validate exact v90 source
         working-directory: app
         run: |
           python3 - <<'PY'
           from pathlib import Path
           s=Path('lib/main_online.dart').read_text()
-          for x in ["Text('v90'","-AB-${sequence.toString().padLeft(6, '0')}","_pdfSafeMapV90","rca_correct_offline_conflict_v89","rca_cancel_fueling_v87","rca_session_resume_offline_v88"]:
-            if x not in s: raise SystemExit(f'missing {x}')
+          required=["Text('v90'","-AB-${sequence.toString().padLeft(6, '0')}","_pdfSafeMapV90","rca_correct_offline_conflict_v89","rca_cancel_fueling_v87","rca_session_resume_offline_v88","_measurementTypeForPdf","'Foto do KM'","'Foto do Horímetro'"]
+          missing=[x for x in required if x not in s]
+          if missing: raise SystemExit(f'missing {missing}')
           print('V90_SOURCE_PASS')
           PY
       - name: Build APK

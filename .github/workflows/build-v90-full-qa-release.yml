@@ -1,0 +1,338 @@
+name: Build R&C Abastecimento v90 Full QA Release
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/build-v90-full-qa-release.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v90-full-qa-release
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  build-and-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Install PDF QA tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq poppler-utils
+          python3 -m pip install --quiet pillow
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android app from exact v89 approved source
+        run: |
+          rm -rf app qa/pdf_v90_final
+          flutter create --platforms=android --org com.rc --project-name rc_abastecimento app >/dev/null
+          rm -rf app/lib app/test
+          cp -r qa/v89_source/lib app/lib
+          cp qa/v89_source/pubspec.yaml app/pubspec.yaml
+          mkdir -p app/assets app/test app/qa_output qa/pdf_v90_final android_tmp
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" app/assets/MaterialIcons-Regular.otf
+          cp tool/apply_v90_full_qa_fixes.py app/apply_v90_full_qa_fixes.py
+          cd app
+          python3 apply_v90_full_qa_fixes.py
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)) else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml'); t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:
+              t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"'); m.write_text(t)
+          g=Path('android/app/build.gradle.kts'); x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          x=x.replace(marker,signing+marker,1)
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: v90 source regression gate
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          alltxt=main+'\n'+Path('lib/v29_features.dart').read_text()+'\n'+Path('lib/v30_features.dart').read_text()+'\n'+Path('lib/v31_features.dart').read_text()
+          required=[
+            "Text('v90'",
+            "'${_sourceCodeV74(tankId)}-AB-${sequence.toString().padLeft(6, '0')}'",
+            "rca_correct_offline_conflict_v89",
+            "rca_record_fueling_v71",
+            "rca_session_resume_offline_v88",
+            "_measurementTypeForPdf",
+            "'Foto do KM'",
+            "'Foto do Horímetro'",
+            "_hasValue(st?['plate'])",
+            "vehicleLike(st, thirdParty: true)",
+            "identityKind: (hasPlate || manualThird) ? 'plate' : 'side'",
+            "canCancel: isAdmin || isManager",
+            "rca_cancel_fueling_v87",
+            "'audit_events_v87'",
+            "rca_sync_app_events_v87",
+            "_syncImmediatelyAfterReconnectV84",
+            "reauthenticateOnlineForSyncV83",
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v90 incomplete: {missing}')
+          if "Text('v89'" in alltxt: raise SystemExit('Visible v89 label still present')
+          if main.count("requiredMessage('Placa/Identificação do equipamento não cadastrado')") != 1:
+            raise SystemExit('Manual third-party identifier validation is duplicated or missing')
+          if "String _offlineCodeV74(int tankId, int sequence) =>\n      '${_sourceCodeV74(tankId)}-${sequence.toString().padLeft(6, '0')}';" in main:
+            raise SystemExit('Old offline fueling number format remains')
+          for token in ["pw.Transform.rotate","pw.RotatedBox","Matrix4.rotation","quarterTurns"]:
+            if token in main:
+              raise SystemExit(f'Unexpected PDF/text rotation construct: {token}')
+          print('V90_SOURCE_REGRESSION_GATE=PASS')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Create PDF content/layout stress generator
+        run: |
+          cat > app/test/pdf_v90_final_test.dart <<'DART'
+          import 'dart:io';
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:rc_abastecimento/main_online.dart';
+
+          String longText(String marker) => '$marker - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.';
+          const longToken = '12345678901234567890123456789012345678901234';
+
+          Map<String,dynamic> ctx({String? nf}) => <String,dynamic>{
+            'institutional_company': <String,dynamic>{'company_name':'HYDRA ENGENHARIA PDF QA LTDA','document':'12.345.678/0001-90'},
+            'empresa':'HYDRA ENGENHARIA PDF QA LTDA',
+            'empresa_fornecedora_vendedora':'HYDRA ENGENHARIA PDF QA LTDA',
+            'empresa_recebedora_compradora':'CLIENTE RECEBEDOR PDF QA LTDA COM DENOMINAÇÃO EXTENSA',
+            'empresa_compradora':'HYDRA ENGENHARIA PDF QA LTDA',
+            'fornecedor_combustivel':'FORNECEDOR REFINARIA PDF QA LTDA',
+            'obra':'OBRA PDF QA - Complexo Industrial com Nome Muito Extenso',
+            'responsavel_obra':'RESPONSÁVEL DA OBRA PDF QA COM NOME COMPLETO EXTENSO',
+            'proprietario_equipamento':'PROPRIETÁRIA EQUIPAMENTO PDF QA LTDA',
+            'origem':'CB99',
+            'destino':'TE99',
+            'nfs': nf == null ? <dynamic>[] : <dynamic>[<String,dynamic>{'invoice_number':nf,'batch_number':'LOTE-$longToken','supplier_name':'FORNECEDOR REFINARIA PDF QA LTDA','liters':123.4,'unit_cost':5.43}],
+          };
+
+          Map<String,dynamic> base(String code) => <String,dynamic>{
+            'id': null,
+            'code': code,
+            'movement_code': code,
+            'created_at': '2026-09-06T22:05:00-03:00',
+            'occurred_at': '2026-09-06T22:05:00-03:00',
+            'status': 'finalized',
+            'liters': 123.4,
+            'fuel_type': 'Diesel S10',
+            'source_tank': 'CB99',
+            'source_tank_name': 'Comboio QA 99',
+            'source_tank_type': 'comboio',
+            'work': 'OBRA PDF QA - Complexo Industrial com Nome Muito Extenso',
+            'work_responsible': 'RESPONSÁVEL DA OBRA PDF QA COM NOME COMPLETO EXTENSO',
+            'operator': 'OPERADOR PDF QA COM NOME COMPLETO EXTENSO',
+            'receiver': 'RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO',
+            'receiver_company': 'CLIENTE RECEBEDOR PDF QA LTDA COM DENOMINAÇÃO EXTENSA',
+            'location_address': longText('LOCALIZACAO_QA'),
+            'notes': longText('OBSERVACAO_QA'),
+            'sale_price_per_liter': 7.89,
+            'unit_cost': 5.43,
+            'total_value': 973.63,
+            'buyer_company_name_snapshot': 'CLIENTE RECEBEDOR PDF QA LTDA COM DENOMINAÇÃO EXTENSA',
+            'seller_company_name_snapshot': 'HYDRA ENGENHARIA PDF QA LTDA',
+            'equipment_owner_name_snapshot': 'PROPRIETÁRIA EQUIPAMENTO PDF QA LTDA',
+            'asset_number': '034-999',
+            'asset_plate': 'ABC1D23',
+            'asset_model': 'MARCA MODELO EXTENSO PDF QA',
+            'latitude': -19.123456,
+            'longitude': -43.654321,
+            'lubricated': true,
+            'report_context': ctx(),
+          };
+
+          void main() {
+            TestWidgetsFlutterBinding.ensureInitialized();
+            testWidgets('generate final v90 PDF stress cases', (tester) async {
+              await tester.runAsync(() async {
+                final km = base('CB99-AB-000001')..addAll({'type':'fueling','measurement_type':'km','km_value':123456,'hourmeter_value':null});
+                final hour = base('CB99-AB-000002')..addAll({'type':'fueling','measurement_type':'hourmeter','km_value':null,'hourmeter_value':9876.5,'asset_plate':'','asset_number':'034-998'});
+                final both = base('CB99-AB-000003')..addAll({'type':'fueling','measurement_type':'both','km_value':222222,'hourmeter_value':12345.6});
+                final none = base('CB99-AB-000004')..addAll({'type':'fueling','measurement_type':'none','km_value':null,'hourmeter_value':null,'third_party_plate':'XYZ9Z99','third_party_description':'EQUIPAMENTO TERCEIRO PDF QA COM DESCRIÇÃO MUITO EXTENSA','third_party_company':'TERCEIRA_QA_LTDA','asset_number':null,'asset_plate':null,'asset_model':null,'report_context':ctx()});
+                final transfer = base('CB99-TR-000001')..addAll({'type':'tank_transfer','transfer_kind':'comboio_to_comboio','destination_tank':'CB98','destination_tank_type':'comboio','receiver_responsible':'RECEBEDOR TRANSFERÊNCIA QA','donor_responsible':'DOADOR TRANSFERÊNCIA QA','report_context':ctx(nf:'NF-$longToken')});
+                final refinery = base('TE99-ER-000001')..addAll({'type':'refinery_entry','source_tank':null,'destination_tank':'TE99','destination_tank_type':'stationary','invoice_numbers':['NF-$longToken'],'asset_number':null,'asset_plate':null,'asset_model':null,'report_context':ctx(nf:'NF-$longToken')});
+                final items=<Map<String,dynamic>>[km,hour,both,none,transfer,refinery];
+                final bytes=await FuelPdfReport.build(items);
+                await File('qa_output/fuel_report_v90.pdf').writeAsBytes(bytes,flush:true);
+
+                final snapshot=<String,dynamic>{
+                  'work': <String,dynamic>{'name':'OBRA FINAL PDF QA COM NOME MUITO EXTENSO PARA VALIDAR QUEBRA DE LINHA','responsible':'RESPONSÁVEL FINAL PDF QA COM NOME COMPLETO MUITO EXTENSO','location':longText('LOCAL_OBRA_FINAL_QA'),'company_name':'CLIENTE FINAL PDF QA LTDA COM DENOMINAÇÃO EMPRESARIAL MUITO EXTENSA','company_document':'12.345.678/0001-90','status':'finalized','finalized_at':'2026-09-06T22:10:00-03:00'},
+                  'summary': <String,dynamic>{'movement_count':6,'fueling_count':4,'fueling_liters':493.6,'purchase_cost_total':2680.25,'sale_total':3894.52,'profit_total':1214.27},
+                  'fuel_summary': <dynamic>[<String,dynamic>{'fuel_type':'Diesel S10','liters':493.6,'fueling_count':4}],
+                  'assets': <dynamic>[<String,dynamic>{'kind':'own','label':'034-999 • ATIVO PRÓPRIO PDF QA COM MODELO EXTREMAMENTE COMPRIDO','asset_number':'034-999','plate':'ABC1D23','owner_company':'PROPRIETARIA FINAL QA LTDA','fueling_count':3,'liters':370.2},<String,dynamic>{'kind':'third_party','label':'XYZ9Z99 • EQUIPAMENTO TERCEIRO PDF QA COM DESCRIÇÃO EXTREMAMENTE COMPRIDA','plate':'XYZ9Z99','description':'EQUIPAMENTO TERCEIRO PDF QA','owner_company':'TERCEIRA FINAL QA LTDA','fueling_count':1,'liters':123.4}],
+                  'movements': items,
+                  'nfs': <dynamic>[<String,dynamic>{'invoice_number':'NF-$longToken','batch_number':'LOTE-$longToken','supplier_name':'FORNECEDOR FINAL PDF QA LTDA','fuel_type':'Diesel S10','liters_used_by_work':493.6,'cost_used_by_work':2680.25,'received_at':'2026-09-06T20:00:00-03:00','total_liters':1000,'remaining_liters':506.4,'status':'open'}],
+                  'lineage': <dynamic>[<String,dynamic>{'movement_id':9006,'code':'TE99-ER-000001','created_at':'2026-09-06T20:00:00-03:00','type':'refinery_entry','lot_id':777,'invoice_number':'NF-$longToken','liters':1000,'source':'REFINARIA','destination':'TE99'}],
+                  'audit': <dynamic>[<String,dynamic>{'created_at':'2026-09-06T22:12:00-03:00','user_name':'ADMINISTRADOR PDF QA','action':'CORREÇÃO DE TESTE COM TEXTO EXTENSO PARA VALIDAR LAYOUT','record_id':'9001'}],
+                };
+                final workBytes=await WorkFinalPdf.build(snapshot);
+                await File('qa_output/work_final_v90.pdf').writeAsBytes(workBytes,flush:true);
+              });
+            });
+          }
+          DART
+
+      - name: Generate PDFs
+        working-directory: app
+        run: flutter test test/pdf_v90_final_test.dart --reporter expanded
+
+      - name: Render and validate PDF content and geometry
+        run: |
+          set -e
+          for f in app/qa_output/*.pdf; do
+            b=$(basename "$f" .pdf)
+            cp "$f" "qa/pdf_v90_final/${b}.pdf"
+            pdfinfo "$f" > "qa/pdf_v90_final/${b}.pdfinfo.txt"
+            pdftotext -layout "$f" "qa/pdf_v90_final/${b}.txt"
+            pdftotext -bbox-layout "$f" "qa/pdf_v90_final/${b}.bbox.html"
+            pdftoppm -png -r 150 "$f" "qa/pdf_v90_final/${b}" >/dev/null 2>&1
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import re, html
+          failures=[]; notes=[]
+          for p in sorted(Path('qa/pdf_v90_final').glob('*.bbox.html')):
+              t=p.read_text(errors='replace')
+              pages=re.findall(r'<page width="([0-9.]+)" height="([0-9.]+)">(.*?)</page>',t,re.S)
+              notes.append(f'{p.name}: {len(pages)} page(s)')
+              for pi,(ws,hs,body) in enumerate(pages,1):
+                  w,h=float(ws),float(hs)
+                  words=re.findall(r'<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">(.*?)</word>',body,re.S)
+                  for xmin,ymin,xmax,ymax,text in words:
+                      x1,y1,x2,y2=map(float,(xmin,ymin,xmax,ymax))
+                      if x1 < -0.2 or y1 < -0.2 or x2 > w+0.2 or y2 > h+0.2:
+                          failures.append(f'{p.name} page {pi}: text outside page: {html.unescape(text)!r} {x1,y1,x2,y2} page={w,h}')
+                  lines=re.findall(r'<line xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">',body)
+                  suspicious=sum(1 for x1,y1,x2,y2 in lines if float(x2)-float(x1)<3 and float(y2)-float(y1)>8)
+                  if suspicious: failures.append(f'{p.name} page {pi}: suspicious vertical text lines={suspicious}')
+          for imgp in sorted(Path('qa/pdf_v90_final').glob('*.png')):
+              im=Image.open(imgp).convert('L')
+              # Content darker than near-white; require safe separation from physical page edge.
+              mask=im.point(lambda x: 255 if x < 245 else 0)
+              bbox=mask.getbbox()
+              if bbox:
+                  x1,y1,x2,y2=bbox
+                  margin=min(x1,y1,im.width-x2,im.height-y2)
+                  notes.append(f'{imgp.name}: rendered content bbox={bbox}, edge_margin_px={margin}')
+                  if margin < 6: failures.append(f'{imgp.name}: rendered content touches/crosses page edge (margin={margin}px)')
+          fuel=(Path('qa/pdf_v90_final')/'fuel_report_v90.txt').read_text(errors='replace')
+          work=(Path('qa/pdf_v90_final')/'work_final_v90.txt').read_text(errors='replace')
+          for token in ['Nº: 0001','CB99','123456','9876.5','222222','12345.6','XYZ9Z99','LOCALIZACAO_QA','RESPONSÁVEL DA OBRA PDF QA','HYDRA ENGENHARIA PDF QA LTDA','CLIENTE RECEBEDOR PDF QA','NF-12345678901234567890123456789012345678901234','R$ 7,89','R$ 973,63']:
+              if token not in fuel: failures.append(f'fuel_report_v90.txt missing {token!r}')
+          for token in ['OBRA FINAL PDF QA','034-999','XYZ9Z99','NF-12345678901234567890123456789012345678901234','ADMINISTRADOR PDF QA','493.6']:
+              if token not in work: failures.append(f'work_final_v90.txt missing {token!r}')
+          source=Path('app/lib/main_online.dart').read_text()
+          for token in ['pw.Transform.rotate','pw.RotatedBox','Matrix4.rotation','quarterTurns']:
+              if token in source: failures.append(f'rotation construct present: {token}')
+          report='\n'.join(notes)+'\n\n'+('PASS: content present; no text bbox outside page; no suspicious vertical text; rendered pages keep safe edge margin.' if not failures else 'FAIL:\n'+'\n'.join(failures))+'\n'
+          Path('qa/pdf_v90_final/QA_REPORT.txt').write_text(report)
+          print(report)
+          if failures: raise SystemExit(1)
+          PY
+
+      - name: Build APK v90
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-number=58 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Package artifacts
+        run: |
+          cp app/build/app/outputs/flutter-apk/app-release.apk RC-Abastecimento-v90-full-qa.apk
+          sha256sum RC-Abastecimento-v90-full-qa.apk | tee RC-Abastecimento-v90-full-qa.sha256.txt
+          mkdir -p qa/v90_source
+          cp app/lib/main_online.dart app/lib/v29_features.dart app/lib/v30_features.dart app/lib/v31_features.dart app/pubspec.yaml qa/v90_source/
+
+      - name: Commit v90 approved source and PDF QA evidence
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/v90_source qa/pdf_v90_final
+          if ! git diff --cached --quiet; then
+            git commit -m "test: record v90 approved source and PDF QA evidence"
+            git push origin HEAD:fix/rc-abastecimento-v90-full-qa
+          fi
+
+      - name: Upload v90 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v90-approved-source
+          path: qa/v90_source
+          retention-days: 30
+
+      - name: Upload APK and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v90-full-qa
+          path: |
+            RC-Abastecimento-v90-full-qa.apk
+            RC-Abastecimento-v90-full-qa.sha256.txt
+          retention-days: 30

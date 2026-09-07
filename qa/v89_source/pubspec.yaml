@@ -1,0 +1,31 @@
+name: rc_abastecimento
+
+description: R&C Abastecimento online para operação compartilhada de combustível.
+publish_to: "none"
+version: 0.4.0+4
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  supabase_flutter: ^2.9.1
+  connectivity_plus: ^6.1.4
+  crypto: ^3.0.6
+  path_provider: ^2.1.5
+  image_picker: ^1.1.2
+  geolocator: ^13.0.2
+  geocoding: ^4.0.0
+  pdf: ^3.11.3
+  printing: ^5.14.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^5.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/MaterialIcons-Regular.otf

@@ -1,0 +1,50 @@
+name: Materialize v89 source for v90 QA
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-materialize-v89-source.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  actions: read
+
+jobs:
+  materialize:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - name: Restore exact validated v89 source artifact
+        run: |
+          rm -rf /tmp/v89src /tmp/v89src.zip qa/v89_source
+          mkdir -p /tmp/v89src qa/v89_source
+          curl -L --fail --silent --show-error \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${{ github.repository }}/actions/artifacts/9998603627/zip" \
+            -o /tmp/v89src.zip
+          unzip -q /tmp/v89src.zip -d /tmp/v89src
+          if [ -d /tmp/v89src/app/lib ]; then
+            cp -r /tmp/v89src/app/lib qa/v89_source/lib
+            cp /tmp/v89src/app/pubspec.yaml qa/v89_source/pubspec.yaml
+          else
+            cp -r /tmp/v89src/lib qa/v89_source/lib
+            cp /tmp/v89src/pubspec.yaml qa/v89_source/pubspec.yaml
+          fi
+      - name: Commit source snapshot
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/v89_source
+          if git diff --cached --quiet; then
+            echo "No changes"
+          else
+            git commit -m "chore: materialize exact v89 source for v90 QA"
+            git push origin HEAD:fix/rc-abastecimento-v90-full-qa
+          fi

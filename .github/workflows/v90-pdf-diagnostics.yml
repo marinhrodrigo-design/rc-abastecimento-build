@@ -1,0 +1,102 @@
+name: Diagnose R&C Abastecimento v90 PDF
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-pdf-diagnostics.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pdf-diagnostics:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Tools
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+          python3 -m pip install --quiet pillow
+      - name: Prepare app
+        run: |
+          rm -rf app qa/pdf_v90_diag
+          flutter create --platforms=android --org com.rc --project-name rc_abastecimento app >/dev/null
+          rm -rf app/lib app/test
+          cp -r qa/v89_source/lib app/lib
+          cp qa/v89_source/pubspec.yaml app/pubspec.yaml
+          mkdir -p app/assets app/test app/qa_output qa/pdf_v90_diag
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" app/assets/MaterialIcons-Regular.otf
+          cp tool/apply_v90_full_qa_fixes.py app/apply_v90_full_qa_fixes.py
+          (cd app && python3 apply_v90_full_qa_fixes.py && flutter pub get >/dev/null)
+          cp qa/v90_pdf_stress_test.dart app/test/pdf_v90_stress_test.dart
+      - name: Generate PDFs
+        working-directory: app
+        run: flutter test test/pdf_v90_stress_test.dart --reporter expanded
+      - name: Diagnose rendered PDFs
+        run: |
+          set +e
+          for f in app/qa_output/*.pdf; do
+            b=$(basename "$f" .pdf)
+            cp "$f" "qa/pdf_v90_diag/$b.pdf"
+            pdfinfo "$f" > "qa/pdf_v90_diag/$b.pdfinfo.txt"
+            pdftotext -layout "$f" "qa/pdf_v90_diag/$b.txt"
+            pdftotext -bbox-layout "$f" "qa/pdf_v90_diag/$b.bbox.html"
+            pdftoppm -png -r 150 "$f" "qa/pdf_v90_diag/$b" >/dev/null 2>&1
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          from PIL import Image
+          import re, html
+          failures=[]; notes=[]
+          for p in sorted(Path('qa/pdf_v90_diag').glob('*.bbox.html')):
+            t=p.read_text(errors='replace')
+            pages=re.findall(r'<page width="([0-9.]+)" height="([0-9.]+)">(.*?)</page>',t,re.S)
+            notes.append(f'{p.name}: pages={len(pages)}')
+            for pi,(ws,hs,body) in enumerate(pages,1):
+              w,h=float(ws),float(hs)
+              for xmin,ymin,xmax,ymax,text in re.findall(r'<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">(.*?)</word>',body,re.S):
+                x1,y1,x2,y2=map(float,(xmin,ymin,xmax,ymax))
+                if x1<-.2 or y1<-.2 or x2>w+.2 or y2>h+.2:
+                  failures.append(f'{p.name} page {pi}: OUTSIDE {html.unescape(text)!r} bbox={x1,y1,x2,y2} page={w,h}')
+              vertical=0
+              for x1,y1,x2,y2 in re.findall(r'<line xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">',body):
+                if float(x2)-float(x1)<3 and float(y2)-float(y1)>8: vertical+=1
+              if vertical: failures.append(f'{p.name} page {pi}: suspicious_vertical_lines={vertical}')
+          for p in sorted(Path('qa/pdf_v90_diag').glob('*.png')):
+            im=Image.open(p).convert('L'); mask=im.point(lambda x:255 if x<245 else 0); bbox=mask.getbbox()
+            if bbox:
+              x1,y1,x2,y2=bbox; margin=min(x1,y1,im.width-x2,im.height-y2)
+              notes.append(f'{p.name}: image={im.size} content_bbox={bbox} edge_margin_px={margin}')
+              if margin<6: failures.append(f'{p.name}: CONTENT_TOUCHES_EDGE margin={margin}px')
+          fuel=Path('qa/pdf_v90_diag/fuel_report_v90.txt').read_text(errors='replace')
+          work=Path('qa/pdf_v90_diag/work_final_v90.txt').read_text(errors='replace')
+          fuel_tokens=['Nº: 0001','CB99','123456','9876.5','222222','12345.6','XYZ9Z99','LOCALIZACAO_QA','RESPONSÁVEL DA OBRA PDF QA','HYDRA ENGENHARIA PDF QA LTDA','CLIENTE RECEBEDOR PDF QA','NF-12345678901234567890123456789012345678901234','R$ 7,89','R$ 973,63']
+          work_tokens=['OBRA FINAL PDF QA','034-999','XYZ9Z99','NF-12345678901234567890123456789012345678901234','ADMINISTRADOR PDF QA']
+          for tok in fuel_tokens:
+            if tok not in fuel: failures.append(f'fuel_report_v90.txt: MISSING {tok!r}')
+          for tok in work_tokens:
+            if tok not in work: failures.append(f'work_final_v90.txt: MISSING {tok!r}')
+          report='\n'.join(notes)+'\n\n'+('PASS' if not failures else 'FAIL\n'+'\n'.join(failures))+'\n'
+          Path('qa/pdf_v90_diag/QA_REPORT.txt').write_text(report)
+          Path('qa/pdf_v90_diag/FAILED.flag').write_text('1\n' if failures else '0\n')
+          print(report)
+          PY
+      - name: Commit diagnostics
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/pdf_v90_diag
+          git commit -m "test: persist v90 PDF diagnostics"
+          git push origin HEAD:fix/rc-abastecimento-v90-full-qa
+      - name: Enforce diagnostics
+        run: |
+          test "$(cat qa/pdf_v90_diag/FAILED.flag)" = "0"

@@ -1,0 +1,181 @@
+name: v90 PDF baseline QA
+
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-pdf-baseline-qa.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  pdf-qa:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: Install PDF inspection tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq poppler-utils
+      - name: Create Flutter QA app from exact v89 source
+        run: |
+          rm -rf app qa/pdf_v89_baseline
+          flutter create --platforms=android --org com.rc --project-name rc_abastecimento app >/dev/null
+          rm -rf app/lib app/test
+          cp -r qa/v89_source/lib app/lib
+          cp qa/v89_source/pubspec.yaml app/pubspec.yaml
+          mkdir -p app/assets app/test app/qa_output qa/pdf_v89_baseline
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" app/assets/MaterialIcons-Regular.otf
+          cd app && flutter pub get >/dev/null
+      - name: Create PDF stress generator
+        run: |
+          cat > app/test/pdf_v90_stress_test.dart <<'DART'
+          import 'dart:io';
+          import 'package:flutter_test/flutter_test.dart';
+          import 'package:rc_abastecimento/main_online.dart';
+
+          String longText(String marker) => '$marker - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.';
+
+          Map<String,dynamic> base(String code) => <String,dynamic>{
+            'id': 9001,
+            'code': code,
+            'created_at': '2026-09-06T22:05:00-03:00',
+            'status': 'finalized',
+            'liters': 123.4,
+            'fuel_type': 'Diesel S10',
+            'source_tank': 'CB99',
+            'source_tank_name': 'Comboio QA 99',
+            'source_tank_type': 'comboio',
+            'work': 'OBRA PDF QA - Complexo Industrial com Nome Muito Extenso',
+            'work_responsible': 'Responsável da Obra PDF QA com Nome Muito Extenso',
+            'work_company_name': 'EMPRESA CLIENTE PDF QA LTDA - DENOMINAÇÃO EMPRESARIAL EXTENSA',
+            'operator': 'OPERADOR PDF QA COM NOME COMPLETO EXTENSO',
+            'receiver': 'RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO',
+            'receiver_company': 'EMPRESA RECEBEDORA PDF QA LTDA',
+            'location_address': longText('LOCALIZACAO_QA'),
+            'notes': longText('OBSERVACAO_QA'),
+            'sale_price_per_liter': 7.89,
+            'unit_cost': 5.43,
+            'total_value': 973.63,
+            'buyer_company_name_snapshot': 'COMPRADORA_QA_LTDA',
+            'seller_company_name_snapshot': 'VENDEDORA_QA_LTDA',
+            'equipment_owner_name_snapshot': 'PROPRIETARIA_QA_LTDA',
+            'asset_number': '034-999',
+            'asset_plate': 'ABC1D23',
+            'asset_model': 'MARCA MODELO EXTENSO PDF QA',
+            'latitude': -19.123456,
+            'longitude': -43.654321,
+            'lubricated': true,
+          };
+
+          void main() {
+            TestWidgetsFlutterBinding.ensureInitialized();
+            testWidgets('generate all PDF layout stress cases', (tester) async {
+              await tester.runAsync(() async {
+                final items = <Map<String,dynamic>>[];
+                final km = base('CB99-AB-000001')..addAll({'type':'fueling','measurement_type':'km','km_value':123456,'hourmeter_value':null});
+                final hour = base('CB99-AB-000002')..addAll({'id':9002,'type':'fueling','measurement_type':'hourmeter','km_value':null,'hourmeter_value':9876.5,'asset_plate':'','asset_number':'034-998'});
+                final both = base('CB99-AB-000003')..addAll({'id':9003,'type':'fueling','measurement_type':'both','km_value':222222,'hourmeter_value':12345.6});
+                final none = base('CB99-AB-000004')..addAll({'id':9004,'type':'fueling','measurement_type':'none','km_value':null,'hourmeter_value':null,'third_party_plate':'XYZ9Z99','third_party_description':'EQUIPAMENTO TERCEIRO PDF QA COM DESCRIÇÃO MUITO EXTENSA','third_party_company':'TERCEIRA_QA_LTDA','asset_number':null,'asset_plate':null,'asset_model':null});
+                final transfer = base('CB99-TR-000001')..addAll({'id':9005,'type':'tank_transfer','transfer_kind':'comboio_to_comboio','destination_tank':'CB98','destination_tank_type':'comboio','receiver_responsible':'RECEBEDOR TRANSFERÊNCIA QA','donor_responsible':'DOADOR TRANSFERÊNCIA QA'});
+                final refinery = base('TE99-ER-000001')..addAll({'id':9006,'type':'refinery_entry','source_tank':null,'destination_tank':'TE99','destination_tank_type':'stationary','invoice_numbers':['NF-QA-12345678901234567890'],'seller_company_name_snapshot':'FORNECEDOR REFINARIA PDF QA LTDA','buyer_company_name_snapshot':'COMPRADORA REFINARIA PDF QA LTDA'});
+                items.addAll([km,hour,both,none,transfer,refinery]);
+                final bytes = await FuelPdfReport.build(items);
+                await File('qa_output/fuel_report_stress.pdf').writeAsBytes(bytes, flush:true);
+
+                final snapshot = <String,dynamic>{
+                  'work': <String,dynamic>{
+                    'name':'OBRA FINAL PDF QA COM NOME MUITO EXTENSO PARA VALIDAR QUEBRA DE LINHA',
+                    'responsible':'RESPONSÁVEL FINAL PDF QA COM NOME COMPLETO MUITO EXTENSO',
+                    'location':longText('LOCAL_OBRA_FINAL_QA'),
+                    'company_name':'CLIENTE FINAL PDF QA LTDA COM DENOMINAÇÃO EMPRESARIAL MUITO EXTENSA',
+                    'company_document':'12.345.678/0001-90',
+                    'status':'finalized',
+                    'finalized_at':'2026-09-06T22:10:00-03:00',
+                  },
+                  'summary': <String,dynamic>{'movement_count':6,'fueling_count':4,'fueling_liters':493.6,'purchase_cost_total':2680.25,'sale_total':3894.52,'profit_total':1214.27},
+                  'fuel_summary': <dynamic>[<String,dynamic>{'fuel_type':'Diesel S10','liters':493.6,'fueling_count':4}],
+                  'assets': <dynamic>[
+                    <String,dynamic>{'kind':'own','label':'034-999 • ATIVO PRÓPRIO PDF QA COM MODELO EXTREMAMENTE COMPRIDO','asset_number':'034-999','plate':'ABC1D23','owner_company':'PROPRIETARIA FINAL QA LTDA','fueling_count':3,'liters':370.2},
+                    <String,dynamic>{'kind':'third_party','label':'XYZ9Z99 • EQUIPAMENTO TERCEIRO PDF QA COM DESCRIÇÃO EXTREMAMENTE COMPRIDA','plate':'XYZ9Z99','description':'EQUIPAMENTO TERCEIRO PDF QA','owner_company':'TERCEIRA FINAL QA LTDA','fueling_count':1,'liters':123.4},
+                  ],
+                  'movements': items,
+                  'nfs': <dynamic>[<String,dynamic>{'invoice_number':'NF-QA-12345678901234567890','supplier_name':'FORNECEDOR FINAL PDF QA LTDA','fuel_type':'Diesel S10','liters_used_by_work':493.6,'cost_used_by_work':2680.25,'received_at':'2026-09-06T20:00:00-03:00','total_liters':1000,'remaining_liters':506.4,'status':'open'}],
+                  'lineage': <dynamic>[<String,dynamic>{'movement_id':9006,'code':'TE99-ER-000001','created_at':'2026-09-06T20:00:00-03:00','type':'refinery_entry','lot_id':777,'invoice_number':'NF-QA-12345678901234567890','liters':1000,'source':'REFINARIA','destination':'TE99'}],
+                  'audit': <dynamic>[<String,dynamic>{'created_at':'2026-09-06T22:12:00-03:00','user_name':'ADMINISTRADOR PDF QA','action':'CORREÇÃO DE TESTE COM TEXTO EXTENSO PARA VALIDAR LAYOUT','record_id':'9001'}],
+                };
+                final workBytes = await WorkFinalPdf.build(snapshot);
+                await File('qa_output/work_final_stress.pdf').writeAsBytes(workBytes, flush:true);
+              });
+            });
+          }
+          DART
+      - name: Generate PDFs
+        working-directory: app
+        run: flutter test test/pdf_v90_stress_test.dart --reporter expanded
+      - name: Render and inspect PDFs
+        run: |
+          set -e
+          for f in app/qa_output/*.pdf; do
+            b=$(basename "$f" .pdf)
+            pdfinfo "$f" > "qa/pdf_v89_baseline/${b}.pdfinfo.txt"
+            pdftotext -layout "$f" "qa/pdf_v89_baseline/${b}.txt"
+            pdftotext -bbox-layout "$f" "qa/pdf_v89_baseline/${b}.bbox.html"
+            pdftoppm -png -r 120 "$f" "qa/pdf_v89_baseline/${b}" >/dev/null 2>&1
+            cp "$f" "qa/pdf_v89_baseline/${b}.pdf"
+          done
+          python3 - <<'PY'
+          from pathlib import Path
+          import re, html
+          out=[]
+          failures=[]
+          for p in sorted(Path('qa/pdf_v89_baseline').glob('*.bbox.html')):
+              t=p.read_text(errors='replace')
+              pages=re.findall(r'<page width="([0-9.]+)" height="([0-9.]+)">(.*?)</page>',t,re.S)
+              out.append(f'{p.name}: pages={len(pages)}')
+              for pi,(ws,hs,body) in enumerate(pages,1):
+                  w,h=float(ws),float(hs)
+                  words=re.findall(r'<word xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">(.*?)</word>',body,re.S)
+                  for xmin,ymin,xmax,ymax,text in words:
+                      x1,y1,x2,y2=map(float,(xmin,ymin,xmax,ymax))
+                      if x1 < -0.2 or y1 < -0.2 or x2 > w+0.2 or y2 > h+0.2:
+                          failures.append(f'{p.name} page {pi}: out-of-page text {html.unescape(text)!r} bbox={x1,y1,x2,y2} page={w,h}')
+                  lines=re.findall(r'<line xMin="([0-9.]+)" yMin="([0-9.]+)" xMax="([0-9.]+)" yMax="([0-9.]+)">',body)
+                  suspicious=sum(1 for x1,y1,x2,y2 in lines if float(x2)-float(x1)<3 and float(y2)-float(y1)>8)
+                  if suspicious:
+                      failures.append(f'{p.name} page {pi}: {suspicious} suspicious vertical/narrow text line(s)')
+          source=Path('qa/v89_source/lib/main_online.dart').read_text()
+          for token in ['pw.Transform.rotate','pw.RotatedBox','Matrix4.rotation','quarterTurns']:
+              if token in source:
+                  failures.append(f'PDF/source rotation token present: {token}')
+          required={
+              'fuel_report_stress.txt':['CB99-AB-000001','KM','123456','Horímetro','9876.5','LOCALIZACAO_QA','NF-QA-12345678901234567890','XYZ9Z99'],
+              'work_final_stress.txt':['OBRA FINAL PDF QA','034-999','XYZ9Z99','NF-QA-12345678901234567890','ADMINISTRADOR PDF QA'],
+          }
+          for name,tokens in required.items():
+              text=(Path('qa/pdf_v89_baseline')/name).read_text(errors='replace')
+              for token in tokens:
+                  if token not in text:
+                      failures.append(f'{name}: missing expected text {token!r}')
+          report='\n'.join(out)+"\n\n"+('PASS: no out-of-page text bbox, no suspicious vertical lines, required data present.' if not failures else 'FAIL:\n'+'\n'.join(failures))+'\n'
+          Path('qa/pdf_v89_baseline/QA_REPORT.txt').write_text(report)
+          print(report)
+          if failures:
+              raise SystemExit(1)
+          PY
+      - name: Commit baseline renders and report
+        if: always()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add qa/pdf_v89_baseline
+          if git diff --cached --quiet; then exit 0; fi
+          git commit -m "test: record v89 PDF stress render baseline"
+          git push origin HEAD:fix/rc-abastecimento-v90-full-qa

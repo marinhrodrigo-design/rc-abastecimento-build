@@ -1,0 +1,138 @@
+Empresa não cadastrada
+CNPJ: -
+Endereço: -
+
+
+Relatório Final da Obra
+
+   Obra                                       OBRA FINAL PDF QA COM NOME MUITO EXTENSO PARA VALIDAR
+                                              QUEBRA DE LINHA
+
+   Empresa da obra                            CLIENTE FINAL PDF QA LTDA COM DENOMINAÇÃO EMPRESARIAL
+                                              MUITO EXTENSA
+
+   Responsável da obra                        RESPONSÁVEL FINAL PDF QA COM NOME COMPLETO MUITO
+                                              EXTENSO
+
+   Local                                      LOCAL_OBRA_FINAL_QA - Avenida Presidente Juscelino Kubitschek de
+                                              Oliveira, 12345, Setor Industrial, Bairro Muito Extenso, Município de Nome
+                                              Comprido - MG - complemento galpão administrativo bloco operacional,
+                                              observação completa para testar quebra automática de linhas sem
+                                              ultrapassar margens e sem texto em orientação vertical.
+
+   Início                                     -
+
+   Finalização                                07/09/2026 01:10
+
+
+
+
+Resumo geral
+Registros vinculados                      6
+
+Abastecimentos                            4
+
+Volume abastecido                         493.6 L
+
+Custo do combustível utilizado            R$ 2680,25
+
+Valor de venda                            R$ 3894,52
+
+Lucro total                               R$ 1214,27
+
+
+
+
+Documento gerado automaticamente pelo R&C Abastecimento. Os registros e a rastreabilidade permanecem armazenados no sistema.
+Empresa não cadastrada
+CNPJ: -
+Endereço: -
+
+
+Detalhamento do Relatório Final
+Consumo por combustível
+Diesel S10                               493.6 L     4 abastecimento(s)
+
+
+Ativos e equipamentos atendidos
+Ativo próprio 034-999 ATIVO              Proprietário: PROPRIETARIA FINAL QA LTDA           370.2 L    3 registro(s)
+PRÓPRIO PDF QA COM MODELO
+EXTREMAMENTE COMPRIDO
+
+Equipamento de terceiros XYZ9Z99 Proprietário: TERCEIRA FINAL QA LTDA                  123.4 L   1 registro(s)
+EQUIPAMENTO TERCEIRO PDF QA
+COM DESCRIÇÃO EXTREMAMENTE
+COMPRIDA
+
+
+Notas Fiscais utilizadas
+NF NF-QA-12345678901234567890            Fornecedor: FORNECEDOR FINAL PDF QA LTDA                Usado na obra: 493.6 L
+                                         Custo: R$ 2680,25
+
+
+Registros da obra
+  CB99-AB-000001        Abastecimento       123.4 L
+  07/09/2026 01:05   034-999    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+  CB99-AB-000002        Abastecimento       123.4 L
+  07/09/2026 01:05   034-998    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+  CB99-AB-000003        Abastecimento       123.4 L
+  07/09/2026 01:05   034-999    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+  CB99-AB-000004        Abastecimento       123.4 L
+  07/09/2026 01:05   XYZ9Z99     OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+  CB99-TR-000001        Transferência      123.4 L
+Empresa não cadastrada
+CNPJ: -
+Endereço: -
+
+
+Detalhamento do Relatório Final
+  07/09/2026 01:05   034-999    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+  TE99-ER-000001       Entrada da refinaria      123.4 L
+  07/09/2026 01:05   034-999    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  LOCALIZACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito Extenso,
+  Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação completa para testar
+  quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+
+
+Rastreabilidade dos lotes usados
+NF NF-QA-12345678901234567890            Entrada da refinaria     REFINARIA     TE99   1000.0 L    06/09/2026 23:00
+TE99-ER-000001
+
+
+Auditoria e correções
+CORREÇÃO DE TESTE COM TEXTO              07/09/2026 01:12       Registro 9001
+EXTENSO PARA VALIDAR LAYOUT
+ADMINISTRADOR PDF QA
+

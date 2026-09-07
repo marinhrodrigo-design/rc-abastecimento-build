@@ -1,0 +1,230 @@
+Empresa não cadastrada
+
+            Abastecimento                  CB99     Nº: 0001
+            07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+     Empresa fornecedora/vendedora do combustível                  Empresa recebedora/compradora
+     Empresa não cadastrada                                        -
+     Obra                                                          Responsável
+     OBRA PDF QA - Complexo Industrial com Nome Muito              -
+     Extenso
+     Equipamento abastecido                                        Proprietário do equipamento
+     034-999 - MARCA MODELO EXTENSO PDF QA                         -
+     Localização                                                   Combustível
+     LOCALIZACAO_QA - Avenida Presidente Juscelino                 Diesel S10
+     Kubitschek de Oliveira, 12345, Setor Industrial, Bairro
+     Muito Extenso, Município de Nome Comprido - MG -
+     complemento galpão administrativo bloco operacional,
+     observação completa para testar quebra automática
+     de linhas sem ultrapassar margens e sem texto em
+     orientação vertical.
+     KM
+     123456
+     Quem abasteceu                                                Responsável pelo recebimento do abastecimento
+     OPERADOR PDF QA COM NOME COMPLETO                             RECEBEDOR PDF QA COM NOME COMPLETO
+     EXTENSO                                                       EXTENSO
+     Preço de venda/L                                              Valor total
+     R$ 7,89                                                       R$ 973,63
+
+     Volume                                                        Totalizador
+     123.4 L                                                       -
+     Observação
+     OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+     Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+     completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+    Assinatura de quem recebeu                                    Assinatura de quem abasteceu
+
+                   Assinatura não disponível                                     Assinatura não disponível
+
+ RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO                    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+Empresa não cadastrada
+
+            Abastecimento                  CB99     Nº: 0002
+            07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+     Empresa fornecedora/vendedora do combustível                  Empresa recebedora/compradora
+     Empresa não cadastrada                                        -
+     Obra                                                          Responsável
+     OBRA PDF QA - Complexo Industrial com Nome Muito              -
+     Extenso
+     Equipamento abastecido                                        Proprietário do equipamento
+     034-998 - MARCA MODELO EXTENSO PDF QA                         -
+     Localização                                                   Combustível
+     LOCALIZACAO_QA - Avenida Presidente Juscelino                 Diesel S10
+     Kubitschek de Oliveira, 12345, Setor Industrial, Bairro
+     Muito Extenso, Município de Nome Comprido - MG -
+     complemento galpão administrativo bloco operacional,
+     observação completa para testar quebra automática
+     de linhas sem ultrapassar margens e sem texto em
+     orientação vertical.
+     Horímetro
+     9876.5
+     Quem abasteceu                                                Responsável pelo recebimento do abastecimento
+     OPERADOR PDF QA COM NOME COMPLETO                             RECEBEDOR PDF QA COM NOME COMPLETO
+     EXTENSO                                                       EXTENSO
+     Preço de venda/L                                              Valor total
+     R$ 7,89                                                       R$ 973,63
+
+     Volume                                                        Totalizador
+     123.4 L                                                       -
+     Observação
+     OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+     Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+     completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+    Assinatura de quem recebeu                                    Assinatura de quem abasteceu
+
+                   Assinatura não disponível                                     Assinatura não disponível
+
+ RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO                    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+Empresa não cadastrada
+
+            Abastecimento                  CB99     Nº: 0003
+            07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+     Empresa fornecedora/vendedora do combustível                  Empresa recebedora/compradora
+     Empresa não cadastrada                                        -
+     Obra                                                          Responsável
+     OBRA PDF QA - Complexo Industrial com Nome Muito              -
+     Extenso
+     Equipamento abastecido                                        Proprietário do equipamento
+     034-999 - MARCA MODELO EXTENSO PDF QA                         -
+     Localização                                                   Combustível
+     LOCALIZACAO_QA - Avenida Presidente Juscelino                 Diesel S10
+     Kubitschek de Oliveira, 12345, Setor Industrial, Bairro
+     Muito Extenso, Município de Nome Comprido - MG -
+     complemento galpão administrativo bloco operacional,
+     observação completa para testar quebra automática
+     de linhas sem ultrapassar margens e sem texto em
+     orientação vertical.
+     KM                                                            Horímetro
+     222222                                                        12345.6
+     Quem abasteceu                                                Responsável pelo recebimento do abastecimento
+     OPERADOR PDF QA COM NOME COMPLETO                             RECEBEDOR PDF QA COM NOME COMPLETO
+     EXTENSO                                                       EXTENSO
+     Preço de venda/L                                              Valor total
+     R$ 7,89                                                       R$ 973,63
+
+     Volume                                                        Totalizador
+     123.4 L                                                       -
+     Observação
+     OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+     Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+     completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+    Assinatura de quem recebeu                                    Assinatura de quem abasteceu
+
+                   Assinatura não disponível                                     Assinatura não disponível
+
+ RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO                    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+Empresa não cadastrada
+
+            Abastecimento                  CB99     Nº: 0004
+            07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+     Empresa fornecedora/vendedora do combustível                  Empresa recebedora/compradora
+     Empresa não cadastrada                                        -
+     Obra                                                          Responsável
+     OBRA PDF QA - Complexo Industrial com Nome Muito              -
+     Extenso
+     Equipamento abastecido                                        Proprietário do equipamento
+     XYZ9Z99 - EQUIPAMENTO TERCEIRO PDF QA                         -
+     COM DESCRIÇÃO MUITO EXTENSA
+     Localização                                                   Combustível
+     LOCALIZACAO_QA - Avenida Presidente Juscelino                 Diesel S10
+     Kubitschek de Oliveira, 12345, Setor Industrial, Bairro
+     Muito Extenso, Município de Nome Comprido - MG -
+     complemento galpão administrativo bloco operacional,
+     observação completa para testar quebra automática
+     de linhas sem ultrapassar margens e sem texto em
+     orientação vertical.
+     Quem abasteceu                                                Responsável pelo recebimento do abastecimento
+     OPERADOR PDF QA COM NOME COMPLETO                             RECEBEDOR PDF QA COM NOME COMPLETO
+     EXTENSO                                                       EXTENSO
+     Preço de venda/L                                              Valor total
+     R$ 7,89                                                       R$ 973,63
+
+     Volume                                                        Totalizador
+     123.4 L                                                       -
+     Observação
+     OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+     Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+     completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+    Assinatura de quem recebeu                                    Assinatura de quem abasteceu
+
+                   Assinatura não disponível                                     Assinatura não disponível
+
+ RECEBEDOR PDF QA COM NOME COMPLETO EXTENSO                    OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+Empresa não cadastrada
+
+          Transferência                   034-999    MARCA MODELO EXTENSO PDF QA
+          07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+     Empresa
+     Empresa não cadastrada
+     Tipo de movimento
+     Transferência interna      sem venda
+     Origem
+     CB99
+
+     Destino
+     CB98
+
+     Volume
+     123.4 L
+
+     Responsável doador
+     DOADOR TRANSFERÊNCIA QA
+
+     Responsável recebedor
+     RECEBEDOR TRANSFERÊNCIA QA
+
+     NF(s)/Lote(s) envolvidos
+     -
+     Observações
+     OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+     Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+     completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+
+
+    Assinatura responsável doador                                Assinatura responsável recebedor
+
+                   Assinatura não disponível                                   Assinatura não disponível
+
+ DOADOR TRANSFERÊNCIA QA                                     RECEBEDOR TRANSFERÊNCIA QA
+Empresa não cadastrada
+       Entrada da refinaria                034-999         MARCA MODELO EXTENSO PDF
+       QA
+       07/09/2026 01:05 | OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+
+  Empresa compradora
+  Empresa não cadastrada
+
+  Fornecedor do combustível
+  -
+
+  Nota Fiscal / lote
+  -
+
+  Combustível
+  Diesel S10
+
+  Volume recebido
+  123.4 L
+
+  Caminhão-tanque
+  TE99
+
+  Quem registrou
+  OPERADOR PDF QA COM NOME COMPLETO EXTENSO
+  Observações
+  OBSERVACAO_QA - Avenida Presidente Juscelino Kubitschek de Oliveira, 12345, Setor Industrial, Bairro Muito
+  Extenso, Município de Nome Comprido - MG - complemento galpão administrativo bloco operacional, observação
+  completa para testar quebra automática de linhas sem ultrapassar margens e sem texto em orientação vertical.
+

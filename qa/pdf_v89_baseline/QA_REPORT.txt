@@ -1,0 +1,6 @@
+fuel_report_stress.bbox.html: pages=6
+work_final_stress.bbox.html: pages=3
+
+FAIL:
+fuel_report_stress.txt: missing expected text 'CB99-AB-000001'
+fuel_report_stress.txt: missing expected text 'NF-QA-12345678901234567890'

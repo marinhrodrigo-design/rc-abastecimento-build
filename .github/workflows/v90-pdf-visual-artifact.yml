@@ -1,0 +1,21 @@
+name: Package v90 PDF visual evidence
+on:
+  push:
+    branches: ['fix/rc-abastecimento-v90-full-qa']
+    paths:
+      - '.github/workflows/v90-pdf-visual-artifact.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: fix/rc-abastecimento-v90-full-qa
+      - uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v90-PDF-visual-evidence
+          path: qa/pdf_v90_diag
+          retention-days: 7

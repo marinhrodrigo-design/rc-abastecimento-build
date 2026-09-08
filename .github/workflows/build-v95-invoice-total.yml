@@ -1,0 +1,185 @@
+name: Build R&C Abastecimento v95 Invoice Total
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths: ['.github/workflows/build-v95-invoice-total.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v95-invoice-total
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/rc-abastecimento
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Download exact validated v94 source
+        uses: actions/download-artifact@v4
+        with:
+          name: RC-Abastecimento-v94-arrival-mode-source
+          path: /tmp/v94src
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34168394203
+
+      - name: Restore v94 source and apply v95 invoice total
+        run: |
+          rm -rf app/lib
+          cp -r /tmp/v94src/lib app/lib
+          cp /tmp/v94src/pubspec.yaml app/pubspec.yaml
+          cp tool/apply_v95_invoice_total.py app/apply_v95_invoice_total.py
+          cd app
+          python3 apply_v95_invoice_total.py
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)) else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml'); t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t:
+              t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"'); m.write_text(t)
+          g=Path('android/app/build.gradle.kts'); x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          x=x.replace(marker,signing+marker,1)
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Validate v95 invoice total and preserved features
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          alltxt=main+'\n'+Path('lib/v29_features.dart').read_text()+'\n'+Path('lib/v30_features.dart').read_text()+'\n'+Path('lib/v31_features.dart').read_text()
+          required=[
+            "Text('v95'",
+            "Valor total do volume recebido",
+            "Calculado automaticamente: volume recebido × preço de compra/L.",
+            "invoiceTotalPreview",
+            "p_invoice_total_value",
+            "Text('Valor total: ${_fmtMoney(volume * unitCost)}'",
+            "rca_register_fuel_invoice_v94",
+            "Como o combustível chegou à empresa?",
+            "Caminhão-tanque da empresa",
+            "Caminhão da refinaria / fornecedor",
+            "Empresa fornecedora do combustível *",
+            "Editar/corrigir Nota Fiscal",
+            "Localização deve estar ativada",
+            "-AB-${sequence.toString().padLeft(6, '0')}",
+            "_pdfSafeMapV90",
+            "rca_correct_offline_conflict_v89",
+            "rca_cancel_fueling_v87",
+            "rca_session_resume_offline_v88",
+            "_measurementTypeForPdf",
+            "'audit_events_v87'",
+            "rca_sync_app_events_v87",
+          ]
+          missing=[x for x in required if x not in alltxt]
+          if missing: raise SystemExit(f'v95 incomplete: {missing}')
+          if "Text('v94'" in main:
+            raise SystemExit('old v94 label still present')
+          if main.count('Localização deve estar ativada') != 2:
+            raise SystemExit(f'location reminder count={main.count("Localização deve estar ativada")}')
+          print('V95_INVOICE_TOTAL_GATE_PASS')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Build signed APK v95
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-name=1.0.95 --build-number=63 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p release
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/RC-Abastecimento-v95-invoice-total.apk
+          sha256sum release/RC-Abastecimento-v95-invoice-total.apk > release/RC-Abastecimento-v95-invoice-total.sha256.txt
+
+      - name: Upload validated v95 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v95-invoice-total-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-v95-invoice-total
+          path: release/
+          retention-days: 30

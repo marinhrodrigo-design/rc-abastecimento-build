@@ -35,8 +35,6 @@ if count != 1:
     raise SystemExit(f'Expected one v89 visible label, found {count}')
 s = s.replace(version_anchor, "Text('v90'", 1)
 
-# Sanitize dynamic values before they reach the PDF renderer. Helvetica does not
-# reliably render a few UI separator glyphs used by live/server labels.
 helper = r'''dynamic _pdfSafeValueV90(dynamic value) {
   if (value is String) {
     return value
@@ -70,8 +68,6 @@ if s.count(work_build) != 1:
     raise SystemExit(f'Work PDF build anchor count={s.count(work_build)}')
 s = s.replace(work_build, work_build + "    snapshot = _pdfSafeMapV90(snapshot);\n", 1)
 
-# Normalize static strings only inside each PDF class. These classes are in
-# different parts of main_online.dart, so treat their regions independently.
 def pdf_safe(segment: str) -> str:
     return (segment
             .replace('•', '-')
@@ -87,6 +83,59 @@ fuel_start = s.index('class FuelPdfReport {')
 fuel_end = s.index('class AdminUsersOnlineScreen', fuel_start)
 s = s[:fuel_start] + pdf_safe(s[fuel_start:fuel_end]) + s[fuel_end:]
 
+record_start = s.index('  Future<void> recordEventV87(')
+record_end = s.index('  Future<Map<String, dynamic>> syncAuditEventsV87()', record_start)
+record_seg = s[record_start:record_end]
+record_anchor = """  }) async {
+    final uid = _activeUserKeyV78;"""
+record_repl = """  }) async {
+    final normalizedEventTypeV90 = eventType.trim().toLowerCase();
+    if (normalizedEventTypeV90 == 'fueling_field_changed') return;
+    final uid = _activeUserKeyV78;"""
+if record_seg.count(record_anchor) != 1:
+    raise SystemExit(f'Audit record anchor count={record_seg.count(record_anchor)}')
+record_seg = record_seg.replace(record_anchor, record_repl, 1)
+event_type_anchor = "'event_type': eventType.trim().toLowerCase(),"
+if record_seg.count(event_type_anchor) != 1:
+    raise SystemExit(f'Audit event type anchor count={record_seg.count(event_type_anchor)}')
+record_seg = record_seg.replace(event_type_anchor, "'event_type': normalizedEventTypeV90,", 1)
+s = s[:record_start] + record_seg + s[record_end:]
+
+failed_anchor = """      await offlineStore.recordEventV87('fueling_submit_failed',
+          tankId: _intOrNull(widget.source['id']),
+          fuelingEventId: fuelingTraceIdV87,
+          payload: {'error': _friendlyError(e)});"""
+failed_repl = """      final failureMessageV90 = _friendlyError(e);
+      await offlineStore.recordEventV87('fueling_submit_failed',
+          tankId: _intOrNull(widget.source['id']),
+          fuelingEventId: fuelingTraceIdV87,
+          payload: {
+            'error': failureMessageV90,
+            'reason': failureMessageV90,
+            'source_code': widget.source['code'],
+            'work_id': work,
+            'machine_id': machine,
+            'third_party_vehicle_id': third == -1 ? null : third,
+            'third_party_plate': third == -1 ? thirdPlate.text.trim() : null,
+            'third_party_description':
+                third == -1 ? thirdDescription.text.trim() : null,
+            'fuel_type': fuel,
+            'liters': v,
+            'sale_price_per_liter': saleValue,
+            'total_price': v * saleValue,
+            'km': k,
+            'hourmeter': h,
+            'receiver': receiver.text.trim(),
+          });
+      if (offlineStore.backendReadyV81) {
+        try {
+          await offlineStore.syncAuditEventsV87();
+        } catch (_) {}
+      }"""
+if s.count(failed_anchor) != 1:
+    raise SystemExit(f'Fueling failure audit anchor count={s.count(failed_anchor)}')
+s = s.replace(failed_anchor, failed_repl, 1)
+
 required = [
     "_hasValue(st?['plate'])",
     "vehicleLike(st, thirdParty: true)",
@@ -96,6 +145,8 @@ required = [
     "'Foto do KM'",
     "'Foto do Horímetro'",
     "_pdfSafeMapV90",
+    "normalizedEventTypeV90 == 'fueling_field_changed'",
+    "final failureMessageV90 = _friendlyError(e);",
 ]
 missing = [x for x in required if x not in s]
 if missing:

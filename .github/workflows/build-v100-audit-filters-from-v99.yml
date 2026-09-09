@@ -120,7 +120,7 @@ jobs:
             '_pdfSafeMapV90','rca_correct_offline_conflict_v89','rca_cancel_fueling_v87','rca_session_resume_offline_v88',
             '_measurementTypeForPdf',"'audit_events_v87'",'rca_sync_app_events_v87',
             'Variação metrológica','Sobra SB','Físico apurado',
-            'rca_record_transfer_te_v97','rca_record_transfer_v97','rca_metrology_pretransfer_v99',
+            'rca_record_transfer_te_v99','rca_record_transfer_v99','rca_metrology_pretransfer_v99',
             'Nova transferência necessária antes do próximo abastecimento.',
             'rca_record_fueling_v99','rca_metrology_close_empty_v99',
             'Tolerância de auditoria ±6%','Dentro da tolerância de auditoria','Fora da tolerância de auditoria',

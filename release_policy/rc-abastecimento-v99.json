@@ -1,0 +1,23 @@
+{
+  "app": "R&C Abastecimento",
+  "validated_version": "V99",
+  "version_name": "1.0.99",
+  "build_number": 69,
+  "branch": "release/rc-abastecimento",
+  "workflow": ".github/workflows/build-v99-sb-ft-from-v98.yml",
+  "validated_run_id": 34362879163,
+  "validated_job_id": 102504068569,
+  "validated_head_sha": "5f964de0dfe479d80c4010fcd30acc7da5089a15",
+  "source_artifact": "RC-Abastecimento-V99-source",
+  "apk_artifact": "RC-Abastecimento-V99",
+  "apk_sha256": "f19f29509914d44cb4074593bce255eee85aff4e6640e0321dcd2b5dd2968925",
+  "forward_only": true,
+  "rule": "All future releases must restore the exact validated V99 source artifact first, then apply only additive requested changes. Do not rebuild from V98 or earlier and do not remove previously approved features unless explicitly requested by the user.",
+  "v99_additions": [
+    "Sequential SB event per surplus fueling after registered transfer volume is exhausted, scoped to comboio",
+    "Sequential FT event per negative closed transfer cycle, scoped to comboio",
+    "SB/FT linked to metrology transfer cycle, comboio and originating invoice lot allocation(s)",
+    "Per-event liters, percent of transfer, purchase value, sale value and difference",
+    "Cycle-level variation totals preserve V98 dynamic audit tolerance of plus/minus 6 percent based on actual transferred volume"
+  ]
+}

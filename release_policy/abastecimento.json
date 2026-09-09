@@ -1,0 +1,49 @@
+{
+  "app": "R&C Abastecimento",
+  "branch": "release/rc-abastecimento",
+  "approved_version": "1.0.97+67",
+  "visible_version": "v97",
+  "approved_workflow_run_id": 34345970963,
+  "approved_workflow_job_id": 102447521777,
+  "approved_build_commit": "a496573f11e008db039e5c322264cc583e4907d1",
+  "approved_source_artifact": {
+    "name": "RC-Abastecimento-V97-source",
+    "id": 10101919818,
+    "digest": "sha256:fda69980d0b9dde37e6137f44565b6ec6507784da41810bfe3271f0a32781f2a"
+  },
+  "approved_apk_artifact": {
+    "name": "RC-Abastecimento-V97",
+    "id": 10101921951,
+    "artifact_digest": "sha256:4a0429f362b2893bb84412484fa81ac36458beda1ad1d42afac85fd6eba2cf2c",
+    "apk_sha256": "b27e129fb631d405080a402924f19f77b542256897aa82aea93bb9332f767e64"
+  },
+  "forward_only_rule": "Every future version must start from the exact approved V97 source artifact, apply only cumulative changes, preserve all approved features, pass regression/analyze/build/signing gates, and only then become the new approved baseline.",
+  "required_features": [
+    "rca_delete_fuel_user_v1",
+    "Valor total do volume recebido",
+    "rca_register_fuel_invoice_v94",
+    "Editar/corrigir Nota Fiscal",
+    "rca_session_resume_offline_v88",
+    "rca_correct_offline_conflict_v89",
+    "rca_cancel_fueling_v87",
+    "rca_reference_data_v97",
+    "rca_record_fueling_v97",
+    "rca_record_transfer_te_v97",
+    "rca_record_transfer_v97",
+    "rca_metrology_fueling_check_v97",
+    "rca_metrology_close_empty_v97",
+    "rca_metrology_audit_v97",
+    "A transferência entrou nos 6% finais",
+    "Não • CB vazio",
+    "Sim, ainda há",
+    "Sobra SB",
+    "Físico apurado",
+    "Cálculo por transferência: Litros • % • Valor pelo preço de compra • Valor pelo preço de venda."
+  ],
+  "forbidden_regressions": [
+    "±6% as audit tolerance",
+    "metrology_prompt_needed",
+    "metrologyConfirmExtraV96",
+    "rca_delete_driver_user"
+  ]
+}

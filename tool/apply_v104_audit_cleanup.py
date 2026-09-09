@@ -68,9 +68,14 @@ helpers = r'''  bool _isTechnicalAuditV104(Map<String, dynamic> x) {
       }
     }
     final raw = rawRef.trim();
+    final legacy = _auditUsefulReferenceV103(x, rawRef);
     if (raw.isEmpty || raw == '—' || RegExp(r'^\d+$').hasMatch(raw) ||
         _auditLooksTechnicalReferenceV103(raw)) {
       return '—';
+    }
+    if (legacy != '—' && !RegExp(r'^\d+$').hasMatch(legacy) &&
+        !_auditLooksTechnicalReferenceV103(legacy)) {
+      return legacy;
     }
     return raw;
   }

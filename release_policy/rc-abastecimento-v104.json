@@ -1,0 +1,18 @@
+{
+  "app": "R&C Abastecimento",
+  "validated_version": "V104",
+  "validated_run_id": 34395445631,
+  "validated_head_sha": "006bfc188c35328d02fbb51e98a9506afb421c51",
+  "source_artifact": {
+    "id": 10121524530,
+    "name": "RC-Abastecimento-V104-source"
+  },
+  "apk_artifact": {
+    "id": 10121526991,
+    "name": "RC-Abastecimento-V104",
+    "apk_sha256": "24c69670dae233ea0cccbd9f1383b729e6d1e64aeb58a3a92bbe02c257bcf8fd"
+  },
+  "forward_only_rule": "V105+ must start from the exact validated V104 source artifact, or a verified exact copy, and preserve all approved V104 and earlier behavior unless explicitly removed by the user.",
+  "base_version": "V103",
+  "change_scope": "Audit UI cleanup: single scrolling page, concise labels, technical app events separated from main history by default, meaningful operational references only."
+}

@@ -1,0 +1,20 @@
+{
+  "app": "R&C Abastecimento",
+  "validated_version": "V109",
+  "build_name": "1.0.109",
+  "build_number": 79,
+  "workflow_run_id": 34496077331,
+  "workflow_head_sha": "2736060f81f44b5f28139fe2adc1bf957c54dbf4",
+  "source_artifact": {
+    "id": 10160113086,
+    "name": "RC-Abastecimento-V109-source",
+    "artifact_zip_digest": "sha256:930831a979023fa87e68912da7e58551d2897224305002ec28fd4ecb3a98205a"
+  },
+  "apk_artifact": {
+    "id": 10160116299,
+    "name": "RC-Abastecimento-V109",
+    "artifact_zip_digest": "sha256:a68c1d8b45670ad32172b685b2ec403f1bf933b283e1534da9f8c1bc0ff4b217",
+    "apk_sha256": "b9cd1e9d370b8fd628c17cd8e5409030687b6ed831856c919562d2c6301422c1"
+  },
+  "forward_only_rule": "V110+ must start only from exact validated V109 source artifact 10160113086 from workflow run 34496077331, or a cryptographically verified exact copy. Preserve all approved V109 and earlier functionality unless explicitly requested otherwise."
+}

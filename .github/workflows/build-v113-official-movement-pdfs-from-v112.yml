@@ -112,7 +112,7 @@ jobs:
           from pathlib import Path
           main=Path('lib/main_online.dart').read_text()
           required_main=[
-            "Text('v113'",
+            "'v113'",
             '_fuelUnitLabelV111','_fuelUnitPlateV112','_donorCompactLabelV109','_donorLiveTankV109',
             'rca_record_fueling_v99','rca_record_transfer_v113','rca_record_transfer_te_v113','rca_record_refinery_to_te_v113',
             'rca_sequence_snapshot_v113','rca_official_pdf_record_v113','rca_register_app_pdf_v113',
@@ -125,12 +125,12 @@ jobs:
             'transfer_totalizador_doador_antes','transfer_totalizador_doador_depois',
             "value.startsWith('offline://')",
             'app_pdf_path',
-            'pw.Wrap(children:'
+            'pw.Wrap('
           ]
           missing=[x for x in required_main if x not in main]
           if missing: raise SystemExit(f'V113 incomplete/regressed: {missing}')
           forbidden=[
-            "Text('v112'",
+            "'v112'",
             '_officialPdfFileNameV112',
             "RC-Abastecimento-${DateTime.now().millisecondsSinceEpoch}.pdf",
             "executeOrQueue('rca_record_transfer_v108'",

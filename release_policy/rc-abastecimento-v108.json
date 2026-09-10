@@ -1,0 +1,16 @@
+{
+  "validated_version": "V108",
+  "build_name": "1.0.108",
+  "build_number": 78,
+  "workflow_run_id": 34493585579,
+  "workflow_head_sha": "5e2deca47c797eea1ca2104dfbf04a8e31ae9644",
+  "source_artifact_id": 10159076521,
+  "source_artifact_name": "RC-Abastecimento-V108-source",
+  "source_artifact_digest": "sha256:96012f64e65abf5e893dfe8701100a1870f768e2dbb4d5c90e6e20e42405b197",
+  "apk_artifact_id": 10159079327,
+  "apk_artifact_name": "RC-Abastecimento-V108",
+  "apk_artifact_digest": "sha256:d640341570b91e4c8de38d0d69733060753ee3545b17e57a36790f52cac11ce5",
+  "apk_sha256": "0b764b8512f7e4929f5a6310a1b28dd95a78a40c22cefeba0473e43d56d7b0b5",
+  "forward_only_rule": "V109+ must start only from the exact validated V108 source artifact 10159076521 from run 34493585579, or from a cryptographically verified exact copy. Changes are additive unless the user explicitly requests removal. Regression gate, Flutter Analyze, signed APK build, certificate verification and final workflow success are mandatory before declaring a newer version ready.",
+  "v108_requirement": "Every transfer flow requires a donor-unit totalizer photo before and after the transfer. The requirement is enforced in both the app UI and V108 backend RPC wrappers, and both paths are stored in fuel.movements totalizer_photo_before_path / totalizer_photo_after_path."
+}

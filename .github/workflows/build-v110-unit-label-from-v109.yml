@@ -1,1 +1,252 @@
-name: placeholder
+name: Build R&C Abastecimento V110 Unidade Ativo Placa
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths: ['.github/workflows/build-v110-unit-label-from-v109.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v110-unit-label
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/rc-abastecimento
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Download exact validated V109 source
+        uses: actions/download-artifact@v4
+        with:
+          name: RC-Abastecimento-V109-source
+          path: /tmp/v109src
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34496077331
+
+      - name: Restore exact V109 and apply V110 unit label only
+        run: |
+          rm -rf app/lib
+          cp -r /tmp/v109src/lib app/lib
+          cp /tmp/v109src/pubspec.yaml app/pubspec.yaml
+          cd app
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart')
+          s=p.read_text()
+          helper=r'''String _unitInUseLabelV110(Map<String, dynamic> currentUnit,
+              Map<String, dynamic>? referenceData) {
+            final tankId = _intOrNull(currentUnit['tank_id']);
+            Map<String, dynamic>? tank;
+            if (referenceData != null && tankId != null) {
+              for (final x in _rows(referenceData['tanks'])) {
+                if (_intOrNull(x['id']) == tankId) {
+                  tank = x;
+                  break;
+                }
+              }
+            }
+            final source = tank ?? currentUnit;
+            final code = '${source['code'] ?? currentUnit['unit_code'] ?? ''}'.trim();
+            final type = '${source['tank_type'] ?? currentUnit['tank_type'] ?? ''}'.trim();
+            String identity = '';
+            String plate = '';
+
+            final machineId = _intOrNull(source['machine_id']);
+            if (referenceData != null && machineId != null) {
+              for (final x in _rows(referenceData['machines'])) {
+                if (_intOrNull(x['id']) != machineId) continue;
+                identity = '${x['numeroAtivo'] ?? source['machine_asset_number'] ?? ''}'.trim();
+                plate = '${x['placa'] ?? ''}'.trim();
+                break;
+              }
+            }
+            if (identity.isEmpty) {
+              identity = '${source['machine_asset_number'] ?? ''}'.trim();
+            }
+
+            if (referenceData != null && identity.isEmpty) {
+              final thirdPartyId = _intOrNull(source['third_party_vehicle_id']);
+              if (thirdPartyId != null) {
+                for (final x in _rows(referenceData['third_party_vehicles'])) {
+                  if (_intOrNull(x['id']) != thirdPartyId) continue;
+                  identity = '${x['description'] ?? ''}'.trim();
+                  plate = '${x['plate'] ?? ''}'.trim();
+                  break;
+                }
+              }
+            }
+
+            if (type == 'stationary') {
+              final name = '${source['name'] ?? currentUnit['unit_name'] ?? ''}'.trim();
+              return [code, name].where((x) => x.isNotEmpty).join(' • ');
+            }
+
+            if (identity.isEmpty) {
+              identity = '${source['name'] ?? currentUnit['unit_name'] ?? ''}'.trim();
+            }
+            return [code, identity, plate]
+                .where((x) => x.isNotEmpty)
+                .toSet()
+                .join(' • ');
+          }
+
+          '''
+          marker='class AdminHomeScreen extends StatefulWidget {'
+          if marker not in s:
+              raise SystemExit('AdminHomeScreen marker not found')
+          s=s.replace(marker,helper+marker,1)
+          if "Text('v109'" not in s:
+              raise SystemExit('V109 visible marker not found')
+          s=s.replace("Text('v109'","Text('v110'",1)
+          old="""    final currentCode = '${currentUnit['unit_code'] ?? ''}'.trim(),
+              currentName = '${currentUnit['unit_name'] ?? ''}'.trim();"""
+          new="""    final currentLabel = _unitInUseLabelV110(currentUnit, ref);"""
+          if old not in s:
+              raise SystemExit('V109 current unit variables not found')
+          s=s.replace(old,new,1)
+          old_if='if (currentCode.isNotEmpty) ...['
+          if old_if not in s:
+              raise SystemExit('Current-unit visibility condition not found')
+          s=s.replace(old_if,'if (currentLabel.isNotEmpty) ...[',1)
+          old_text="'Unidade em uso: $currentCode${currentName.isNotEmpty ? ' • $currentName' : ''}',"
+          if old_text not in s:
+              raise SystemExit('V109 current-unit title not found')
+          s=s.replace(old_text,"'Unidade em uso: $currentLabel',",1)
+          p.write_text(s)
+          PY
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)) else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml'); t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t: t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"'); m.write_text(t)
+          g=Path('android/app/build.gradle.kts'); x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          x=x.replace(marker,signing+marker,1)
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Validate V110 unit identity and preserved V109 features
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          required=[
+            "Text('v110'", '_unitInUseLabelV110', "x['numeroAtivo']", "x['placa']",
+            "source['third_party_vehicle_id']", "x['description']", "x['plate']",
+            "final currentLabel = _unitInUseLabelV110(currentUnit, ref);",
+            "'Unidade em uso: $currentLabel'",
+            '_donorCompactLabelV109','_donorLiveTankV109',
+            'rca_record_transfer_v108','rca_record_transfer_te_v108','rca_record_refinery_to_te_v108',
+            'transfer_totalizador_doador_antes','transfer_totalizador_doador_depois',
+            'As fotos do totalizador da unidade doadora antes e depois da transferência são obrigatórias.',
+            'rca_metrology_audit_v100','SB / FT desta transferência','Tolerância de auditoria ±6%'
+          ]
+          missing=[x for x in required if x not in main]
+          if missing: raise SystemExit(f'V110 incomplete/regressed: {missing}')
+          if "Text('v109'" in main: raise SystemExit('Visible V109 marker remained')
+          if "'Unidade em uso: $currentCode" in main: raise SystemExit('Old verbose current-unit label remained')
+          print('V110_FROM_EXACT_V109_UNIT_ASSET_PLATE_GATE_PASS')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Build signed APK V110
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-name=1.0.110 --build-number=80 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p release
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/RC-Abastecimento-V110.apk
+          sha256sum release/RC-Abastecimento-V110.apk > release/RC-Abastecimento-V110.sha256.txt
+
+      - name: Upload validated V110 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-V110-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30
+
+      - name: Upload V110 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-V110
+          path: release/
+          retention-days: 30

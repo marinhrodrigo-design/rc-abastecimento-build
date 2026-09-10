@@ -1,0 +1,28 @@
+{
+  "schema_version": 1,
+  "project": "R&C Abastecimento",
+  "policy": {
+    "require_exact_version_before_source_claim": true,
+    "require_verified_commit_for_current_source_claim": true,
+    "never_fallback_to_older_version": true,
+    "on_unverified_source": "STOP_AND_REPORT_SOURCE_NOT_LOCATED"
+  },
+  "app": {
+    "version": "V113",
+    "status": "current_operational_version",
+    "repository": "marinhrodrigo-design/rc-abastecimento-build",
+    "branch": null,
+    "commit": null,
+    "source_verified": false,
+    "notes": "V113 é a versão atual informada para o app. O commit exato ainda não foi localizado no repositório conectado; portanto nenhuma versão anterior pode ser usada como substituta para afirmar comportamento da V113."
+  },
+  "site": {
+    "version": "V115",
+    "status": "local_testing",
+    "repository": "marinhrodrigo-design/rc-abastecimento-build",
+    "branch": null,
+    "commit": null,
+    "source_verified": false,
+    "notes": "V115 é o artefato local atual do portal nesta etapa. Ainda não há commit de release do site vinculado."
+  }
+}

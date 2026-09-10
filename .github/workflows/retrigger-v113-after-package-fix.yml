@@ -17,4 +17,6 @@ jobs:
       - name: Dispatch V113 build
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh workflow run build-v113-official-movement-pdfs-from-v112.yml --repo ${{ github.repository }} --ref release/rc-abastecimento
+        run: |
+          echo "Retrigger after V113 analyzer fix"
+          gh workflow run build-v113-official-movement-pdfs-from-v112.yml --repo ${{ github.repository }} --ref release/rc-abastecimento

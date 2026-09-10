@@ -1,0 +1,14 @@
+{
+  "app": "R&C Abastecimento",
+  "official_base": "V106",
+  "validated_run_id": 34469677093,
+  "validated_source_artifact_id": 10149140032,
+  "validated_apk_artifact_id": 10149141922,
+  "build_head_sha": "2d70cc6b90713e006f4f47042272625b6ff7e351",
+  "apk_sha256": "829d2bac6df98541d5426acdbcbcc879f91fca142194e6127aa2f84760563088",
+  "base_version": "V105",
+  "base_run_id": 34467942921,
+  "base_source_artifact_id": 10148479217,
+  "forward_only": true,
+  "rule": "All V107+ work must start from the exact validated V106 source artifact or a verified exact copy. Preserve all approved V106 and earlier behavior unless explicitly requested otherwise."
+}

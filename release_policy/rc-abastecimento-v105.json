@@ -1,0 +1,19 @@
+{
+  "app": "R&C Abastecimento",
+  "validated_base": "V105",
+  "source_rule": "All future versions must start from the exact validated V105 source artifact or a verified exact copy. Never build from V104 or older unless explicitly requested.",
+  "workflow_run_id": 34467942921,
+  "head_sha": "b583b9163ac1da7d7024ac8a1b26c031d7ffc18a",
+  "source_artifact": {
+    "name": "RC-Abastecimento-V105-source",
+    "id": 10148479217,
+    "digest": "sha256:2ddb4a1582fd6a536505355d176cd1ba586c1b144c0db489c679220beb1a2fe5"
+  },
+  "apk_artifact": {
+    "name": "RC-Abastecimento-V105",
+    "id": 10148481097,
+    "digest": "sha256:281fc18f5ca6b4c84fb85369e869bb1d72fa1964b0dae775fa06d74f8cb9f1f7",
+    "apk_sha256": "b94a4de3cd247015fa915a87c2d7d8e4beb9a34d3e73f09eedf719a9e4a89444"
+  },
+  "v105_change": "T.E. home now exposes Entrada da refinaria / NF and opens supplier/refinery receipt with the current stationary tank preselected as destination. Existing V104 behavior is preserved."
+}

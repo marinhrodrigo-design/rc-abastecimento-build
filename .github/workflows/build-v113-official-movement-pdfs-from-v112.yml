@@ -147,7 +147,7 @@ jobs:
             "executeOrQueue('rca_record_transfer_v108'",
             "executeOrQueue('rca_record_transfer_te_v108'",
             "executeOrQueue('rca_record_refinery_to_te_v108'",
-            'referenceData: widget.ref'
+            'referenceData: widget.ref)'
           ]
           present=[x for x in forbidden if x in main]
           if present: raise SystemExit(f'Old V112/transfer behavior remains: {present}')

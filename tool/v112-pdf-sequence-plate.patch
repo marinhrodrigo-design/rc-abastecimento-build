@@ -1,0 +1,189 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -4636,7 +4636,7 @@
+                     const SizedBox(height: 10),
+                     const Align(
+                       alignment: Alignment.centerRight,
+-                      child: Text('v111',
++                      child: Text('v112',
+                           style: TextStyle(
+                               fontSize: 11,
+                               color: Color(0xFF8A98A8),
+@@ -11386,6 +11386,68 @@
+       .join(' • ');
+ }
+ 
++String _fuelUnitPlateV112(Map<String, dynamic> unit,
++    [Map<String, dynamic>? referenceData]) {
++  final ref = referenceData ?? offlineStore.cachedReferenceData;
++  final requestedId = _intOrNull(unit['id'] ??
++      unit['tank_id'] ??
++      unit['source_tank_id'] ??
++      unit['destination_tank_id']);
++  final requestedCode = _firstTextV111([
++    unit['code'],
++    unit['unit_code'],
++    unit['tank_code'],
++    unit['source_code'],
++    unit['source_tank_code'],
++    unit['source_tank'],
++    unit['destination_code'],
++    unit['destination_tank_code'],
++  ]);
++
++  Map<String, dynamic>? tank;
++  if (ref != null) {
++    for (final x in _rows(ref['tanks'])) {
++      final sameId = requestedId != null && _intOrNull(x['id']) == requestedId;
++      final code = _firstTextV111([x['code']]);
++      final sameCode = requestedCode.isNotEmpty &&
++          code.isNotEmpty &&
++          code.toUpperCase() == requestedCode.toUpperCase();
++      if (sameId || sameCode) {
++        tank = x;
++        break;
++      }
++    }
++  }
++
++  final source = tank ?? unit;
++  String plate = _firstTextV111([
++    source['plate'],
++    source['placa'],
++    unit['plate'],
++    unit['placa'],
++  ]);
++
++  final machineId = _intOrNull(source['machine_id'] ?? unit['machine_id']);
++  if (ref != null && machineId != null) {
++    for (final x in _rows(ref['machines'])) {
++      if (_intOrNull(x['id']) != machineId) continue;
++      plate = _firstTextV111([x['placa'], plate]);
++      break;
++    }
++  }
++
++  final thirdPartyId = _intOrNull(
++      source['third_party_vehicle_id'] ?? unit['third_party_vehicle_id']);
++  if (ref != null && thirdPartyId != null) {
++    for (final x in _rows(ref['third_party_vehicles'])) {
++      if (_intOrNull(x['id']) != thirdPartyId) continue;
++      plate = _firstTextV111([x['plate'], plate]);
++      break;
++    }
++  }
++  return plate;
++}
++
+ String _unitInUseLabelV110(Map<String, dynamic> currentUnit,
+     Map<String, dynamic>? referenceData) =>
+     _fuelUnitLabelV111(currentUnit, referenceData);
+@@ -12025,6 +12087,20 @@
+   Widget build(BuildContext context) => const GeneralRecordsV28Screen();
+ }
+ 
++String _officialPdfFileNameV112(List<Map<String, dynamic>> items) {
++  if (items.isEmpty) return 'R&C-Abastecimento.pdf';
++  final first = items.first;
++  final fueling = '${first['type'] ?? ''}' == 'fueling';
++  if (items.length == 1 && fueling) {
++    final origin = _recordOriginV28(first)
++        .replaceAll(RegExp(r'[^A-Za-z0-9_-]+'), '-')
++        .replaceAll(RegExp(r'^-+|-+$'), '');
++    final sequence = _recordSequenceV28(first);
++    return 'R&C-Abastecimento-${origin.isEmpty ? 'UNIDADE' : origin}-$sequence.pdf';
++  }
++  return 'R&C-Abastecimento-${items.length}-registros.pdf';
++}
++
+ class OfficialPdfPreviewV28Screen extends StatelessWidget {
+   final List<Map<String, dynamic>> items;
+   final String title;
+@@ -12038,8 +12114,7 @@
+           canChangePageFormat: false,
+           canChangeOrientation: false,
+           canDebug: false,
+-          pdfFileName:
+-              'RC-Abastecimento-${DateTime.now().millisecondsSinceEpoch}.pdf'));
++          pdfFileName: _officialPdfFileNameV112(items)));
+ }
+ 
+ String _recordSequenceV28(Map<String, dynamic> x) {
+@@ -15430,6 +15505,13 @@
+           '${_movementLabelForItem(x)}${equipment.isNotEmpty ? ' - $equipment' : ''}';
+       final fuelOrigin = _fuelOrigin(ctx, x);
+       final fuelSequence = _fuelSequence(x);
++      final fuelOriginPlate = fueling
++          ? _fuelUnitPlateV112({
++              'source_tank_id': x['source_tank_id'],
++              'source_tank': fuelOrigin,
++              'code': fuelOrigin,
++            })
++          : '';
+       final operator = '${x['operator'] ?? '-'}';
+       final receiver = '${x['receiver'] ?? '-'}';
+       final nfs = _nfs(ctx);
+@@ -15606,26 +15688,10 @@
+                         children: [
+                       if (fueling)
+                         pw.Row(mainAxisSize: pw.MainAxisSize.min, children: [
+-                          pw.Text('Abastecimento',
+-                              style: pw.TextStyle(
+-                                  font: bold, fontSize: 14, color: navy)),
+-                          pw.SizedBox(width: 7),
+-                          pw.Container(
+-                              width: 3,
+-                              height: 3,
+-                              decoration: pw.BoxDecoration(
+-                                  color: navy, shape: pw.BoxShape.circle)),
+-                          pw.SizedBox(width: 7),
+-                          pw.Text(fuelOrigin.isEmpty ? '-' : fuelOrigin,
++                          pw.Text(
++                              'Abastecimento ${fuelOrigin.isEmpty ? '-' : fuelOrigin}${fuelOriginPlate.isNotEmpty ? ' - $fuelOriginPlate' : ''} - ',
+                               style: pw.TextStyle(
+                                   font: bold, fontSize: 14, color: navy)),
+-                          pw.SizedBox(width: 7),
+-                          pw.Container(
+-                              width: 3,
+-                              height: 3,
+-                              decoration: pw.BoxDecoration(
+-                                  color: navy, shape: pw.BoxShape.circle)),
+-                          pw.SizedBox(width: 7),
+                           pw.Text('Nº: $fuelSequence',
+                               style: pw.TextStyle(
+                                   font: bold,
+@@ -15775,32 +15841,12 @@
+                             pw.Row(
+                                 mainAxisSize: pw.MainAxisSize.min,
+                                 children: [
+-                                  pw.Text('Evidências do registro',
+-                                      style: pw.TextStyle(
+-                                          font: bold,
+-                                          fontSize: 13.5,
+-                                          color: navy)),
+-                                  pw.SizedBox(width: 7),
+-                                  pw.Container(
+-                                      width: 3,
+-                                      height: 3,
+-                                      decoration: pw.BoxDecoration(
+-                                          color: navy,
+-                                          shape: pw.BoxShape.circle)),
+-                                  pw.SizedBox(width: 7),
+-                                  pw.Text(fuelOrigin.isEmpty ? '-' : fuelOrigin,
++                                  pw.Text(
++                                      'Evidências do registro - ${fuelOrigin.isEmpty ? '-' : fuelOrigin}${fuelOriginPlate.isNotEmpty ? ' - $fuelOriginPlate' : ''} - ',
+                                       style: pw.TextStyle(
+                                           font: bold,
+                                           fontSize: 13.5,
+                                           color: navy)),
+-                                  pw.SizedBox(width: 7),
+-                                  pw.Container(
+-                                      width: 3,
+-                                      height: 3,
+-                                      decoration: pw.BoxDecoration(
+-                                          color: navy,
+-                                          shape: pw.BoxShape.circle)),
+-                                  pw.SizedBox(width: 7),
+                                   pw.Text('Nº: $fuelSequence',
+                                       style: pw.TextStyle(
+                                           font: bold,

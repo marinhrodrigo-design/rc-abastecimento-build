@@ -131,12 +131,16 @@ jobs:
           if "Text('v109'" not in s:
               raise SystemExit('V109 visible marker not found')
           s=s.replace("Text('v109'","Text('v110'",1)
-          old="""    final currentCode = '${currentUnit['unit_code'] ?? ''}'.trim(),
-              currentName = '${currentUnit['unit_name'] ?? ''}'.trim();"""
-          new="""    final currentLabel = _unitInUseLabelV110(currentUnit, ref);"""
-          if old not in s:
-              raise SystemExit('V109 current unit variables not found')
-          s=s.replace(old,new,1)
+
+          start="    final currentCode = '${currentUnit['unit_code'] ?? ''}'.trim(),"
+          i=s.find(start)
+          if i < 0:
+              raise SystemExit('V109 currentCode declaration not found')
+          semi=s.find(';', i)
+          if semi < 0 or 'currentName' not in s[i:semi+1]:
+              raise SystemExit('V109 currentName declaration not found')
+          s=s[:i]+"    final currentLabel = _unitInUseLabelV110(currentUnit, ref);"+s[semi+1:]
+
           old_if='if (currentCode.isNotEmpty) ...['
           if old_if not in s:
               raise SystemExit('Current-unit visibility condition not found')
@@ -207,7 +211,7 @@ jobs:
           missing=[x for x in required if x not in main]
           if missing: raise SystemExit(f'V110 incomplete/regressed: {missing}')
           if "Text('v109'" in main: raise SystemExit('Visible V109 marker remained')
-          if "'Unidade em uso: $currentCode" in main: raise SystemExit('Old verbose current-unit label remained')
+          if "'Unidade em uso: $currentCode" in main: raise SystemExit('Old current-unit label remained')
           print('V110_FROM_EXACT_V109_UNIT_ASSET_PLATE_GATE_PASS')
           PY
 

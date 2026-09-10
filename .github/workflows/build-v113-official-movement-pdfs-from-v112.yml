@@ -56,14 +56,25 @@ jobs:
           repository: ${{ github.repository }}
           run-id: 34513524516
 
-      - name: Restore exact V112 and apply V113 official PDF patch
+      - name: Restore exact V112 and apply validated V113 package plus analyzer fix
         run: |
           rm -rf app/lib
           cp -r /tmp/v112src/lib app/lib
           cp /tmp/v112src/pubspec.yaml app/pubspec.yaml
-          base64 -d tool/v113-official-movement-pdfs.patch.gz.b64 | gzip -d > /tmp/v113.patch
+          git fetch --no-tags --depth=1 origin e28f822b003d4748225cbf5d0ea12d503ff36455
+          git show e28f822b003d4748225cbf5d0ea12d503ff36455:tool/v113-official-movement-pdfs.patch.gz.b64 | base64 -d | gzip -d > /tmp/v113.patch
           cd app
           patch -p1 < /tmp/v113.patch
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('lib/main_online.dart')
+          s=p.read_text()
+          old='api.metrologyPretransferV113(destination!, referenceData: widget.ref)'
+          new='api.metrologyPretransferV113(destination!, referenceData: widget.referenceData)'
+          if s.count(old) != 1:
+            raise SystemExit(f'Expected exactly one V113 transfer reference getter to fix, found {s.count(old)}')
+          p.write_text(s.replace(old,new))
+          PY
           dart format lib/main_online.dart
 
       - name: Configure Android and stable signing
@@ -124,7 +135,7 @@ jobs:
             'rca_metrology_audit_v100','SB / FT desta transferência','Tolerância de auditoria ±6%',
             'transfer_totalizador_doador_antes','transfer_totalizador_doador_depois',
             "value.startsWith('offline://')",
-            'app_pdf_path',
+            'app_pdf_path','widget.referenceData',
             'pw.Wrap('
           ]
           missing=[x for x in required_main if x not in main]
@@ -135,7 +146,8 @@ jobs:
             "RC-Abastecimento-${DateTime.now().millisecondsSinceEpoch}.pdf",
             "executeOrQueue('rca_record_transfer_v108'",
             "executeOrQueue('rca_record_transfer_te_v108'",
-            "executeOrQueue('rca_record_refinery_to_te_v108'"
+            "executeOrQueue('rca_record_refinery_to_te_v108'",
+            'referenceData: widget.ref'
           ]
           present=[x for x in forbidden if x in main]
           if present: raise SystemExit(f'Old V112/transfer behavior remains: {present}')

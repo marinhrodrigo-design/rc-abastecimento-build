@@ -1,0 +1,56 @@
+name: Extract V113 Patched Source for V114
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths: ['.github/workflows/extract-v113-patched-source-for-v114.yml']
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  extract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/rc-abastecimento
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Download exact validated V112 source
+        uses: actions/download-artifact@v4
+        with:
+          name: RC-Abastecimento-V112-source
+          path: /tmp/v112src
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 34513524516
+
+      - name: Apply repaired V113 patch
+        run: |
+          mkdir -p app
+          cp -r /tmp/v112src/lib app/lib
+          cp /tmp/v112src/pubspec.yaml app/pubspec.yaml
+          base64 -d tool/v113-official-movement-pdfs.patch.gz.b64 | gzip -d > /tmp/v113.patch
+          cd app
+          patch -p1 < /tmp/v113.patch
+          dart format lib/main_online.dart
+
+      - name: Upload consolidated V113 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-V113-patched-source-for-V114
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 7

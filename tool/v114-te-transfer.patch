@@ -1,0 +1,75 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -312,6 +312,7 @@
+   List<Map<String, dynamic>> get _pdfJobsV113 => _rows(_state['pdf_jobs_v113']);
+ 
+   bool _transferRpcV113(String rpc) =>
++      rpc == 'rca_record_transfer_v114' ||
+       rpc == 'rca_record_transfer_v113' ||
+       rpc == 'rca_record_transfer_te_v113' ||
+       rpc == 'rca_record_refinery_to_te_v113' ||
+@@ -3502,7 +3503,7 @@
+     String? notes,
+   }) async {
+     final eventId = offlineStore.newTraceIdV87();
+-    return offlineStore.executeOrQueue('rca_record_transfer_v113', {
++    return offlineStore.executeOrQueue('rca_record_transfer_v114', {
+       'p_source_tank_id': sourceTankId,
+       'p_destination_tank_id': destinationTankId,
+       'p_liters': liters,
+@@ -4521,7 +4522,7 @@
+           'p_movement_id': movementId,
+           'p_path': path,
+           'p_sha256': sha,
+-          'p_version': 'v113',
++          'p_version': 'v114',
+         },
+       ),
+     );
+@@ -5650,7 +5651,7 @@
+                 const Align(
+                   alignment: Alignment.centerRight,
+                   child: Text(
+-                    'v113',
++                    'v114',
+                     style: TextStyle(
+                       fontSize: 11,
+                       color: Color(0xFF8A98A8),
+@@ -6193,6 +6194,19 @@
+                         ),
+                       ),
+                     ),
++                    const SizedBox(height: 12),
++                    HomeActionCard(
++                      icon: Icons.swap_horiz_rounded,
++                      title: 'Transferir',
++                      subtitle: 'T.E. → Comboio',
++                      onTap: () => open(
++                        TransferV23Screen(
++                          source: t,
++                          ref: ref!,
++                          profile: widget.profile,
++                        ),
++                      ),
++                    ),
+                   ],
+                   const SizedBox(height: 12),
+                   HomeActionCard(
+@@ -11147,7 +11161,7 @@
+       double? previousPhysicalLiters;
+       final prep = await api.metrologyPretransferV113(
+         destination!,
+-        referenceData: widget.ref,
++        referenceData: liveReferenceData ?? widget.referenceData,
+       );
+       if (prep['requires_physical_balance'] == true) {
+         final physical = TextEditingController();
+@@ -14380,7 +14394,7 @@
+   Future<void> _transfer() async {
+     if (ref == null) return;
+     final t = await _operationUnit(
+-      const {'comboio', 'truck'},
++      const {'stationary', 'comboio', 'truck'},
+       'Transferir',
+       'Selecione a unidade doadora.',
+     );

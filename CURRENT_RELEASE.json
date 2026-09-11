@@ -39,15 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V116",
+    "version": "V117",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V116-PDF-Oficial-V113.html",
-    "artifact_sha256": "12e43f4c07a877b4ce51317d9f94c4c5d6d6dcaf25d0dc2f05283a59c06d3bf9",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V117-Matriz-Acesso-Editavel.html",
+    "artifact_sha256": "6329437d4fb5af282de388675b5dc902893a462a6c983ac7e1134f3eef8e297c",
     "pdf_behavior": "download-only from APP V113 official Storage PDF; no manual attach; no site PDF generator",
-    "notes": "V116 é a versão local do portal ajustada para consumir exclusivamente o PDF oficial arquivado pela APP V113."
+    "access_matrix_behavior": "Admin edits Manager and Supervisor default permissions directly with checkboxes and saves them in one transaction via rca_admin_save_access_matrix_v117; fixed/Admin rules stay locked",
+    "notes": "V117 parte da V116 e torna a Matriz de Acesso editável por checkboxes para o Administrador, preservando o contrato de PDF oficial da APP V113."
   }
 }

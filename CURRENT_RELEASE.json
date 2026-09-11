@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V120",
+    "version": "V121",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V120-Download-PDF-Oficial-Corrigido.html",
-    "artifact_sha256": "18225f5db96544248d2734d68ba69475408c519abb863443da733d609a82ed9d",
-    "pdf_behavior": "movement detail remains view-only; bulk official PDF action now uses signed Storage URLs with attachment disposition. One selected PDF downloads by direct navigation; multiple selected PDFs open an explicit download list to avoid browser blocking artificial downloads. No site PDF generation or manual attach.",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V121-Download-Blob-Sem-Bloqueio.html",
+    "artifact_sha256": "094f41dec86491247b9b56dc625eace61697163b9da3bd07c8536a03a4c57c52",
+    "pdf_behavior": "movement detail remains view-only; bulk official PDF action downloads from Supabase Storage through the authenticated SDK as a Blob and saves locally without navigating to an external signed URL. Multiple PDFs are downloaded one at a time by explicit user clicks. No site PDF generation or manual attach.",
     "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
-    "notes": "V120 parte da V119 e corrige a ação Baixar PDFs oficiais. O último PDF oficial confirmado é CB03-AB-000001, movimento 148, em PDF-Oficial-App/148/R&C-Abastecimento-CB03-0001.pdf."
+    "notes": "V121 parte da V120 e elimina a navegação para URL assinada que causava a mensagem de conteúdo bloqueado. O download agora usa Storage.download + Blob local."
   }
 }

@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V117",
+    "version": "V118",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V117-Matriz-Acesso-Editavel.html",
-    "artifact_sha256": "6329437d4fb5af282de388675b5dc902893a462a6c983ac7e1134f3eef8e297c",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V118-Matriz-Todas-Permissoes.html",
+    "artifact_sha256": "2909cfcfe451c7f61a8a0cf405b0e189c3c13e979d42442fe4d243fe0bd20107",
     "pdf_behavior": "download-only from APP V113 official Storage PDF; no manual attach; no site PDF generator",
-    "access_matrix_behavior": "Admin edits Manager and Supervisor default permissions directly with checkboxes and saves them in one transaction via rca_admin_save_access_matrix_v117; fixed/Admin rules stay locked",
-    "notes": "V117 parte da V116 e torna a Matriz de Acesso editável por checkboxes para o Administrador, preservando o contrato de PDF oficial da APP V113."
+    "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
+    "notes": "V118 parte da V117 e remove a limitação de permissões na Matriz de Acesso. Todos os 27 permission keys atuais existem para manager, supervisor e operator e podem ser escolhidos pelo Admin."
   }
 }

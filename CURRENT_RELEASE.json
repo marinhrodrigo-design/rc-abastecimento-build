@@ -29,11 +29,12 @@
     "source_verified": true,
     "pdf_contract": {
       "bucket": "fuel-pdfs",
-      "path_prefix": "PDF-Oficial-App/",
+      "path_prefix": "PDF-Oficial-App/<movement_id>/",
       "movement_field": "app_pdf_path",
       "record_rpc": "rca_official_pdf_record_v113",
-      "register_rpc": "rca_register_app_pdf_v113",
-      "offline_queue": "pdf_jobs_v113"
+      "register_rpc": "rca_register_app_pdf_v113(bigint,text,text,text)",
+      "offline_queue": "pdf_jobs_v113",
+      "immutable": true
     },
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
@@ -44,6 +45,9 @@
     "branch": null,
     "commit": null,
     "source_verified": false,
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V116-PDF-Oficial-V113.html",
+    "artifact_sha256": "12e43f4c07a877b4ce51317d9f94c4c5d6d6dcaf25d0dc2f05283a59c06d3bf9",
+    "pdf_behavior": "download-only from APP V113 official Storage PDF; no manual attach; no site PDF generator",
     "notes": "V116 é a versão local do portal ajustada para consumir exclusivamente o PDF oficial arquivado pela APP V113."
   }
 }

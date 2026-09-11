@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V121",
+    "version": "V122",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V121-Download-Blob-Sem-Bloqueio.html",
-    "artifact_sha256": "094f41dec86491247b9b56dc625eace61697163b9da3bd07c8536a03a4c57c52",
-    "pdf_behavior": "movement detail remains view-only; bulk official PDF action downloads from Supabase Storage through the authenticated SDK as a Blob and saves locally without navigating to an external signed URL. Multiple PDFs are downloaded one at a time by explicit user clicks. No site PDF generation or manual attach.",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V122-Download-PDF-Link-Nativo.html",
+    "artifact_sha256": "cb4f8845a8e0011cc08c7304c81c411a8127f5ea0c8185334e25d0744dd0bf75",
+    "pdf_behavior": "movement detail remains view-only; Baixar PDFs oficiais prepares the authenticated Storage blobs first, then presents real native download links that require an explicit user click, avoiding browser blocking of programmatic downloads after asynchronous calls. No site PDF generation or manual attach.",
     "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
-    "notes": "V121 parte da V120 e elimina a navegação para URL assinada que causava a mensagem de conteúdo bloqueado. O download agora usa Storage.download + Blob local."
+    "notes": "V122 parte da V121 e remove totalmente o clique artificial de download. O botão principal prepara os PDFs e abre uma janela interna com links nativos Baixar PDF para cada arquivo."
   }
 }

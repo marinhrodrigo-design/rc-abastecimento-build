@@ -1,0 +1,368 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -292,6 +292,7 @@
+ 
+ class OfflineStore {
+   final ValueNotifier<bool> online = ValueNotifier(true);
++  final ValueNotifier<bool> connectingV115 = ValueNotifier(true);
+   final ValueNotifier<int> pendingCount = ValueNotifier(0);
+   final ValueNotifier<bool> syncing = ValueNotifier(false);
+   final ValueNotifier<int> syncRevision = ValueNotifier(0);
+@@ -302,6 +303,7 @@
+   Future<void> _writeChain = Future<void>.value();
+   bool _syncing = false;
+   bool _reconnectSyncingV84 = false;
++  bool _connectivityCheckRunningV115 = false;
+   bool _pdfSyncingV113 = false;
+   String? _sessionLoginV84;
+   String? _sessionCredentialV84;
+@@ -1206,6 +1208,10 @@
+       'responsavel_obra': work?['responsible'],
+       'proprietario_equipamento': owner,
+       'origem': tank?['code'] ?? tank?['name'],
++      'source_tank_plate': _fuelUnitPlateV112(
++        tank ?? <String, dynamic>{'source_tank_id': tankId},
++        ref,
++      ),
+       'work_company_name': buyer,
+       'work_responsible': work?['responsible'],
+       'measurement_type': measurement,
+@@ -1330,6 +1336,15 @@
+             snapshot['origem'] ?? tank?['code'] ?? tank?['name'] ?? '-',
+         'source_tank_name': tank?['name'],
+         'source_tank_type': tank?['tank_type'],
++        'source_tank_plate': _firstTextV111([
++          q['source_tank_plate_v115'],
++          snapshot['source_tank_plate'],
++          _fuelUnitPlateV112(
++            tank ?? <String, dynamic>{'source_tank_id': tankId},
++            ref,
++          ),
++        ]),
++        'pdf_local_path_v113': q['pdf_local_path_v113'],
+         'occurred_at': params['p_occurred_at'] ?? q['created_at'],
+         'created_at': params['p_occurred_at'] ?? q['created_at'],
+         'km_value': params['p_km_value'],
+@@ -1467,10 +1482,11 @@
+         'source_tank_id': sourceId,
+         'source_tank': source?['code'] ?? source?['name'] ?? '-',
+         'source_tank_type': source?['tank_type'],
+-        'source_tank_plate': _fuelUnitPlateV112(
+-          source ?? const <String, dynamic>{},
+-          ref,
+-        ),
++        'source_tank_plate': _firstTextV111([
++          q['source_tank_plate_v115'],
++          _fuelUnitPlateV112(source ?? const <String, dynamic>{}, ref),
++        ]),
++        'pdf_local_path_v113': q['pdf_local_path_v113'],
+         'destination_tank_id': destinationId,
+         'destination_tank': destination?['code'] ?? destination?['name'] ?? '-',
+         'destination_tank_type': destination?['tank_type'],
+@@ -1941,9 +1957,10 @@
+       }
+     }
+     pendingCount.value = _pendingQueueCountV68();
+-    await _refreshOnlineState();
++    connectingV115.value = true;
++    unawaited(_refreshOnlineState(showConnecting: true));
+     _connectivity.onConnectivityChanged.listen(
+-      (_) => unawaited(_refreshOnlineState()),
++      (_) => unawaited(_refreshOnlineState(showConnecting: true)),
+     );
+     Timer.periodic(
+       const Duration(seconds: 12),
+@@ -2005,43 +2022,82 @@
+     }
+   }
+ 
+-  Future<void> _refreshOnlineState() async {
++  Future<void> waitForConnectivityV115({
++    Duration timeout = const Duration(seconds: 12),
++  }) async {
++    if (!connectingV115.value) return;
++    final deadline = DateTime.now().add(timeout);
++    while (connectingV115.value && DateTime.now().isBefore(deadline)) {
++      await Future<void>.delayed(const Duration(milliseconds: 100));
++    }
++  }
++
++  Future<bool> _probeSupabaseV115() async {
++    final http = HttpClient()..connectionTimeout = const Duration(seconds: 3);
++    try {
++      final req = await http
++          .getUrl(Uri.parse(_supabaseUrl))
++          .timeout(const Duration(seconds: 3));
++      final res = await req.close().timeout(const Duration(seconds: 3));
++      await res.drain().timeout(const Duration(seconds: 3));
++      return true;
++    } catch (_) {
++      return false;
++    } finally {
++      http.close(force: true);
++    }
++  }
++
++  Future<void> _refreshOnlineState({bool showConnecting = false}) async {
++    if (_connectivityCheckRunningV115) return;
++    _connectivityCheckRunningV115 = true;
++    if (showConnecting || !online.value) connectingV115.value = true;
+     var reachable = false;
+     try {
+       final states = await _connectivity.checkConnectivity();
+-      if (states.any((x) => x != ConnectivityResult.none)) {
+-        final http = HttpClient()
+-          ..connectionTimeout = const Duration(seconds: 4);
+-        try {
+-          final req = await http
+-              .getUrl(Uri.parse(_supabaseUrl))
+-              .timeout(const Duration(seconds: 4));
+-          final res = await req.close().timeout(const Duration(seconds: 4));
+-          await res.drain();
+-          reachable = true;
+-        } finally {
+-          http.close(force: true);
++      final hasTransport = states.any((x) => x != ConnectivityResult.none);
++      if (hasTransport) {
++        // V115: do not classify the app as OFFLINE because of one transient
++        // DNS/socket/handshake failure while Android is still bringing the
++        // network up. Confirm reachability with short retries first.
++        for (var attempt = 0; attempt < 3; attempt++) {
++          if (await _probeSupabaseV115()) {
++            reachable = true;
++            break;
++          }
++          if (attempt < 2) {
++            await Future<void>.delayed(const Duration(milliseconds: 650));
++          }
+         }
+       }
+-    } catch (_) {}
+-    final changed = online.value != reachable;
+-    online.value = reachable;
+-    if (reachable) {
+-      if (changed && _hasSyncWorkV78()) {
+-        unawaited(_syncImmediatelyAfterReconnectV84());
+-        return;
++      final changed = online.value != reachable;
++      online.value = reachable;
++      if (reachable) {
++        if (changed && _hasSyncWorkV78()) {
++          unawaited(_syncImmediatelyAfterReconnectV84());
++          return;
++        }
++        try {
++          await reconcileAbandonedSessionV68();
++        } catch (_) {}
++        if (_hasSyncWorkV78()) unawaited(syncPending(force: changed));
+       }
+-      try {
+-        await reconcileAbandonedSessionV68();
+-      } catch (_) {}
+-      if (_hasSyncWorkV78()) unawaited(syncPending(force: changed));
++    } finally {
++      connectingV115.value = false;
++      _connectivityCheckRunningV115 = false;
+     }
+   }
+ 
+-  void markOffline() => online.value = false;
++  void markOffline() {
++    online.value = false;
++    connectingV115.value = true;
++    unawaited(_refreshOnlineState(showConnecting: true));
++  }
++
+   void markOnline() {
+     final changed = !online.value;
+     online.value = true;
++    connectingV115.value = false;
+     if (changed && _hasSyncWorkV78()) unawaited(syncPending(force: true));
+   }
+ 
+@@ -2458,6 +2514,16 @@
+     final reportSnapshot = _fuelingRpc(rpc)
+         ? _offlineFuelingReportSnapshotV73(params)
+         : null;
++    String sourceTankPlateV115 = '';
++    if (_officialPdfMovementRpcV113(rpc)) {
++      final sourceTankId = _intOrNull(
++        params['p_source_tank_id'] ?? params['p_truck_tank_id'],
++      );
++      sourceTankPlateV115 = _fuelUnitPlateV112(
++        <String, dynamic>{'source_tank_id': sourceTankId},
++        cachedReferenceData,
++      );
++    }
+     queue.add(<String, dynamic>{
+       'id': queueId,
+       'rpc': rpc,
+@@ -2470,6 +2536,8 @@
+       if (offlineTransferCodeV113 != null)
+         'offline_transfer_code_v113': offlineTransferCodeV113,
+       if (reportSnapshot != null) 'report_snapshot_v73': reportSnapshot,
++      if (sourceTankPlateV115.isNotEmpty)
++        'source_tank_plate_v115': sourceTankPlateV115,
+       'created_at': DateTime.now().toUtc().toIso8601String(),
+       'user_id': activeUserIdV62,
+     });
+@@ -2560,6 +2628,31 @@
+     }
+   }
+ 
++  Future<Uint8List?> localOfficialPdfBytesForQueueV115(
++    String queueId,
++  ) async {
++    if (queueId.trim().isEmpty) return null;
++
++    Future<File?> localFile() async {
++      for (final q in _queue) {
++        if ('${q['id'] ?? ''}' != queueId) continue;
++        final path = '${q['pdf_local_path_v113'] ?? ''}'.trim();
++        if (path.isEmpty) return null;
++        final file = File(path);
++        return await file.exists() ? file : null;
++      }
++      return null;
++    }
++
++    var file = await localFile();
++    if (file == null) {
++      await _prepareLocalOfficialPdfForQueueV113(queueId);
++      file = await localFile();
++    }
++    if (file == null) return null;
++    return file.readAsBytes();
++  }
++
+   Future<void> enqueueOfficialPdfJobV113(
+     int movementId, {
+     String? localPdfPath,
+@@ -4522,7 +4615,7 @@
+           'p_movement_id': movementId,
+           'p_path': path,
+           'p_sha256': sha,
+-          'p_version': 'v114',
++          'p_version': 'v115',
+         },
+       ),
+     );
+@@ -4718,6 +4811,7 @@
+ 
+   Future<void> _restore() async {
+     final cached = offlineStore.cachedProfile;
++    await offlineStore.waitForConnectivityV115();
+     if (offlineStore.appLoggedOutV62) {
+       if (mounted) setState(() => loading = false);
+       return;
+@@ -4795,6 +4889,7 @@
+     });
+     final client = Supabase.instance.client;
+     final normalized = username.trim().toLowerCase();
++    await offlineStore.waitForConnectivityV115();
+     if (!offlineStore.online.value) {
+       try {
+         final p = await offlineStore.offlineLoginV62(normalized, password);
+@@ -5104,38 +5199,46 @@
+   const OnlineBadge({super.key});
+   @override
+   Widget build(BuildContext context) => ValueListenableBuilder<bool>(
+-    valueListenable: offlineStore.online,
+-    builder: (_, isOnline, __) {
+-      final reauth = isOnline && offlineStore.onlineReauthRequiredV81;
+-      final color = !isOnline
+-          ? Colors.red
+-          : reauth
+-          ? Colors.orange
+-          : Colors.green;
+-      final label = !isOnline
+-          ? 'OFFLINE'
+-          : reauth
+-          ? 'ONLINE • VALIDAR'
+-          : 'ONLINE';
+-      return Container(
+-        padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+-        decoration: BoxDecoration(
+-          color: color.shade50,
+-          borderRadius: BorderRadius.circular(30),
+-          border: Border.all(color: color.shade200),
+-        ),
+-        child: Text(
+-          label,
+-          maxLines: 1,
+-          softWrap: false,
+-          style: TextStyle(
+-            color: color.shade800,
+-            fontWeight: FontWeight.w900,
+-            fontSize: 9,
++    valueListenable: offlineStore.connectingV115,
++    builder: (_, isConnecting, __) => ValueListenableBuilder<bool>(
++      valueListenable: offlineStore.online,
++      builder: (_, isOnline, __) {
++        final reauth =
++            !isConnecting && isOnline && offlineStore.onlineReauthRequiredV81;
++        final MaterialColor color = isConnecting
++            ? Colors.blue
++            : !isOnline
++            ? Colors.red
++            : reauth
++            ? Colors.orange
++            : Colors.green;
++        final label = isConnecting
++            ? 'CONECTANDO…'
++            : !isOnline
++            ? 'OFFLINE'
++            : reauth
++            ? 'ONLINE • VALIDAR'
++            : 'ONLINE';
++        return Container(
++          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
++          decoration: BoxDecoration(
++            color: color.shade50,
++            borderRadius: BorderRadius.circular(30),
++            border: Border.all(color: color.shade200),
+           ),
+-        ),
+-      );
+-    },
++          child: Text(
++            label,
++            maxLines: 1,
++            softWrap: false,
++            style: TextStyle(
++              color: color.shade800,
++              fontWeight: FontWeight.w900,
++              fontSize: 9,
++            ),
++          ),
++        );
++      },
++    ),
+   );
+ }
+ 
+@@ -5651,7 +5754,7 @@
+                 const Align(
+                   alignment: Alignment.centerRight,
+                   child: Text(
+-                    'v114',
++                    'v115',
+                     style: TextStyle(
+                       fontSize: 11,
+                       color: Color(0xFF8A98A8),
+@@ -14843,6 +14946,15 @@
+     final type = '${initial['type'] ?? ''}';
+     final movementId = _intOrNull(initial['id']);
+     final official = type == 'fueling' || type == 'tank_transfer';
++    if (official && initial['offline_pending'] == true) {
++      final queueId = '${initial['queue_id'] ?? ''}'.trim();
++      if (queueId.isNotEmpty) {
++        final local = await offlineStore.localOfficialPdfBytesForQueueV115(
++          queueId,
++        );
++        if (local != null) return local;
++      }
++    }
+     if (official && movementId != null && offlineStore.online.value) {
+       try {
+         final serverItem = await api.officialPdfRecordV113(movementId);

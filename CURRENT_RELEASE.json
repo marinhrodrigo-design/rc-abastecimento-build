@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V119",
+    "version": "V120",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V119-Sem-Botao-Baixar-PDF-Detalhe.html",
-    "artifact_sha256": "75652c175201d5b608de7724ecaddba9e2c3af77d608972c1a8cd6136c3a3164",
-    "pdf_behavior": "movement detail is view-only for APP V113 official PDF; singular Download PDF button removed; no manual attach and no site PDF generator; bulk official PDF action remains unchanged",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V120-Download-PDF-Oficial-Corrigido.html",
+    "artifact_sha256": "18225f5db96544248d2734d68ba69475408c519abb863443da733d609a82ed9d",
+    "pdf_behavior": "movement detail remains view-only; bulk official PDF action now uses signed Storage URLs with attachment disposition. One selected PDF downloads by direct navigation; multiple selected PDFs open an explicit download list to avoid browser blocking artificial downloads. No site PDF generation or manual attach.",
     "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
-    "notes": "V119 parte da V118 e remove apenas o botão Baixar PDF da tela de detalhes do abastecimento, mantendo Visualizar PDF e todas as demais funções da V118."
+    "notes": "V120 parte da V119 e corrige a ação Baixar PDFs oficiais. O último PDF oficial confirmado é CB03-AB-000001, movimento 148, em PDF-Oficial-App/148/R&C-Abastecimento-CB03-0001.pdf."
   }
 }

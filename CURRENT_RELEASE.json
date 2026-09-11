@@ -1,28 +1,49 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "project": "R&C Abastecimento",
   "policy": {
     "require_exact_version_before_source_claim": true,
     "require_verified_commit_for_current_source_claim": true,
     "never_fallback_to_older_version": true,
+    "source_resolution_order": [
+      "CURRENT_RELEASE.json",
+      "exact_release_branch",
+      "exact_release_workflow",
+      "exact_release_commit",
+      "STOP"
+    ],
     "on_unverified_source": "STOP_AND_REPORT_SOURCE_NOT_LOCATED"
   },
   "app": {
     "version": "V113",
+    "build_name": "1.0.113",
+    "build_number": 83,
     "status": "current_operational_version",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
-    "branch": null,
-    "commit": null,
-    "source_verified": false,
-    "notes": "V113 é a versão atual informada para o app. O commit exato ainda não foi localizado no repositório conectado; portanto nenhuma versão anterior pode ser usada como substituta para afirmar comportamento da V113."
+    "branch": "release/rc-abastecimento",
+    "release_commit": "34fa1414da3a7970dd0a6c3ca1b18429d1413ecd",
+    "release_parent_commit": "54c054233c0cbfa57d5426d16ddc59560f6acc75",
+    "source_patch_commit": "e28f822b003d4748225cbf5d0ea12d503ff36455",
+    "workflow": ".github/workflows/build-v113-official-movement-pdfs-from-v112.yml",
+    "source_strategy": "V112 validated source artifact + V113 official-PDF patch",
+    "source_verified": true,
+    "pdf_contract": {
+      "bucket": "fuel-pdfs",
+      "path_prefix": "PDF-Oficial-App/",
+      "movement_field": "app_pdf_path",
+      "record_rpc": "rca_official_pdf_record_v113",
+      "register_rpc": "rca_register_app_pdf_v113",
+      "offline_queue": "pdf_jobs_v113"
+    },
+    "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V115",
+    "version": "V116",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "notes": "V115 é o artefato local atual do portal nesta etapa. Ainda não há commit de release do site vinculado."
+    "notes": "V116 é a versão local do portal ajustada para consumir exclusivamente o PDF oficial arquivado pela APP V113."
   }
 }

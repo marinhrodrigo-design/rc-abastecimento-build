@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V118",
+    "version": "V119",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V118-Matriz-Todas-Permissoes.html",
-    "artifact_sha256": "2909cfcfe451c7f61a8a0cf405b0e189c3c13e979d42442fe4d243fe0bd20107",
-    "pdf_behavior": "download-only from APP V113 official Storage PDF; no manual attach; no site PDF generator",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V119-Sem-Botao-Baixar-PDF-Detalhe.html",
+    "artifact_sha256": "75652c175201d5b608de7724ecaddba9e2c3af77d608972c1a8cd6136c3a3164",
+    "pdf_behavior": "movement detail is view-only for APP V113 official PDF; singular Download PDF button removed; no manual attach and no site PDF generator; bulk official PDF action remains unchanged",
     "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
-    "notes": "V118 parte da V117 e remove a limitação de permissões na Matriz de Acesso. Todos os 27 permission keys atuais existem para manager, supervisor e operator e podem ser escolhidos pelo Admin."
+    "notes": "V119 parte da V118 e remove apenas o botão Baixar PDF da tela de detalhes do abastecimento, mantendo Visualizar PDF e todas as demais funções da V118."
   }
 }

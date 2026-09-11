@@ -66,6 +66,7 @@ jobs:
           base64 -d /tmp/v113.patch.gz.b64 | gzip -d > /tmp/v113.patch
           cd app
           patch -p1 < /tmp/v113.patch
+          dart format lib/main_online.dart
           patch -p1 < ../tool/v114-te-transfer.patch
           dart format lib/main_online.dart
 

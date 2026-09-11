@@ -39,16 +39,16 @@
     "notes": "Referência oficial verificada da APP V113. Não usar V90, V96 ou qualquer versão anterior como substituta para afirmar comportamento da V113. O fonte V113 é sintetizado pelo workflow a partir do artefato validado da V112 mais o patch oficial da V113."
   },
   "site": {
-    "version": "V122",
+    "version": "V123",
     "status": "local_testing",
     "repository": "marinhrodrigo-design/rc-abastecimento-build",
     "branch": null,
     "commit": null,
     "source_verified": false,
-    "artifact_filename": "RC-Abastecimento-Web-Espelho-V122-Download-PDF-Link-Nativo.html",
-    "artifact_sha256": "cb4f8845a8e0011cc08c7304c81c411a8127f5ea0c8185334e25d0744dd0bf75",
-    "pdf_behavior": "movement detail remains view-only; Baixar PDFs oficiais prepares the authenticated Storage blobs first, then presents real native download links that require an explicit user click, avoiding browser blocking of programmatic downloads after asynchronous calls. No site PDF generation or manual attach.",
+    "artifact_filename": "RC-Abastecimento-Web-Espelho-V123-Download-Nativo-Com-Fallback-Visualizar.html",
+    "artifact_sha256": "63ec6067a70ea5c3cfea007b6c482181a9832fa01b1a5492361c89f787eb1d71",
+    "pdf_behavior": "In hosted browsers with File System Access support, a single selected official PDF opens the native Save File dialog immediately and writes the authenticated Storage blob directly to the chosen file. In the ChatGPT web sandbox, direct file saving is blocked by the host, so the same action opens the official PDF viewer instead; the browser viewer download control can then be used. Multiple PDFs are handled by explicit per-file actions. No site PDF generation or manual attach.",
     "access_matrix_behavior": "Admin sees the complete permission catalog and can edit every catalog permission for Manager, Supervisor and Operator with checkboxes; Admin remains full-access. Matrix saves through rca_admin_save_access_matrix_v118 and future catalog permissions are displayed automatically.",
-    "notes": "V122 parte da V121 e remove totalmente o clique artificial de download. O botão principal prepara os PDFs e abre uma janela interna com links nativos Baixar PDF para cada arquivo."
+    "notes": "V123 parte da V122 e remove o link blob quebrado no sandbox. Usa salvamento nativo quando permitido e fallback para Visualizar PDF quando o ambiente bloqueia download direto."
   }
 }

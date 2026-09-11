@@ -57,12 +57,13 @@ jobs:
           repository: ${{ github.repository }}
           run-id: 34633229987
 
-      - name: Restore V115 and apply V116 correction model
+      - name: Restore V115 and apply exact V116 correction model
         run: |
           rm -rf app/lib
           cp -r /tmp/v115src/lib app/lib
           cp /tmp/v115src/pubspec.yaml app/pubspec.yaml
-          cat tool/v116-patch.part1.b64 tool/v116-patch.part2.b64 tool/v116-patch.part3.b64 tool/v116-patch.part4.b64 | tr -d '\n\r ' | base64 -d > /tmp/v116.patch
+          base64 -d tool/v116-append-only-corrections.patch.gz.b64 | gzip -d > /tmp/v116.patch
+          echo "0570a658c11c91d59693aeee0e161819dbf98f56924db14cf0f291a7794419a0  /tmp/v116.patch" | sha256sum -c -
           cd app
           patch -p1 < /tmp/v116.patch
           dart format lib/main_online.dart

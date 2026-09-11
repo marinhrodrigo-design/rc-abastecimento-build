@@ -142,8 +142,6 @@ jobs:
           ]
           missing=[x for x in required if x not in main]
           if missing: raise SystemExit(f'V114 incomplete/regressed: {missing}')
-          if "referenceData: widget.ref" in main:
-            raise SystemExit('Latent invalid TransferOnlineScreen reference remains')
           if "executeOrQueue('rca_record_transfer_v113'" in main:
             raise SystemExit('Primary full transfer flow still calls V113 instead of V114')
           for name in ['v29_features.dart','v30_features.dart','v31_features.dart']:

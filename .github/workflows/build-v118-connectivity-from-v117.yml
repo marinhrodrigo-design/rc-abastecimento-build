@@ -1,0 +1,187 @@
+name: Build R&C Abastecimento V118 Conectando Estavel
+
+on:
+  push:
+    branches: ['release/rc-abastecimento']
+    paths:
+      - '.github/workflows/build-v118-connectivity-from-v117.yml'
+      - 'tool/v118-from-v117.patch'
+  workflow_dispatch:
+
+concurrency:
+  group: rc-abastecimento-v118-connectivity
+  cancel-in-progress: true
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    env:
+      SUPABASE_KEY: ${{ secrets.SUPABASE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: release/rc-abastecimento
+          fetch-depth: 0
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Restore persistent APK signing key
+        uses: actions/cache/restore@v4
+        with:
+          path: ~/.android/rc-abastecimento.keystore
+          key: rc-abastecimento-signing-v1
+
+      - name: Verify persistent signing key
+        run: test -f "$HOME/.android/rc-abastecimento.keystore"
+
+      - name: Create Android platform
+        run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
+
+      - name: Download exact validated V117 source
+        uses: actions/download-artifact@v4
+        with:
+          name: RC-Abastecimento-V117-source
+          path: /tmp/v117src
+          github-token: ${{ github.token }}
+          repository: ${{ github.repository }}
+          run-id: 35006116983
+
+      - name: Restore exact V117 and apply V118 connectivity fix
+        run: |
+          echo "f3d74155282aeb6b955fbdb0897876623eca610e2393a0e07c98ad8a486e0c4e  tool/v118-from-v117.patch" | sha256sum -c -
+          rm -rf app/lib
+          cp -r /tmp/v117src/lib app/lib
+          cp /tmp/v117src/pubspec.yaml app/pubspec.yaml
+          cd app
+          patch -p1 < ../tool/v118-from-v117.patch
+          dart format lib/main_online.dart
+
+      - name: Configure Android and stable signing
+        working-directory: app
+        run: |
+          rm -f test/widget_test.dart
+          mkdir -p assets android/app/src/main/kotlin/com/rc/rc_abastecimento
+          cp "$FLUTTER_ROOT/bin/cache/artifacts/material_fonts/MaterialIcons-Regular.otf" assets/MaterialIcons-Regular.otf
+          cat > android/app/src/main/kotlin/com/rc/rc_abastecimento/MainActivity.kt <<'KOTLIN'
+          package com.rc.rc_abastecimento
+          import android.provider.Settings
+          import io.flutter.embedding.android.FlutterActivity
+          import io.flutter.embedding.engine.FlutterEngine
+          import io.flutter.plugin.common.MethodChannel
+          class MainActivity: FlutterActivity() {
+              override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
+                  super.configureFlutterEngine(flutterEngine)
+                  MethodChannel(flutterEngine.dartExecutor.binaryMessenger, "rc.abastecimento/device").setMethodCallHandler { call, result ->
+                      if (call.method == "androidId") result.success(Settings.Secure.getString(contentResolver, Settings.Secure.ANDROID_ID)) else result.notImplemented()
+                  }
+              }
+          }
+          KOTLIN
+          python3 - <<'PY'
+          from pathlib import Path
+          m=Path('android/app/src/main/AndroidManifest.xml'); t=m.read_text()
+          for x in ['android.permission.INTERNET','android.permission.CAMERA','android.permission.ACCESS_FINE_LOCATION','android.permission.ACCESS_COARSE_LOCATION']:
+            if x not in t: t=t.replace('<application',f'<uses-permission android:name="{x}" />\n\n    <application',1)
+          t=t.replace('android:label="rc_abastecimento"','android:label="R&amp;C Abastecimento"'); m.write_text(t)
+          g=Path('android/app/build.gradle.kts'); x=g.read_text().replace('minSdk = flutter.minSdkVersion','minSdk = 23')
+          marker='    buildTypes {\n'
+          signing='''    signingConfigs {\n        create("rcRelease") {\n            storeFile = file(System.getProperty("user.home") + "/.android/rc-abastecimento.keystore")\n            storePassword = "android"\n            keyAlias = "rcabastecimento"\n            keyPassword = "android"\n        }\n    }\n\n'''
+          x=x.replace(marker,signing+marker,1)
+          x=x.replace('signingConfig = signingConfigs.getByName("debug")','signingConfig = signingConfigs.getByName("rcRelease")',1)
+          g.write_text(x)
+          PY
+
+      - name: Dependencies
+        working-directory: app
+        run: flutter pub get
+
+      - name: Validate V118 connectivity and preserved V117 flows
+        working-directory: app
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          main=Path('lib/main_online.dart').read_text()
+          v31=Path('lib/v31_features.dart').read_text()
+          required=[
+            "V118: Android can report `none`",
+            "transportAttempt < 4",
+            "V118: a single network exception is not enough to publish OFFLINE",
+            "connectingV115.value = true",
+            "'p_version': 'v118'",
+            "'v118'",
+            "CONECTANDO…",
+            "rca_reference_data_v117",
+            "rca_meter_check_v117",
+            "latestMeterSnapshotV117",
+            "rca_admin_correct_fueling_v116",
+            "REGISTRO CORRIGIDO",
+            "R&C-Correcao-Abastecimento",
+            "rca_record_transfer_v114",
+            "source_tank_plate_v115",
+            "syncOfficialPdfJobsV113",
+            "rca_register_app_pdf_v113",
+            "'fuel-pdfs'"
+          ]
+          missing=[x for x in required if x not in main]
+          if "Combustível restante:" not in v31:
+            missing.append("Combustível restante:")
+          if "_fmtLitersBrV117(currentTank['current_balance_liters'])" not in v31:
+            missing.append("saldo restante V117")
+          if missing: raise SystemExit(f'V118 incomplete/regressed: {missing}')
+          bad="void markOffline() {\n    online.value = false;"
+          if bad in main: raise SystemExit('V118 still publishes OFFLINE before confirmation')
+          print('V118_CONNECTIVITY_GATE_PASS')
+          PY
+
+      - name: Flutter Analyze fatal warnings gate
+        working-directory: app
+        run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
+
+      - name: Build signed APK V118
+        working-directory: app
+        run: flutter build apk --release --target lib/main_online.dart --build-name=1.0.118 --build-number=88 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+
+      - name: Verify APK signing certificate
+        working-directory: app
+        run: |
+          APKSIGNER="$(find "$ANDROID_HOME/build-tools" -type f -name apksigner | sort -V | tail -n 1)"
+          test -x "$APKSIGNER"
+          "$APKSIGNER" verify --verbose --print-certs build/app/outputs/flutter-apk/app-release.apk
+
+      - name: Prepare artifacts
+        run: |
+          mkdir -p release
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/RC-Abastecimento-V118.apk
+          sha256sum release/RC-Abastecimento-V118.apk > release/RC-Abastecimento-V118.sha256.txt
+
+      - name: Upload validated V118 source
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-V118-source
+          path: |
+            app/lib/main_online.dart
+            app/lib/v29_features.dart
+            app/lib/v30_features.dart
+            app/lib/v31_features.dart
+            app/pubspec.yaml
+          retention-days: 30
+
+      - name: Upload V118 APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: RC-Abastecimento-V118
+          path: release/
+          retention-days: 30

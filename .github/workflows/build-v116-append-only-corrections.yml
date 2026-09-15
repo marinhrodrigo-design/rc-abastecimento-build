@@ -1,4 +1,4 @@
-name: Build R&C Abastecimento V116 Correcoes Imutaveis
+name: Build R&C Abastecimento V117 Saldo e KM Offline
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: rc-abastecimento-v116-corrections
+  group: rc-abastecimento-v117-balance-meter-offline
   cancel-in-progress: true
 
 permissions:
@@ -48,25 +48,24 @@ jobs:
       - name: Create Android platform
         run: flutter create --platforms=android --org com.rc --project-name rc_abastecimento app
 
-      - name: Download exact validated V115 source
+      - name: Download exact validated V116 source
         uses: actions/download-artifact@v4
         with:
-          name: RC-Abastecimento-V115-source
-          path: /tmp/v115src
+          name: RC-Abastecimento-V116-source
+          path: /tmp/v116src
           github-token: ${{ github.token }}
           repository: ${{ github.repository }}
-          run-id: 34633229987
+          run-id: 34642445166
 
-      - name: Restore V115 and apply exact V116 correction model
+      - name: Restore exact V116 and apply V117 improvements
         run: |
+          echo "6debcc38b52efff8c9595db797c7145504dd7cc9976b0120c40388f2e01c08cd  tool/v117-from-v116.patch" | sha256sum -c -
           rm -rf app/lib
-          cp -r /tmp/v115src/lib app/lib
-          cp /tmp/v115src/pubspec.yaml app/pubspec.yaml
-          base64 -d tool/v116-append-only-corrections.patch.gz.b64 | gzip -d > /tmp/v116.patch
-          echo "0570a658c11c91d59693aeee0e161819dbf98f56924db14cf0f291a7794419a0  /tmp/v116.patch" | sha256sum -c -
+          cp -r /tmp/v116src/lib app/lib
+          cp /tmp/v116src/pubspec.yaml app/pubspec.yaml
           cd app
-          patch -p1 < /tmp/v116.patch
-          dart format lib/main_online.dart
+          patch -p1 < ../tool/v117-from-v116.patch
+          dart format lib/main_online.dart lib/v31_features.dart
 
       - name: Configure Android and stable signing
         working-directory: app
@@ -107,52 +106,59 @@ jobs:
         working-directory: app
         run: flutter pub get
 
-      - name: Validate V116 correction model and preserved flows
+      - name: Validate V117 improvements and preserved V116 flows
         working-directory: app
         run: |
           python3 - <<'PY'
           from pathlib import Path
           main=Path('lib/main_online.dart').read_text()
-          required=[
-            "'v116'",
+          v31=Path('lib/v31_features.dart').read_text()
+          required_main=[
+            "'v117'",
+            "rca_reference_data_v117",
+            "rca_meter_check_v117",
+            "meterCheckV117",
+            "latestMeterSnapshotV117",
+            "_fmtLitersBrV117",
+            "kmV117 <= lastKmV117",
+            "hourV117 <= lastHourV117",
+            "A comparação offline considera o último valor sincronizado",
             "rca_admin_correct_fueling_v116",
-            "adminCorrectFuelingV116",
             "REGISTRO CORRIGIDO",
             "REGISTRO DE CORREÇÃO",
             "R&C-Correcao-Abastecimento",
-            "correction_original_code",
-            "correction_number",
-            "correction_reason",
-            "superseded_by_code",
-            "enqueueOfficialPdfJobV113(newMovementId)",
-            "O registro original foi preservado",
             "rca_record_transfer_v114",
-            "subtitle: 'T.E. → Comboio'",
             "CONECTANDO…",
             "source_tank_plate_v115",
             "syncOfficialPdfJobsV113",
             "rca_register_app_pdf_v113",
             "'fuel-pdfs'"
           ]
-          missing=[x for x in required if x not in main]
-          if missing: raise SystemExit(f'V116 incomplete/regressed: {missing}')
+          required_v31=[
+            "rca_reference_data_v117",
+            "Combustível restante:",
+            "_fmtLitersBrV117(currentTank['current_balance_liters'])"
+          ]
+          missing=[x for x in required_main if x not in main]
+          missing += [x for x in required_v31 if x not in v31]
+          if missing: raise SystemExit(f'V117 incomplete/regressed: {missing}')
           forbidden=["rca_admin_edit_fueling_v48", "adminEditFuelingV48("]
           present=[x for x in forbidden if x in main]
-          if present: raise SystemExit(f'Legacy in-place correction still present: {present}')
+          if present: raise SystemExit(f'Legacy in-place correction returned: {present}')
           for name in ['v29_features.dart','v30_features.dart','v31_features.dart']:
             text=Path('lib/'+name).read_text()
             if '_fuelUnitLabelV111' not in text:
               raise SystemExit(f'Global unit identity missing in {name}')
-          print('V116_APPEND_ONLY_CORRECTION_GATE_PASS')
+          print('V117_BALANCE_STRICT_METER_OFFLINE_GATE_PASS')
           PY
 
       - name: Flutter Analyze fatal warnings gate
         working-directory: app
         run: flutter analyze lib/main_online.dart lib/v29_features.dart lib/v30_features.dart lib/v31_features.dart --no-fatal-infos --fatal-warnings
 
-      - name: Build signed APK V116
+      - name: Build signed APK V117
         working-directory: app
-        run: flutter build apk --release --target lib/main_online.dart --build-name=1.0.116 --build-number=86 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
+        run: flutter build apk --release --target lib/main_online.dart --build-name=1.0.117 --build-number=87 --dart-define=SUPABASE_KEY="$SUPABASE_KEY"
 
       - name: Verify APK signing certificate
         working-directory: app
@@ -164,13 +170,13 @@ jobs:
       - name: Prepare artifacts
         run: |
           mkdir -p release
-          cp app/build/app/outputs/flutter-apk/app-release.apk release/RC-Abastecimento-V116.apk
-          sha256sum release/RC-Abastecimento-V116.apk > release/RC-Abastecimento-V116.sha256.txt
+          cp app/build/app/outputs/flutter-apk/app-release.apk release/RC-Abastecimento-V117.apk
+          sha256sum release/RC-Abastecimento-V117.apk > release/RC-Abastecimento-V117.sha256.txt
 
-      - name: Upload validated V116 source
+      - name: Upload validated V117 source
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-V116-source
+          name: RC-Abastecimento-V117-source
           path: |
             app/lib/main_online.dart
             app/lib/v29_features.dart
@@ -179,9 +185,9 @@ jobs:
             app/pubspec.yaml
           retention-days: 30
 
-      - name: Upload V116 APK
+      - name: Upload V117 APK
         uses: actions/upload-artifact@v4
         with:
-          name: RC-Abastecimento-V116
+          name: RC-Abastecimento-V117
           path: release/
           retention-days: 30

@@ -1,0 +1,401 @@
+--- a/lib/main_online.dart
++++ b/lib/main_online.dart
+@@ -183,6 +183,20 @@
+ }
+ 
+ String _fmtLiters(dynamic value) => '${_num(value).toStringAsFixed(1)} L';
++
++String _fmtLitersBrV117(dynamic value) {
++  final fixed = _num(value).toStringAsFixed(1);
++  final parts = fixed.split('.');
++  final negative = parts.first.startsWith('-');
++  final digits = negative ? parts.first.substring(1) : parts.first;
++  final groups = <String>[];
++  for (var end = digits.length; end > 0; end -= 3) {
++    final start = max(0, end - 3);
++    groups.insert(0, digits.substring(start, end));
++  }
++  final integer = '${negative ? '-' : ''}${groups.join('.')}';
++  return '$integer,${parts.length > 1 ? parts[1] : '0'} L';
++}
+ String _fmtMoney(dynamic value) =>
+     'R\$ ${_num(value).toStringAsFixed(2).replaceAll('.', ',')}';
+ 
+@@ -462,6 +476,89 @@
+ 
+   Map<String, dynamic>? get cachedReferenceData =>
+       _referenceWithPendingOverlayV69();
++
++
++  Map<String, dynamic> latestMeterSnapshotV117({
++    int? machineId,
++    int? thirdPartyVehicleId,
++  }) {
++    double? asDouble(dynamic raw) {
++      if (raw == null) return null;
++      if (raw is num) return raw.toDouble();
++      return double.tryParse('$raw'.trim().replaceAll(',', '.'));
++    }
++
++    final ref = _baseReferenceDataV69;
++    double? lastKm;
++    double? lastHourmeter;
++    double? lastThirdPartyMeter;
++    String measurementType = '';
++
++    if (machineId != null) {
++      for (final m in _rows(ref?['machines'])) {
++        if (_intOrNull(m['id']) != machineId) continue;
++        measurementType = '${m['measurement_type'] ?? ''}'.trim().toLowerCase();
++        lastKm = asDouble(m['last_km_v117']);
++        lastHourmeter = asDouble(m['last_hourmeter_v117']);
++        if (lastKm == null && measurementType == 'km') {
++          lastKm = asDouble(m['meter_physical_value'] ?? m['kmHorimetro']);
++        }
++        if (lastHourmeter == null &&
++            (measurementType == 'hourmeter' || measurementType == 'both')) {
++          lastHourmeter = asDouble(m['meter_physical_value']);
++        }
++        break;
++      }
++    }
++
++    if (thirdPartyVehicleId != null) {
++      for (final v in _rows(ref?['third_party_vehicles'])) {
++        if (_intOrNull(v['id']) != thirdPartyVehicleId) continue;
++        lastThirdPartyMeter = asDouble(
++          v['last_meter_v117'] ?? v['last_km_hourmeter'],
++        );
++        break;
++      }
++    }
++
++    // Every pending fueling on this device participates in the comparison.
++    // This prevents a second offline fueling from reusing (or going below) a
++    // meter reading that was already recorded locally but not yet synced.
++    for (final q in _queue) {
++      if (q['sync_rejected'] == true) continue;
++      if (q['sync_blocked'] == true && q['sync_conflict'] != true) continue;
++      if (!_fuelingRpc('${q['rpc'] ?? ''}')) continue;
++      final p = _map(q['params']);
++      if (machineId != null && _intOrNull(p['p_machine_id']) == machineId) {
++        final legacy = asDouble(p['p_km_hourmeter']);
++        final k = asDouble(p['p_km_value']) ??
++            (measurementType == 'km' ? legacy : null);
++        final h = asDouble(p['p_hourmeter_value']) ??
++            (measurementType == 'hourmeter' ? legacy : null);
++        if (k != null && (lastKm == null || k > lastKm)) lastKm = k;
++        if (h != null && (lastHourmeter == null || h > lastHourmeter)) {
++          lastHourmeter = h;
++        }
++      }
++      if (thirdPartyVehicleId != null &&
++          _intOrNull(p['p_third_party_vehicle_id']) == thirdPartyVehicleId) {
++        final meter = asDouble(
++          p['p_hourmeter_value'] ?? p['p_km_value'] ?? p['p_km_hourmeter'],
++        );
++        if (meter != null &&
++            (lastThirdPartyMeter == null || meter > lastThirdPartyMeter)) {
++          lastThirdPartyMeter = meter;
++        }
++      }
++    }
++
++    return <String, dynamic>{
++      'measurement_type': measurementType,
++      'last_km': lastKm,
++      'last_hourmeter': lastHourmeter,
++      'last_third_party_meter': lastThirdPartyMeter,
++    };
++  }
+   int? get lastTankId {
+     final uid = _activeUserKeyV78;
+     final byUser = _state['last_tank_by_user_v78'];
+@@ -1015,7 +1112,7 @@
+       await cacheFuelingPermissionV68(profile['can_fueling_create'] == true);
+       await cacheOfflineLoginV62(username, password, profile);
+       try {
+-        final ref = _map(await client.rpc('rca_reference_data_v99'));
++        final ref = _map(await client.rpc('rca_reference_data_v117'));
+         await cacheReferenceData(ref);
+       } catch (_) {}
+       await markAppLoggedInV62(signedUid);
+@@ -2429,6 +2526,58 @@
+           );
+         }
+       }
++
++      final machineIdV117 = _intOrNull(params['p_machine_id']);
++      final thirdIdV117 = _intOrNull(params['p_third_party_vehicle_id']);
++      final meterV117 = latestMeterSnapshotV117(
++        machineId: machineIdV117,
++        thirdPartyVehicleId: thirdIdV117,
++      );
++      final legacyMeterV117 = params['p_km_hourmeter'] == null
++          ? null
++          : _num(params['p_km_hourmeter']);
++      final measurementV117 = '${meterV117['measurement_type'] ?? ''}'
++          .trim()
++          .toLowerCase();
++      final kmV117 = params['p_km_value'] != null
++          ? _num(params['p_km_value'])
++          : measurementV117 == 'km'
++          ? legacyMeterV117
++          : null;
++      final hourV117 = params['p_hourmeter_value'] != null
++          ? _num(params['p_hourmeter_value'])
++          : measurementV117 == 'hourmeter'
++          ? legacyMeterV117
++          : null;
++      if (machineIdV117 != null) {
++        final lastKmV117 = meterV117['last_km'] as double?;
++        final lastHourV117 = meterV117['last_hourmeter'] as double?;
++        if (kmV117 != null &&
++            lastKmV117 != null &&
++            kmV117 <= lastKmV117) {
++          throw Exception(
++            'O KM informado deve ser maior que o último registro (${lastKmV117.toStringAsFixed(1)} km).',
++          );
++        }
++        if (hourV117 != null &&
++            lastHourV117 != null &&
++            hourV117 <= lastHourV117) {
++          throw Exception(
++            'O horímetro informado deve ser maior que o último registro (${lastHourV117.toStringAsFixed(1)} h).',
++          );
++        }
++      } else if (thirdIdV117 != null) {
++        final proposedV117 = hourV117 ?? kmV117;
++        final lastV117 = meterV117['last_third_party_meter'] as double?;
++        if (proposedV117 != null &&
++            lastV117 != null &&
++            proposedV117 <= lastV117) {
++          throw Exception(
++            'O KM/horímetro informado deve ser maior que o último registro (${lastV117.toStringAsFixed(1)}).',
++          );
++        }
++      }
++
+       final available = _balance(tankId);
+       if (rpc == 'rca_record_fueling_v99') {
+         final check = metrologyFuelingCheckCachedV98(tankId, liters);
+@@ -2852,7 +3001,7 @@
+       return;
+     try {
+       final fresh = _map(
+-        await Supabase.instance.client.rpc('rca_reference_data_v99'),
++        await Supabase.instance.client.rpc('rca_reference_data_v117'),
+       );
+       await cacheReferenceData(fresh);
+       try {
+@@ -3143,7 +3292,7 @@
+           Supabase.instance.client.auth.currentUser != null) {
+         try {
+           final fresh = _map(
+-            await Supabase.instance.client.rpc('rca_reference_data_v99'),
++            await Supabase.instance.client.rpc('rca_reference_data_v117'),
+           );
+           await cacheReferenceData(fresh);
+         } catch (_) {}
+@@ -3338,7 +3487,7 @@
+       _map(await client.rpc('rca_profile'));
+   Future<Map<String, dynamic>> referenceData() async {
+     try {
+-      final value = _map(await client.rpc('rca_reference_data_v107'));
++      final value = _map(await client.rpc('rca_reference_data_v117'));
+       offlineStore.markOnline();
+       await offlineStore.cacheReferenceData(value);
+       try {
+@@ -4131,13 +4280,13 @@
+       params: {'p_machine_id': machineId},
+     ),
+   );
+-  Future<Map<String, dynamic>> meterCheckV48(
++  Future<Map<String, dynamic>> meterCheckV117(
+     int machineId, {
+     double? km,
+     double? hourmeter,
+   }) async => _map(
+     await client.rpc(
+-      'rca_meter_check_v48',
++      'rca_meter_check_v117',
+       params: {'p_machine_id': machineId, 'p_km': km, 'p_hourmeter': hourmeter},
+     ),
+   );
+@@ -4610,7 +4759,7 @@
+           'p_movement_id': movementId,
+           'p_path': path,
+           'p_sha256': sha,
+-          'p_version': 'v116',
++          'p_version': 'v117',
+         },
+       ),
+     );
+@@ -5749,7 +5898,7 @@
+                 const Align(
+                   alignment: Alignment.centerRight,
+                   child: Text(
+-                    'v116',
++                    'v117',
+                     style: TextStyle(
+                       fontSize: 11,
+                       color: Color(0xFF8A98A8),
+@@ -8651,66 +8800,58 @@
+       requiredMessage('Assinatura de quem abasteceu');
+       return;
+     }
+-    if (machine != null && !offlineStore.backendReadyV81) {
+-      final sm = selected(_rows(widget.ref['machines']), machine);
+-      if (sm != null) {
+-        final configured = '${sm['measurement_type'] ?? ''}'
+-            .trim()
+-            .toLowerCase();
+-        final lastKmRaw = sm['kmHorimetro'];
+-        final lastHourRaw = sm['meter_physical_value'];
+-        final lastKm = lastKmRaw == null
+-            ? null
+-            : (lastKmRaw is num
+-                  ? lastKmRaw.toDouble()
+-                  : double.tryParse('$lastKmRaw'));
+-        final lastHour = lastHourRaw == null
+-            ? null
+-            : (lastHourRaw is num
+-                  ? lastHourRaw.toDouble()
+-                  : double.tryParse('$lastHourRaw'));
+-        String? regressionMessage;
+-        if ((configured == 'km' || kinds.contains('km')) &&
+-            k != null &&
+-            lastKm != null &&
+-            k < lastKm) {
+-          regressionMessage =
+-              'KM inferior ao último registro conhecido no aparelho (${lastKm.toStringAsFixed(1)} km).';
+-        } else if ((configured == 'hourmeter' || kinds.contains('hour')) &&
+-            h != null &&
+-            lastHour != null &&
+-            h < lastHour) {
+-          regressionMessage =
+-              'Horímetro inferior ao último registro conhecido no aparelho (${lastHour.toStringAsFixed(1)} h).';
++    if (!offlineStore.backendReadyV81 &&
++        (machine != null || (third != null && third != -1))) {
++      final check = offlineStore.latestMeterSnapshotV117(
++        machineId: machine,
++        thirdPartyVehicleId: third == -1 ? null : third,
++      );
++      String? invalidMessage;
++      if (machine != null) {
++        final lastKm = check['last_km'] as double?;
++        final lastHour = check['last_hourmeter'] as double?;
++        if (k != null && lastKm != null && k <= lastKm) {
++          invalidMessage =
++              'O KM informado deve ser maior que o último registro conhecido no aparelho (${lastKm.toStringAsFixed(1)} km).';
++        } else if (h != null && lastHour != null && h <= lastHour) {
++          invalidMessage =
++              'O horímetro informado deve ser maior que o último registro conhecido no aparelho (${lastHour.toStringAsFixed(1)} h).';
+         }
+-        if (regressionMessage != null) {
+-          if (mounted) {
+-            await showDialog<void>(
+-              context: context,
+-              builder: (ctx) => AlertDialog(
+-                title: const Text('Leitura inválida'),
+-                content: Text(
+-                  '$regressionMessage\n\nComo o aparelho está offline, a última leitura conhecida foi usada para impedir que um valor regressivo seja salvo por engano.',
+-                ),
+-                actions: [
+-                  FilledButton(
+-                    onPressed: () => Navigator.pop(ctx),
+-                    child: const Text('Corrigir valor'),
+-                  ),
+-                ],
++      } else {
++        final proposed = h ?? k;
++        final last = check['last_third_party_meter'] as double?;
++        if (proposed != null && last != null && proposed <= last) {
++          invalidMessage =
++              'O KM/horímetro informado deve ser maior que o último registro conhecido no aparelho (${last.toStringAsFixed(1)}).';
++        }
++      }
++      if (invalidMessage != null) {
++        if (mounted) {
++          await showDialog<void>(
++            context: context,
++            builder: (ctx) => AlertDialog(
++              title: const Text('KM/Horímetro inválido'),
++              content: Text(
++                '$invalidMessage\n\nA comparação offline considera o último valor sincronizado e também os abastecimentos ainda pendentes neste aparelho.',
+               ),
+-            );
+-          }
+-          return;
++              actions: [
++                FilledButton(
++                  onPressed: () => Navigator.pop(ctx),
++                  child: const Text('Corrigir valor'),
++                ),
++              ],
++            ),
++          );
+         }
++        return;
+       }
+     }
+     if (machine != null && offlineStore.backendReadyV81) {
+       try {
+-        final check = await api.meterCheckV48(machine!, km: k, hourmeter: h);
++        final check = await api.meterCheckV117(machine!, km: k, hourmeter: h);
+         if (check['regression'] == true) {
+           final msg =
+-              '${check['message'] ?? 'Valor inferior ao último registro.'}';
++              '${check['message'] ?? 'O KM/horímetro deve ser maior que o último registro.'}';
+           if (mounted)
+             await showDialog<void>(
+               context: context,
+--- a/lib/v31_features.dart
++++ b/lib/v31_features.dart
+@@ -2,7 +2,7 @@
+ 
+ extension FuelApiV31 on FuelApi {
+   Future<Map<String, dynamic>> referenceDataV31() async {
+-    final v = _map(await client.rpc('rca_reference_data_v33'));
++    final v = _map(await client.rpc('rca_reference_data_v117'));
+     await offlineStore.cacheReferenceData(v);
+     return v;
+   }
+@@ -402,7 +402,13 @@
+ 
+   @override
+   Widget build(BuildContext context) {
+-    final currentLabel = _fuelUnitLabelV111(currentUnit, ref);
++    final currentId =
++        _intOrNull(currentUnit['tank_id']) ?? offlineStore.lastTankId;
++    final currentTank = tankFor(currentId);
++    final currentLabel = _fuelUnitLabelV111(
++      currentUnit.isNotEmpty ? currentUnit : (currentTank ?? const <String, dynamic>{}),
++      ref,
++    );
+     return Scaffold(
+       appBar: AppBar(
+           title: const Text('R&C Abastecimento',
+@@ -441,6 +447,22 @@
+                                               style: const TextStyle(
+                                                   fontWeight: FontWeight.w900)))
+                                     ]),
++                                    if (currentTank != null) ...[
++                                      const SizedBox(height: 8),
++                                      Row(children: [
++                                        const Icon(Icons.oil_barrel_outlined,
++                                            size: 19, color: _blue),
++                                        const SizedBox(width: 7),
++                                        Expanded(
++                                          child: Text(
++                                            'Combustível restante: ${_fmtLitersBrV117(currentTank['current_balance_liters'])}',
++                                            style: const TextStyle(
++                                              fontWeight: FontWeight.w900,
++                                            ),
++                                          ),
++                                        ),
++                                      ]),
++                                    ],
+                                     const SizedBox(height: 10),
+                                     Row(children: [
+                                       Expanded(

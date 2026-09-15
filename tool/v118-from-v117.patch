@@ -1,0 +1,58 @@
+--- a/lib/main_online.dart	2026-09-15 18:14:42.000000000 +0000
++++ b/lib/main_online.dart	2026-09-15 20:34:43.413088519 +0000
+@@ -2154,12 +2154,22 @@
+     if (showConnecting || !online.value) connectingV115.value = true;
+     var reachable = false;
+     try {
+-      final states = await _connectivity.checkConnectivity();
+-      final hasTransport = states.any((x) => x != ConnectivityResult.none);
++      // V118: Android can report `none` for a short moment while Wi-Fi/mobile
++      // data is still being restored during app startup/resume. Keep the UI in
++      // CONECTANDO… during this grace window instead of flashing OFFLINE.
++      var hasTransport = false;
++      for (var transportAttempt = 0; transportAttempt < 4; transportAttempt++) {
++        final states = await _connectivity.checkConnectivity();
++        hasTransport = states.any((x) => x != ConnectivityResult.none);
++        if (hasTransport) break;
++        if (transportAttempt < 3) {
++          await Future<void>.delayed(const Duration(milliseconds: 700));
++        }
++      }
+       if (hasTransport) {
+-        // V115: do not classify the app as OFFLINE because of one transient
++        // Do not classify the app as OFFLINE because of one transient
+         // DNS/socket/handshake failure while Android is still bringing the
+-        // network up. Confirm reachability with short retries first.
++        // network up. Confirm Supabase reachability with short retries first.
+         for (var attempt = 0; attempt < 3; attempt++) {
+           if (await _probeSupabaseV115()) {
+             reachable = true;
+@@ -2189,7 +2199,9 @@
+   }
+ 
+   void markOffline() {
+-    online.value = false;
++    // V118: a single network exception is not enough to publish OFFLINE.
++    // First expose CONECTANDO… and let the connectivity/Supabase probes
++    // confirm that the backend is really unreachable.
+     connectingV115.value = true;
+     unawaited(_refreshOnlineState(showConnecting: true));
+   }
+@@ -4760,7 +4772,7 @@
+           'p_movement_id': movementId,
+           'p_path': path,
+           'p_sha256': sha,
+-          'p_version': 'v117',
++          'p_version': 'v118',
+         },
+       ),
+     );
+@@ -5899,7 +5911,7 @@
+                 const Align(
+                   alignment: Alignment.centerRight,
+                   child: Text(
+-                    'v117',
++                    'v118',
+                     style: TextStyle(
+                       fontSize: 11,
+                       color: Color(0xFF8A98A8),
